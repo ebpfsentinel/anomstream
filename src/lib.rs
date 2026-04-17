@@ -103,4 +103,4 @@ pub use domain::{AnomalyScore, BoundingBox, Cut, DiVector, Point};
 pub use error::{RcfError, RcfResult};
 pub use sampler::{ReservoirSampler, SamplerOp};
 pub use tree::{Node, NodeRef, NodeStore, PointAccessor, RandomCutTree};
-pub use visitor::Visitor;
+pub use visitor::{AttributionVisitor, ScalarScoreVisitor, Visitor};

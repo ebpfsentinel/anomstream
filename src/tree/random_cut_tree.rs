@@ -116,6 +116,27 @@ impl RandomCutTree {
         self.leaf_index.contains_key(&point_idx)
     }
 
+    /// Maximum depth from the root to any leaf, or `None` when the
+    /// tree is empty. Used by tests and diagnostics to verify the
+    /// expected `O(log n)` depth bound under uniform-random inserts.
+    #[must_use]
+    pub fn max_depth(&self) -> Option<usize> {
+        let root = self.root?;
+        Some(self.subtree_depth(root, 0).unwrap_or(0))
+    }
+
+    /// Recursive helper for [`max_depth`](Self::max_depth).
+    fn subtree_depth(&self, n: NodeRef, depth: usize) -> RcfResult<usize> {
+        match self.store.node(n)? {
+            Node::Leaf { .. } => Ok(depth),
+            Node::Internal { left, right, .. } => {
+                let l = self.subtree_depth(*left, depth + 1)?;
+                let r = self.subtree_depth(*right, depth + 1)?;
+                Ok(l.max(r))
+            }
+        }
+    }
+
     /// Insert `point` (registered under `point_idx` in the caller's
     /// point store) into the tree.
     ///
@@ -540,7 +561,7 @@ impl RandomCutTree {
                 ..
             } => {
                 let (prob, per_dim) = bbox.probability_of_cut(point)?;
-                visitor.accept_internal(depth, *mass, cut, prob, &per_dim);
+                visitor.accept_internal(depth, *mass, cut, bbox, prob, &per_dim);
                 let next = if cut.left_of(point) { *left } else { *right };
                 self.traverse_inner(next, point, depth + 1, visitor)
             }
@@ -596,6 +617,7 @@ mod tests {
             depth: usize,
             _mass: u64,
             _cut: &Cut,
+            _bbox: &BoundingBox,
             _prob: f64,
             _per_dim: &[f64],
         ) {
@@ -939,5 +961,40 @@ mod tests {
         let mut bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
         bbox.extend(&[10.0, 10.0]).unwrap();
         assert!(!isolates_point(&Cut::new(0, 5.0), &[5.0, 5.0], &bbox));
+    }
+
+    // Property test: under uniform-random insertions, the tree depth
+    // stays within `4 · ⌈log₂ N⌉ + 4` — the "expected `O(log n)`"
+    // bound from Guha 2016 §2 with a generous constant to absorb
+    // the natural variance of random cuts. Backs RCF.4 AC #5.
+    proptest::proptest! {
+        #![proptest_config(proptest::test_runner::Config { cases: 32, ..proptest::test_runner::Config::default() })]
+        #[test]
+        fn depth_bounded_under_uniform_inserts(seed in 0_u64..10_000) {
+            const N: usize = 64;
+            const D: usize = 4;
+            #[allow(clippy::cast_possible_truncation)]
+            let mut t = RandomCutTree::new(N as u32, D).unwrap();
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut points: Vec<Vec<f64>> = Vec::with_capacity(N);
+
+            for i in 0..N {
+                let p: Vec<f64> = (0..D)
+                    .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 100.0)
+                    .collect();
+                points.push(p.clone());
+                t.add(i, &p, &points, &mut rng).unwrap();
+            }
+
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let log2_n = (N as f64).log2().ceil() as usize;
+            let bound = 4 * log2_n + 4;
+            let depth = t.max_depth().expect("non-empty tree");
+            proptest::prop_assert!(
+                depth <= bound,
+                "depth = {} exceeds bound 4·⌈log₂ {}⌉ + 4 = {} (seed={})",
+                depth, N, bound, seed,
+            );
+        }
     }
 }
