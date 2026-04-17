@@ -81,7 +81,7 @@ impl Cut {
     /// use rcf_rs::domain::{BoundingBox, Cut};
     ///
     /// let mut rng = ChaCha8Rng::seed_from_u64(42);
-    /// let mut bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+    /// let mut bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
     /// bbox.extend(&[1.0, 4.0]).unwrap(); // dim 1 has 4× the range of dim 0
     ///
     /// let cut = Cut::random_cut(&bbox, &mut rng).unwrap();
@@ -90,7 +90,10 @@ impl Cut {
     /// let hi = bbox.max()[cut.dim()];
     /// assert!(cut.value() >= lo && cut.value() <= hi);
     /// ```
-    pub fn random_cut<R: RngCore + ?Sized>(bbox: &BoundingBox, rng: &mut R) -> RcfResult<Self> {
+    pub fn random_cut<const D: usize, R: RngCore + ?Sized>(
+        bbox: &BoundingBox<D>,
+        rng: &mut R,
+    ) -> RcfResult<Self> {
         let total = bbox.range_sum();
         if total <= 0.0 {
             return Err(RcfError::EmptyBoundingBox);
@@ -129,9 +132,9 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
-    fn unit_box(dim: usize) -> BoundingBox {
-        let mut b = BoundingBox::from_point(&vec![0.0; dim]).unwrap();
-        b.extend(&vec![1.0; dim]).unwrap();
+    fn unit_box<const D: usize>() -> BoundingBox<D> {
+        let mut b = BoundingBox::<D>::from_point(&vec![0.0; D]).unwrap();
+        b.extend(&vec![1.0; D]).unwrap();
         b
     }
 
@@ -156,7 +159,7 @@ mod tests {
     #[test]
     fn random_cut_is_in_range() {
         let mut rng = ChaCha8Rng::seed_from_u64(1);
-        let bbox = unit_box(3);
+        let bbox: BoundingBox<3> = unit_box();
         for _ in 0..100 {
             let cut = Cut::random_cut(&bbox, &mut rng).unwrap();
             assert!(cut.dim() < bbox.dim());
@@ -168,16 +171,14 @@ mod tests {
     #[test]
     fn random_cut_degenerate_box_fails() {
         let mut rng = ChaCha8Rng::seed_from_u64(1);
-        let bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+        let bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
         let err = Cut::random_cut(&bbox, &mut rng).unwrap_err();
         assert!(matches!(err, RcfError::EmptyBoundingBox));
     }
 
     #[test]
     fn random_cut_dim_distribution_proportional_to_range() {
-        // Build a box where dim 1 has 9× the range of dim 0 — over 5000
-        // draws dim 1 should receive roughly 90% of the mass.
-        let mut bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+        let mut bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
         bbox.extend(&[1.0, 9.0]).unwrap();
 
         let mut rng = ChaCha8Rng::seed_from_u64(7);
@@ -188,7 +189,6 @@ mod tests {
             counts[cut.dim()] += 1;
         }
         let p1 = f64::from(counts[1]) / f64::from(trials);
-        // Expected 0.9, allow a generous ±0.03 tolerance for ChaCha8 noise.
         assert!(
             (0.87..=0.93).contains(&p1),
             "dim-1 share = {p1} outside [0.87, 0.93]"
@@ -197,7 +197,7 @@ mod tests {
 
     #[test]
     fn random_cut_deterministic_for_same_seed() {
-        let bbox = unit_box(4);
+        let bbox: BoundingBox<4> = unit_box();
         let mut rng_a = ChaCha8Rng::seed_from_u64(42);
         let mut rng_b = ChaCha8Rng::seed_from_u64(42);
         for _ in 0..20 {

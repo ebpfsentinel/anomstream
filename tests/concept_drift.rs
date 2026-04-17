@@ -15,7 +15,7 @@ fn distribution_shift_flagged_then_normalised() {
     const PER_PHASE: usize = 2000;
     let mut rng = ChaCha8Rng::seed_from_u64(2026);
 
-    let mut forest = ForestBuilder::new(2)
+    let mut forest = ForestBuilder::<2>::new()
         .num_trees(50)
         .sample_size(64)
         .seed(7)
@@ -24,7 +24,7 @@ fn distribution_shift_flagged_then_normalised() {
 
     // Phase 1: cluster A near the origin (uniform [-0.05, 0.05]).
     for _ in 0..PER_PHASE {
-        let p = vec![
+        let p = [
             <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 0.1 - 0.05,
             <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 0.1 - 0.05,
         ];
@@ -33,13 +33,13 @@ fn distribution_shift_flagged_then_normalised() {
 
     // Score a fresh cluster-B sample BEFORE we feed any cluster-B
     // points — cluster B should look anomalous to the forest now.
-    let probe_b = vec![5.0, 5.0];
+    let probe_b: [f64; 2] = [5.0, 5.0];
     let initial_b: f64 = forest.score(&probe_b).unwrap().into();
 
     // Phase 2: cluster B around (5, 5). Stream enough points that
     // the reservoir refreshes (PER_PHASE > num_trees × sample_size).
     for _ in 0..PER_PHASE {
-        let p = vec![
+        let p = [
             5.0 + <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 0.1 - 0.05,
             5.0 + <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 0.1 - 0.05,
         ];
@@ -57,7 +57,7 @@ fn distribution_shift_flagged_then_normalised() {
 
     // Cluster A is now the historical anomaly — verify it scores
     // higher than cluster B at the new equilibrium.
-    let probe_a = vec![0.0, 0.0];
+    let probe_a: [f64; 2] = [0.0, 0.0];
     let final_a: f64 = forest.score(&probe_a).unwrap().into();
     assert!(
         final_a > final_b,

@@ -16,6 +16,10 @@
 //! version skew is detected before any third-party deserialiser
 //! runs against arbitrary bytes — a defence against malformed
 //! payload-driven panics.
+//!
+//! Both encodings preserve the per-point dimensionality `D` at the
+//! type level — callers must deserialise into a forest with the
+//! same compile-time dimension that produced the payload.
 
 #[cfg(any(feature = "bincode", feature = "serde_json"))]
 use crate::error::{RcfError, RcfResult};
@@ -27,7 +31,7 @@ pub const PERSISTENCE_VERSION: u32 = 1;
 /// Number of bytes reserved for the version prefix.
 pub const VERSION_PREFIX_BYTES: usize = 4;
 
-impl RandomCutForest {
+impl<const D: usize> RandomCutForest<D> {
     /// Serialise the forest into a versioned binary blob.
     ///
     /// # Errors
@@ -103,7 +107,7 @@ impl RandomCutForest {
     ///   does not match [`PERSISTENCE_VERSION`].
     #[cfg(feature = "serde_json")]
     pub fn from_json(json: &str) -> RcfResult<Self> {
-        let envelope: JsonEnvelopeOwned = serde_json::from_str(json)
+        let envelope: JsonEnvelopeOwned<D> = serde_json::from_str(json)
             .map_err(|e| RcfError::DeserializationFailed(e.to_string()))?;
         if envelope.version != PERSISTENCE_VERSION {
             return Err(RcfError::IncompatibleVersion {
@@ -119,22 +123,22 @@ impl RandomCutForest {
 /// forest to avoid an unnecessary clone during serialisation.
 #[cfg(feature = "serde_json")]
 #[derive(serde::Serialize)]
-struct JsonEnvelope<'a> {
+struct JsonEnvelope<'a, const D: usize> {
     /// Persistence format version embedded alongside the payload.
     version: u32,
     /// Borrowed forest to be serialised.
-    forest: &'a RandomCutForest,
+    forest: &'a RandomCutForest<D>,
 }
 
 /// JSON envelope used by [`RandomCutForest::from_json`] — owns the
 /// reconstructed forest.
 #[cfg(feature = "serde_json")]
 #[derive(serde::Deserialize)]
-struct JsonEnvelopeOwned {
+struct JsonEnvelopeOwned<const D: usize> {
     /// Persistence format version embedded alongside the payload.
     version: u32,
     /// Reconstructed forest owned by the envelope.
-    forest: RandomCutForest,
+    forest: RandomCutForest<D>,
 }
 
 #[cfg(all(test, feature = "bincode"))]
@@ -143,8 +147,8 @@ mod bincode_tests {
     use super::*;
     use crate::ForestBuilder;
 
-    fn trained_forest(seed: u64, updates: usize) -> RandomCutForest {
-        let mut f = ForestBuilder::new(2)
+    fn trained_forest(seed: u64, updates: usize) -> RandomCutForest<2> {
+        let mut f = ForestBuilder::<2>::new()
             .num_trees(50)
             .sample_size(16)
             .seed(seed)
@@ -153,7 +157,7 @@ mod bincode_tests {
         for i in 0..updates {
             #[allow(clippy::cast_precision_loss)]
             let v = i as f64 * 0.01;
-            f.update(vec![v, v + 0.5]).unwrap();
+            f.update([v, v + 0.5]).unwrap();
         }
         f
     }
@@ -170,14 +174,14 @@ mod bincode_tests {
 
     #[test]
     fn empty_forest_roundtrip() {
-        let f = ForestBuilder::new(4)
+        let f = ForestBuilder::<4>::new()
             .num_trees(50)
             .sample_size(16)
             .seed(1)
             .build()
             .unwrap();
         let bytes = f.to_bytes().unwrap();
-        let back = RandomCutForest::from_bytes(&bytes).unwrap();
+        let back = RandomCutForest::<4>::from_bytes(&bytes).unwrap();
         assert_eq!(back.num_trees(), f.num_trees());
         assert_eq!(back.sample_size(), f.sample_size());
         assert_eq!(back.dimension(), f.dimension());
@@ -187,9 +191,8 @@ mod bincode_tests {
     fn trained_forest_score_roundtrip() {
         let f = trained_forest(7, 200);
         let bytes = f.to_bytes().unwrap();
-        let back = RandomCutForest::from_bytes(&bytes).unwrap();
-        // Bit-exact score equality on a probe point.
-        let probe = [1.5, 2.0];
+        let back = RandomCutForest::<2>::from_bytes(&bytes).unwrap();
+        let probe = [1.5_f64, 2.0];
         let s1: f64 = f.score(&probe).unwrap().into();
         let s2: f64 = back.score(&probe).unwrap().into();
         assert_eq!(s1, s2);
@@ -197,7 +200,7 @@ mod bincode_tests {
 
     #[test]
     fn time_decay_roundtrip() {
-        let mut f = ForestBuilder::new(2)
+        let mut f = ForestBuilder::<2>::new()
             .num_trees(50)
             .sample_size(16)
             .time_decay(0.05)
@@ -207,12 +210,12 @@ mod bincode_tests {
         for i in 0..100 {
             #[allow(clippy::cast_precision_loss)]
             let v = i as f64;
-            f.update(vec![v, v]).unwrap();
+            f.update([v, v]).unwrap();
         }
         let bytes = f.to_bytes().unwrap();
-        let back = RandomCutForest::from_bytes(&bytes).unwrap();
+        let back = RandomCutForest::<2>::from_bytes(&bytes).unwrap();
         assert_eq!(f.config().time_decay, back.config().time_decay);
-        let probe = [10.0, 10.0];
+        let probe = [10.0_f64, 10.0];
         assert_eq!(
             f64::from(f.score(&probe).unwrap()),
             f64::from(back.score(&probe).unwrap())
@@ -222,7 +225,7 @@ mod bincode_tests {
     #[test]
     fn truncated_bytes_rejected() {
         let bytes = [0_u8; 2];
-        let err = RandomCutForest::from_bytes(&bytes).unwrap_err();
+        let err = RandomCutForest::<2>::from_bytes(&bytes).unwrap_err();
         assert!(matches!(err, RcfError::DeserializationFailed(_)));
     }
 
@@ -230,10 +233,9 @@ mod bincode_tests {
     fn version_mismatch_rejected() {
         let f = trained_forest(2026, 5);
         let mut bytes = f.to_bytes().unwrap();
-        // Flip the version prefix to something the runtime does not know.
         let bogus_version = (PERSISTENCE_VERSION + 99).to_le_bytes();
         bytes[..VERSION_PREFIX_BYTES].copy_from_slice(&bogus_version);
-        let err = RandomCutForest::from_bytes(&bytes).unwrap_err();
+        let err = RandomCutForest::<2>::from_bytes(&bytes).unwrap_err();
         match err {
             RcfError::IncompatibleVersion { found, expected } => {
                 assert_eq!(found, PERSISTENCE_VERSION + 99);
@@ -247,8 +249,8 @@ mod bincode_tests {
     fn malformed_payload_rejected() {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&PERSISTENCE_VERSION.to_le_bytes());
-        bytes.extend_from_slice(&[0xFF; 16]); // garbage payload
-        let err = RandomCutForest::from_bytes(&bytes).unwrap_err();
+        bytes.extend_from_slice(&[0xFF; 16]);
+        let err = RandomCutForest::<2>::from_bytes(&bytes).unwrap_err();
         assert!(matches!(err, RcfError::DeserializationFailed(_)));
     }
 
@@ -257,7 +259,7 @@ mod bincode_tests {
         let f = trained_forest(42, 75);
         let before = f.updates_seen();
         let bytes = f.to_bytes().unwrap();
-        let back = RandomCutForest::from_bytes(&bytes).unwrap();
+        let back = RandomCutForest::<2>::from_bytes(&bytes).unwrap();
         assert_eq!(back.updates_seen(), before);
     }
 }
@@ -268,8 +270,8 @@ mod json_tests {
     use super::*;
     use crate::ForestBuilder;
 
-    fn small_trained() -> RandomCutForest {
-        let mut f = ForestBuilder::new(2)
+    fn small_trained() -> RandomCutForest<2> {
+        let mut f = ForestBuilder::<2>::new()
             .num_trees(50)
             .sample_size(8)
             .seed(2026)
@@ -278,7 +280,7 @@ mod json_tests {
         for i in 0..30 {
             #[allow(clippy::cast_precision_loss)]
             let v = i as f64;
-            f.update(vec![v, v + 1.0]).unwrap();
+            f.update([v, v + 1.0]).unwrap();
         }
         f
     }
@@ -287,8 +289,8 @@ mod json_tests {
     fn json_roundtrip_preserves_score() {
         let f = small_trained();
         let json = f.to_json().unwrap();
-        let back = RandomCutForest::from_json(&json).unwrap();
-        let probe = [3.0, 4.0];
+        let back = RandomCutForest::<2>::from_json(&json).unwrap();
+        let probe = [3.0_f64, 4.0];
         let s1: f64 = f.score(&probe).unwrap().into();
         let s2: f64 = back.score(&probe).unwrap().into();
         assert_eq!(s1, s2);
@@ -310,14 +312,14 @@ mod json_tests {
             &format!("\"version\":{PERSISTENCE_VERSION}"),
             &format!("\"version\":{}", PERSISTENCE_VERSION + 99),
         );
-        let err = RandomCutForest::from_json(&bogus).unwrap_err();
+        let err = RandomCutForest::<2>::from_json(&bogus).unwrap_err();
         assert!(matches!(err, RcfError::IncompatibleVersion { .. }));
     }
 
     #[test]
     fn json_malformed_rejected() {
         assert!(matches!(
-            RandomCutForest::from_json("not json").unwrap_err(),
+            RandomCutForest::<2>::from_json("not json").unwrap_err(),
             RcfError::DeserializationFailed(_)
         ));
     }

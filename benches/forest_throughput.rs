@@ -1,8 +1,12 @@
 //! Criterion benchmarks for [`rcf_rs::RandomCutForest`] insert and
 //! score throughput across a representative `(num_trees, sample_size,
-//! dim)` matrix. Targets per RCF.9 AC #6: ≥ 100k inserts/sec and
-//! ≥ 50k scores/sec at the AWS-default `(100, 256, 16)` configuration
-//! on a typical `x86_64` dev box.
+//! dim)` matrix. Targets ≥ 100k inserts/sec and ≥ 50k scores/sec at
+//! the AWS-default `(100, 256, 16)` configuration on a typical
+//! `x86_64` dev box.
+//!
+//! Forests are now const-generic over `D`, so each `dim` is its own
+//! monomorphisation. The matrix entries are expanded inline through
+//! the [`bench_dim`] helper, parameterised by the target dimension.
 //!
 //! The bench process pins `mimalloc` as the global allocator —
 //! reduces small-allocation overhead vs the system allocator, which
@@ -13,7 +17,9 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{
+    BenchmarkGroup, Criterion, criterion_group, criterion_main, measurement::WallTime,
+};
 use mimalloc::MiMalloc;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -23,20 +29,8 @@ use std::hint::black_box;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-/// Default representative bench matrix: AWS-default centre + the
-/// two extremes for dim and the small/large config sweet spots.
-const CONFIG_MATRIX: &[(usize, usize, usize)] = &[
-    (50, 128, 16),
-    (100, 256, 4),
-    (100, 256, 16),
-    (100, 256, 64),
-    (200, 512, 16),
-];
-
-/// Tuning matrix: pure `(num_trees, sample_size)` sweep at the
-/// AWS-default `dim = 16` so callers can decide the precision /
-/// throughput tradeoff. Captures the AWS minima (`50` trees, `128`
-/// samples) through the AWS centre (`100`, `256`).
+/// Tuning matrix at the AWS-default `D = 16`: `(num_trees,
+/// sample_size)` pairs spanning the AWS minima through the centre.
 const TUNING_MATRIX: &[(usize, usize)] = &[
     (50, 64),
     (50, 128),
@@ -46,117 +40,144 @@ const TUNING_MATRIX: &[(usize, usize)] = &[
     (100, 256),
 ];
 
-fn build_warm_forest(
+fn build_warm_forest<const D: usize>(
     num_trees: usize,
     sample_size: usize,
-    dim: usize,
     seed: u64,
-) -> RandomCutForest {
-    let mut forest = ForestBuilder::new(dim)
+) -> RandomCutForest<D> {
+    let mut forest = ForestBuilder::<D>::new()
         .num_trees(num_trees)
         .sample_size(sample_size)
         .seed(seed)
         .build()
         .expect("AWS-conformant config");
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    // Pre-fill so each tree's reservoir is at capacity — the
-    // post-warmup hot path mixes Inserted/Replaced/Rejected outcomes,
-    // which is what production workloads see.
     for _ in 0..(sample_size * 4) {
-        let p: Vec<f64> = (0..dim)
-            .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng))
-            .collect();
+        let mut p = [0.0_f64; D];
+        for slot in &mut p {
+            *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+        }
         forest.update(p).expect("update succeeds");
     }
     forest
 }
 
+fn bench_update_for<const D: usize>(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    num_trees: usize,
+    sample_size: usize,
+) {
+    let id = format!("{num_trees}t_{sample_size}s_{D}d");
+    group.bench_function(&id, |b| {
+        let mut forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        b.iter(|| {
+            let mut p = [0.0_f64; D];
+            for slot in &mut p {
+                *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+            }
+            forest.update(black_box(p)).expect("update succeeds");
+        });
+    });
+}
+
+fn bench_score_for<const D: usize>(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    num_trees: usize,
+    sample_size: usize,
+) {
+    let id = format!("{num_trees}t_{sample_size}s_{D}d");
+    group.bench_function(&id, |b| {
+        let forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
+        let mut rng = ChaCha8Rng::seed_from_u64(11);
+        b.iter(|| {
+            let mut p = [0.0_f64; D];
+            for slot in &mut p {
+                *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+            }
+            let s = forest.score(black_box(&p)).expect("score succeeds");
+            black_box(s);
+        });
+    });
+}
+
+fn bench_attribution_for<const D: usize>(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    num_trees: usize,
+    sample_size: usize,
+) {
+    let id = format!("{num_trees}t_{sample_size}s_{D}d");
+    group.bench_function(&id, |b| {
+        let forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
+        let mut rng = ChaCha8Rng::seed_from_u64(13);
+        b.iter(|| {
+            let mut p = [0.0_f64; D];
+            for slot in &mut p {
+                *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+            }
+            let di = forest
+                .attribution(black_box(&p))
+                .expect("attribution succeeds");
+            black_box(di);
+        });
+    });
+}
+
 fn bench_insert(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_update");
-    for &(num_trees, sample_size, dim) in CONFIG_MATRIX {
-        let id = format!("{num_trees}t_{sample_size}s_{dim}d");
-        group.bench_function(&id, |b| {
-            let mut forest = build_warm_forest(num_trees, sample_size, dim, 2026);
-            let mut rng = ChaCha8Rng::seed_from_u64(7);
-            b.iter(|| {
-                let p: Vec<f64> = (0..dim)
-                    .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng))
-                    .collect();
-                forest.update(black_box(p)).expect("update succeeds");
-            });
-        });
-    }
+    bench_update_for::<16>(&mut group, 50, 128);
+    bench_update_for::<4>(&mut group, 100, 256);
+    bench_update_for::<16>(&mut group, 100, 256);
+    bench_update_for::<64>(&mut group, 100, 256);
+    bench_update_for::<16>(&mut group, 200, 512);
     group.finish();
 }
 
 fn bench_score(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_score");
-    for &(num_trees, sample_size, dim) in CONFIG_MATRIX {
-        let id = format!("{num_trees}t_{sample_size}s_{dim}d");
-        group.bench_function(&id, |b| {
-            let forest = build_warm_forest(num_trees, sample_size, dim, 2026);
-            let mut rng = ChaCha8Rng::seed_from_u64(11);
-            b.iter(|| {
-                let p: Vec<f64> = (0..dim)
-                    .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng))
-                    .collect();
-                let s = forest.score(black_box(&p)).expect("score succeeds");
-                black_box(s);
-            });
-        });
-    }
+    bench_score_for::<16>(&mut group, 50, 128);
+    bench_score_for::<4>(&mut group, 100, 256);
+    bench_score_for::<16>(&mut group, 100, 256);
+    bench_score_for::<64>(&mut group, 100, 256);
+    bench_score_for::<16>(&mut group, 200, 512);
     group.finish();
 }
 
 fn bench_attribution(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_attribution");
-    // Attribution is heavier than score — bench only the AWS default
-    // configuration plus the two extremes for a sense of scale.
-    for &(num_trees, sample_size, dim) in &[(100, 256, 4), (100, 256, 16), (100, 256, 64)] {
-        let id = format!("{num_trees}t_{sample_size}s_{dim}d");
-        group.bench_function(&id, |b| {
-            let forest = build_warm_forest(num_trees, sample_size, dim, 2026);
-            let mut rng = ChaCha8Rng::seed_from_u64(13);
-            b.iter(|| {
-                let p: Vec<f64> = (0..dim)
-                    .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng))
-                    .collect();
-                let di = forest
-                    .attribution(black_box(&p))
-                    .expect("attribution succeeds");
-                black_box(di);
-            });
-        });
-    }
+    bench_attribution_for::<4>(&mut group, 100, 256);
+    bench_attribution_for::<16>(&mut group, 100, 256);
+    bench_attribution_for::<64>(&mut group, 100, 256);
     group.finish();
 }
 
-/// Tuning sweep: at the AWS-default `dim = 16`, vary
+/// Tuning sweep: at the AWS-default `D = 16`, vary
 /// `(num_trees, sample_size)` so callers can pick a config matching
 /// their precision / latency budget.
 fn bench_tuning(c: &mut Criterion) {
-    const DIM: usize = 16;
     let mut group = c.benchmark_group("forest_tuning_dim16");
     for &(num_trees, sample_size) in TUNING_MATRIX {
-        let id = format!("update_{num_trees}t_{sample_size}s");
-        group.bench_function(&id, |b| {
-            let mut forest = build_warm_forest(num_trees, sample_size, DIM, 2026);
+        let update_id = format!("update_{num_trees}t_{sample_size}s");
+        group.bench_function(&update_id, |b| {
+            let mut forest = build_warm_forest::<16>(num_trees, sample_size, 2026);
             let mut rng = ChaCha8Rng::seed_from_u64(7);
             b.iter(|| {
-                let p: Vec<f64> = (0..DIM)
-                    .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng))
-                    .collect();
+                let mut p = [0.0_f64; 16];
+                for slot in &mut p {
+                    *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+                }
                 forest.update(black_box(p)).expect("update succeeds");
             });
         });
-        let id = format!("score_{num_trees}t_{sample_size}s");
-        group.bench_function(&id, |b| {
-            let forest = build_warm_forest(num_trees, sample_size, DIM, 2026);
+        let score_id = format!("score_{num_trees}t_{sample_size}s");
+        group.bench_function(&score_id, |b| {
+            let forest = build_warm_forest::<16>(num_trees, sample_size, 2026);
             let mut rng = ChaCha8Rng::seed_from_u64(11);
             b.iter(|| {
-                let p: Vec<f64> = (0..DIM)
-                    .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng))
-                    .collect();
+                let mut p = [0.0_f64; 16];
+                for slot in &mut p {
+                    *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+                }
                 let s = forest.score(black_box(&p)).expect("score succeeds");
                 black_box(s);
             });

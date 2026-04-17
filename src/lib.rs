@@ -43,11 +43,9 @@
 //! # Example
 //!
 //! ```ignore
-//! // RandomCutForest is being implemented across stories RCF.2..RCF.7.
-//! // The example below is the target API surface for v0.1.0.
 //! use rcf_rs::ForestBuilder;
 //!
-//! let mut forest = ForestBuilder::new(4)
+//! let mut forest = ForestBuilder::<4>::new()
 //!     .num_trees(100)
 //!     .sample_size(256)
 //!     .seed(42)

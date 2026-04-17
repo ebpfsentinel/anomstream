@@ -22,11 +22,11 @@ use crate::tree::node::{Node, NodeRef};
 /// deallocation via per-arena free lists.
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct NodeStore {
+pub struct NodeStore<const D: usize> {
     /// Internal-node arena. `None` slots are free.
-    internals: Vec<Option<Node>>,
+    internals: Vec<Option<Node<D>>>,
     /// Leaf arena. `None` slots are free.
-    leaves: Vec<Option<Node>>,
+    leaves: Vec<Option<Node<D>>>,
     /// LIFO stack of free internal slot indices.
     internal_free: Vec<u32>,
     /// LIFO stack of free leaf slot indices.
@@ -35,7 +35,7 @@ pub struct NodeStore {
     capacity: u32,
 }
 
-impl NodeStore {
+impl<const D: usize> NodeStore<D> {
     /// Build a store with `capacity` internal slots and `capacity`
     /// leaf slots, all initially free.
     ///
@@ -104,7 +104,7 @@ impl NodeStore {
     pub fn add_internal(
         &mut self,
         cut: Cut,
-        bbox: BoundingBox,
+        bbox: BoundingBox<D>,
         left: NodeRef,
         right: NodeRef,
         parent: Option<NodeRef>,
@@ -192,7 +192,7 @@ impl NodeStore {
     ///
     /// Returns [`RcfError::OutOfBounds`] when the slot is empty or
     /// `n.index() >= capacity()`.
-    pub fn node(&self, n: NodeRef) -> RcfResult<&Node> {
+    pub fn node(&self, n: NodeRef) -> RcfResult<&Node<D>> {
         let idx = n.index();
         if idx >= self.capacity as usize {
             return Err(RcfError::OutOfBounds {
@@ -217,7 +217,7 @@ impl NodeStore {
     ///
     /// Returns [`RcfError::OutOfBounds`] when the slot is empty or
     /// `n.index() >= capacity()`.
-    pub fn node_mut(&mut self, n: NodeRef) -> RcfResult<&mut Node> {
+    pub fn node_mut(&mut self, n: NodeRef) -> RcfResult<&mut Node<D>> {
         let idx = n.index();
         if idx >= self.capacity as usize {
             return Err(RcfError::OutOfBounds {
@@ -288,7 +288,7 @@ impl NodeStore {
     ///   bounding boxes are degenerate single-point boxes; build them
     ///   from the underlying point store entry on the consumer side
     ///   (story RCF.7).
-    pub fn internal_bbox(&self, n: NodeRef) -> RcfResult<&BoundingBox> {
+    pub fn internal_bbox(&self, n: NodeRef) -> RcfResult<&BoundingBox<D>> {
         match self.node(n)? {
             Node::Internal { bbox, .. } => Ok(bbox),
             Node::Leaf { .. } => Err(RcfError::InvalidConfig(
@@ -331,7 +331,7 @@ impl NodeStore {
     ///
     /// - [`RcfError::OutOfBounds`] when the node does not exist.
     /// - [`RcfError::InvalidConfig`] when called on a leaf.
-    pub fn set_internal_bbox(&mut self, n: NodeRef, bbox: BoundingBox) -> RcfResult<()> {
+    pub fn set_internal_bbox(&mut self, n: NodeRef, bbox: BoundingBox<D>) -> RcfResult<()> {
         match self.node_mut(n)? {
             Node::Internal { bbox: b, .. } => {
                 *b = bbox;
@@ -395,16 +395,16 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
-    fn unit_bbox(dim: usize) -> BoundingBox {
-        let mut b = BoundingBox::from_point(&vec![0.0; dim]).unwrap();
-        b.extend(&vec![1.0; dim]).unwrap();
+    fn unit_bbox<const D: usize>() -> BoundingBox<D> {
+        let mut b = BoundingBox::<D>::from_point(&vec![0.0; D]).unwrap();
+        b.extend(&vec![1.0; D]).unwrap();
         b
     }
 
     #[test]
     fn new_rejects_zero_capacity() {
         assert!(matches!(
-            NodeStore::new(0).unwrap_err(),
+            NodeStore::<2>::new(0).unwrap_err(),
             RcfError::InvalidConfig(_)
         ));
     }
@@ -413,14 +413,14 @@ mod tests {
     fn new_rejects_capacity_above_max() {
         // u32::MAX is > MAX_INDEX (1 << 31).
         assert!(matches!(
-            NodeStore::new(u32::MAX).unwrap_err(),
+            NodeStore::<2>::new(u32::MAX).unwrap_err(),
             RcfError::InvalidConfig(_)
         ));
     }
 
     #[test]
     fn new_starts_empty() {
-        let s = NodeStore::new(8).unwrap();
+        let s = NodeStore::<2>::new(8).unwrap();
         assert_eq!(s.capacity(), 8);
         assert_eq!(s.live_count(), 0);
         assert_eq!(s.live_internal_count(), 0);
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn add_leaf_increments_live() {
-        let mut s = NodeStore::new(4).unwrap();
+        let mut s = NodeStore::<2>::new(4).unwrap();
         let l = s.add_leaf(7, None, 1).unwrap();
         assert!(l.is_leaf());
         assert_eq!(s.live_leaf_count(), 1);
@@ -438,11 +438,13 @@ mod tests {
 
     #[test]
     fn add_internal_increments_live() {
-        let mut s = NodeStore::new(4).unwrap();
+        let mut s = NodeStore::<2>::new(4).unwrap();
         let l1 = s.add_leaf(0, None, 1).unwrap();
         let l2 = s.add_leaf(1, None, 1).unwrap();
         let cut = Cut::new(0, 0.5);
-        let i = s.add_internal(cut, unit_bbox(2), l1, l2, None, 2).unwrap();
+        let i = s
+            .add_internal(cut, unit_bbox::<2>(), l1, l2, None, 2)
+            .unwrap();
         assert!(i.is_internal());
         assert_eq!(s.live_internal_count(), 1);
         assert_eq!(s.live_leaf_count(), 2);
@@ -451,7 +453,7 @@ mod tests {
 
     #[test]
     fn add_leaf_capacity_exhausted() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         s.add_leaf(0, None, 1).unwrap();
         s.add_leaf(1, None, 1).unwrap();
         assert!(matches!(
@@ -462,23 +464,23 @@ mod tests {
 
     #[test]
     fn add_internal_capacity_exhausted() {
-        let mut s = NodeStore::new(1).unwrap();
+        let mut s = NodeStore::<2>::new(1).unwrap();
         let l1 = s.add_leaf(0, None, 1).unwrap();
         let l2 = s.add_leaf(1, None, 1);
         // capacity=1: only one leaf slot.
         assert!(matches!(l2.unwrap_err(), RcfError::InvalidConfig(_)));
         let i = s
-            .add_internal(Cut::new(0, 0.0), unit_bbox(2), l1, l1, None, 1)
+            .add_internal(Cut::new(0, 0.0), unit_bbox::<2>(), l1, l1, None, 1)
             .unwrap();
         assert!(
-            s.add_internal(Cut::new(0, 0.0), unit_bbox(2), i, i, None, 1)
+            s.add_internal(Cut::new(0, 0.0), unit_bbox::<2>(), i, i, None, 1)
                 .is_err()
         );
     }
 
     #[test]
     fn delete_frees_slot_for_reuse() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(7, None, 1).unwrap();
         let l_idx = l.index();
         s.delete(l).unwrap();
@@ -490,7 +492,7 @@ mod tests {
 
     #[test]
     fn delete_oob_index_rejected() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let bogus = NodeRef::leaf(99);
         assert!(matches!(
             s.delete(bogus).unwrap_err(),
@@ -500,7 +502,7 @@ mod tests {
 
     #[test]
     fn delete_double_free_rejected() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(0, None, 1).unwrap();
         s.delete(l).unwrap();
         assert!(matches!(
@@ -511,7 +513,7 @@ mod tests {
 
     #[test]
     fn node_returns_inserted_value() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(42, None, 1).unwrap();
         match s.node(l).unwrap() {
             Node::Leaf {
@@ -526,7 +528,7 @@ mod tests {
 
     #[test]
     fn node_mut_allows_inplace_update() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(1, None, 1).unwrap();
         if let Node::Leaf { mass, .. } = s.node_mut(l).unwrap() {
             *mass = 5;
@@ -536,7 +538,7 @@ mod tests {
 
     #[test]
     fn node_oob_returns_err() {
-        let s = NodeStore::new(2).unwrap();
+        let s = NodeStore::<2>::new(2).unwrap();
         assert!(matches!(
             s.node(NodeRef::leaf(7)).unwrap_err(),
             RcfError::OutOfBounds { .. }
@@ -545,11 +547,11 @@ mod tests {
 
     #[test]
     fn parent_and_sibling_lookup() {
-        let mut s = NodeStore::new(4).unwrap();
+        let mut s = NodeStore::<2>::new(4).unwrap();
         let l1 = s.add_leaf(0, None, 1).unwrap();
         let l2 = s.add_leaf(1, None, 1).unwrap();
         let i = s
-            .add_internal(Cut::new(0, 0.5), unit_bbox(2), l1, l2, None, 2)
+            .add_internal(Cut::new(0, 0.5), unit_bbox::<2>(), l1, l2, None, 2)
             .unwrap();
         s.set_parent(l1, Some(i)).unwrap();
         s.set_parent(l2, Some(i)).unwrap();
@@ -564,12 +566,12 @@ mod tests {
 
     #[test]
     fn sibling_orphan_detected() {
-        let mut s = NodeStore::new(4).unwrap();
+        let mut s = NodeStore::<2>::new(4).unwrap();
         let real_l = s.add_leaf(0, None, 1).unwrap();
         let fake_l = s.add_leaf(1, None, 1).unwrap();
         let other = s.add_leaf(2, None, 1).unwrap();
         let i = s
-            .add_internal(Cut::new(0, 0.5), unit_bbox(2), real_l, other, None, 2)
+            .add_internal(Cut::new(0, 0.5), unit_bbox::<2>(), real_l, other, None, 2)
             .unwrap();
         // fake_l claims `i` as its parent without being one of its children.
         s.set_parent(fake_l, Some(i)).unwrap();
@@ -581,7 +583,7 @@ mod tests {
 
     #[test]
     fn sibling_parent_is_leaf_rejected() {
-        let mut s = NodeStore::new(4).unwrap();
+        let mut s = NodeStore::<2>::new(4).unwrap();
         let leaf_parent = s.add_leaf(0, None, 1).unwrap();
         let child = s.add_leaf(1, None, 1).unwrap();
         // Manually break the invariant: child claims a leaf as its parent.
@@ -594,10 +596,10 @@ mod tests {
 
     #[test]
     fn internal_bbox_returns_cached_box() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l1 = s.add_leaf(0, None, 1).unwrap();
         let l2 = s.add_leaf(1, None, 1).unwrap();
-        let bbox = unit_bbox(3);
+        let bbox = unit_bbox::<2>();
         let i = s
             .add_internal(Cut::new(0, 0.5), bbox.clone(), l1, l2, None, 2)
             .unwrap();
@@ -606,7 +608,7 @@ mod tests {
 
     #[test]
     fn internal_bbox_on_leaf_rejected() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(0, None, 1).unwrap();
         assert!(matches!(
             s.internal_bbox(l).unwrap_err(),
@@ -616,7 +618,7 @@ mod tests {
 
     #[test]
     fn set_mass_updates_leaf_and_internal() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(0, None, 1).unwrap();
         s.set_mass(l, 9).unwrap();
         assert_eq!(s.node(l).unwrap().mass(), 9);
@@ -624,13 +626,13 @@ mod tests {
 
     #[test]
     fn set_internal_bbox_replaces_cached() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l1 = s.add_leaf(0, None, 1).unwrap();
         let l2 = s.add_leaf(1, None, 1).unwrap();
         let i = s
-            .add_internal(Cut::new(0, 0.5), unit_bbox(2), l1, l2, None, 2)
+            .add_internal(Cut::new(0, 0.5), unit_bbox::<2>(), l1, l2, None, 2)
             .unwrap();
-        let mut new_bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+        let mut new_bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
         new_bbox.extend(&[10.0, 10.0]).unwrap();
         s.set_internal_bbox(i, new_bbox.clone()).unwrap();
         assert_eq!(s.internal_bbox(i).unwrap(), &new_bbox);
@@ -638,12 +640,12 @@ mod tests {
 
     #[test]
     fn set_internal_children_swaps_refs() {
-        let mut s = NodeStore::new(4).unwrap();
+        let mut s = NodeStore::<2>::new(4).unwrap();
         let l1 = s.add_leaf(0, None, 1).unwrap();
         let l2 = s.add_leaf(1, None, 1).unwrap();
         let l3 = s.add_leaf(2, None, 1).unwrap();
         let i = s
-            .add_internal(Cut::new(0, 0.5), unit_bbox(2), l1, l2, None, 2)
+            .add_internal(Cut::new(0, 0.5), unit_bbox::<2>(), l1, l2, None, 2)
             .unwrap();
         s.set_internal_children(i, l1, l3).unwrap();
         match s.node(i).unwrap() {
@@ -657,11 +659,11 @@ mod tests {
 
     #[test]
     fn set_internal_cut_replaces_cut() {
-        let mut s = NodeStore::new(4).unwrap();
+        let mut s = NodeStore::<2>::new(4).unwrap();
         let l1 = s.add_leaf(0, None, 1).unwrap();
         let l2 = s.add_leaf(1, None, 1).unwrap();
         let i = s
-            .add_internal(Cut::new(0, 0.5), unit_bbox(2), l1, l2, None, 2)
+            .add_internal(Cut::new(0, 0.5), unit_bbox::<2>(), l1, l2, None, 2)
             .unwrap();
         s.set_internal_cut(i, Cut::new(1, 9.0)).unwrap();
         if let Node::Internal { cut, .. } = s.node(i).unwrap() {
@@ -672,10 +674,10 @@ mod tests {
 
     #[test]
     fn setters_reject_oob_or_wrong_kind() {
-        let mut s = NodeStore::new(2).unwrap();
+        let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(0, None, 1).unwrap();
         assert!(matches!(
-            s.set_internal_bbox(l, unit_bbox(2)).unwrap_err(),
+            s.set_internal_bbox(l, unit_bbox::<2>()).unwrap_err(),
             RcfError::InvalidConfig(_)
         ));
         assert!(matches!(
@@ -704,7 +706,7 @@ mod tests {
         #[test]
         fn invariants_under_random_ops(ops in proptest::collection::vec(0u32..20, 0..200)) {
             const CAP: u32 = 16;
-            let mut s = NodeStore::new(CAP).unwrap();
+            let mut s = NodeStore::<2>::new(CAP).unwrap();
             let mut live_leaves: Vec<NodeRef> = Vec::new();
             let mut live_internals: Vec<NodeRef> = Vec::new();
 
@@ -722,7 +724,7 @@ mod tests {
                             let l1 = live_leaves[live_leaves.len() - 1];
                             let l2 = live_leaves[live_leaves.len() - 2];
                             if let Ok(r) = s.add_internal(
-                                Cut::new(0, 0.0), unit_bbox(2), l1, l2, None, 2,
+                                Cut::new(0, 0.0), unit_bbox::<2>(), l1, l2, None, 2,
                             ) {
                                 prop_assert!(!live_internals.iter().any(|x| x.raw() == r.raw()));
                                 live_internals.push(r);

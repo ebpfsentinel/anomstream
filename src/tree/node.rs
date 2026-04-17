@@ -90,11 +90,11 @@ impl NodeRef {
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // `Internal` is intentionally larger than `Leaf` — embedding the
-// SmallVec-backed bounding box inline keeps the hot tree-traversal
+// `[f64; D]`-backed bounding box inline keeps the hot tree-traversal
 // path cache-resident. Boxing the internal variant would put the
-// bbox on the heap and defeat the SmallVec optimisation.
+// bbox on the heap and defeat the const-generic optimisation.
 #[allow(clippy::large_enum_variant)]
-pub enum Node {
+pub enum Node<const D: usize> {
     /// Internal node: a cut hyperplane plus the union bounding box of
     /// the subtree, two children, an optional parent and the mass
     /// (number of leaf descendants).
@@ -102,7 +102,7 @@ pub enum Node {
         /// The hyperplane partitioning the subtree.
         cut: Cut,
         /// Cached union bounding box of the subtree.
-        bbox: BoundingBox,
+        bbox: BoundingBox<D>,
         /// Left child (`point[cut.dim] <= cut.value`).
         left: NodeRef,
         /// Right child (`point[cut.dim] > cut.value`).
@@ -114,8 +114,8 @@ pub enum Node {
     },
     /// Leaf node: an index into the forest point store, the parent,
     /// and a mass (always `1` for distinct points; `> 1` only when
-    /// the same point is inserted multiple times — RCF.4 collapses
-    /// duplicates).
+    /// the same point is inserted multiple times — duplicates are
+    /// collapsed at insert time).
     Leaf {
         /// Index into the forest point store.
         point_idx: usize,
@@ -127,7 +127,7 @@ pub enum Node {
     },
 }
 
-impl Node {
+impl<const D: usize> Node<D> {
     /// Mass of the node (leaf count for internals, copy count for
     /// leaves).
     #[must_use]
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn node_mass_returns_inner_mass() {
-        let leaf = Node::Leaf {
+        let leaf: Node<2> = Node::Leaf {
             point_idx: 0,
             parent: None,
             mass: 3,
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn node_parent_returns_inner_parent() {
-        let leaf = Node::Leaf {
+        let leaf: Node<2> = Node::Leaf {
             point_idx: 0,
             parent: Some(NodeRef::internal(5)),
             mass: 1,

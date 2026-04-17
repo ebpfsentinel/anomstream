@@ -21,6 +21,11 @@ pub use scalar_score::ScalarScoreVisitor;
 /// Trait implemented by anyone observing a root→leaf traversal of a
 /// [`crate::tree::RandomCutTree`].
 ///
+/// `D` is the per-point dimensionality of the tree being walked. The
+/// trait is generic over `D` so the cached bounding boxes can be
+/// passed in as `&BoundingBox<D>` without erasing their compile-time
+/// dimensionality.
+///
 /// The visitor receives one callback per visited internal node and a
 /// final callback when the matching leaf is reached. After the walk
 /// completes, [`Visitor::result`] consumes the visitor and returns
@@ -33,7 +38,7 @@ pub use scalar_score::ScalarScoreVisitor;
 /// - `accept_leaf` is called exactly once, on the leaf where the walk
 ///   stops.
 /// - `result` is called exactly once, after the traversal finishes.
-pub trait Visitor {
+pub trait Visitor<const D: usize> {
     /// Output produced after the traversal completes.
     type Output;
 
@@ -52,7 +57,7 @@ pub trait Visitor {
         depth: usize,
         mass: u64,
         cut: &Cut,
-        bbox: &BoundingBox,
+        bbox: &BoundingBox<D>,
         prob_cut: f64,
         per_dim_prob: &[f64],
     );

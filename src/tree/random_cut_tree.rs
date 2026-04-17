@@ -30,36 +30,39 @@ use crate::tree::node_store::NodeStore;
 use crate::visitor::Visitor;
 
 /// Borrow points by index. Implemented by the forest layer and by
-/// `Vec<Vec<f64>>` for in-tree tests.
-pub trait PointAccessor {
+/// `Vec<[f64; D]>` for in-tree tests.
+///
+/// `D` matches the tree's compile-time dimensionality so the returned
+/// reference is a fixed-size array rather than a slice — callers can
+/// always pass it to [`BoundingBox::from_point`] without paying for a
+/// runtime length check.
+pub trait PointAccessor<const D: usize> {
     /// Borrow the point stored at `idx`, or return `None` when it
     /// does not exist.
-    fn point(&self, idx: usize) -> Option<&[f64]>;
+    fn point(&self, idx: usize) -> Option<&[f64; D]>;
 }
 
-impl PointAccessor for Vec<Vec<f64>> {
-    fn point(&self, idx: usize) -> Option<&[f64]> {
-        self.get(idx).map(Vec::as_slice)
+impl<const D: usize> PointAccessor<D> for Vec<[f64; D]> {
+    fn point(&self, idx: usize) -> Option<&[f64; D]> {
+        self.get(idx)
     }
 }
 
-impl PointAccessor for [Vec<f64>] {
-    fn point(&self, idx: usize) -> Option<&[f64]> {
-        self.get(idx).map(Vec::as_slice)
+impl<const D: usize> PointAccessor<D> for [[f64; D]] {
+    fn point(&self, idx: usize) -> Option<&[f64; D]> {
+        self.get(idx)
     }
 }
 
 /// Incrementally-maintained random cut tree over up to `capacity`
-/// distinct points.
+/// distinct `D`-dimensional points.
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RandomCutTree {
+pub struct RandomCutTree<const D: usize> {
     /// Root reference; `None` when the tree holds no live leaves.
     root: Option<NodeRef>,
     /// Backing storage for all live nodes.
-    store: NodeStore,
-    /// Dimensionality enforced by `add` / `traverse`.
-    dimension: usize,
+    store: NodeStore<D>,
     /// Reverse index: `point_idx → leaf NodeRef` for `O(1)` deletions.
     /// Backed by a sparse `Vec<Option<NodeRef>>` indexed by `point_idx`
     /// — the forest's `PointStore` reuses freed slots so the indices
@@ -70,23 +73,22 @@ pub struct RandomCutTree {
     distinct_count: usize,
 }
 
-impl RandomCutTree {
+impl<const D: usize> RandomCutTree<D> {
     /// Build an empty tree with room for `capacity` distinct points.
     ///
     /// # Errors
     ///
-    /// Returns [`RcfError::InvalidConfig`] when `dimension == 0`,
-    /// `capacity == 0`, or `capacity` exceeds the store limit.
-    pub fn new(capacity: u32, dimension: usize) -> RcfResult<Self> {
-        if dimension == 0 {
+    /// Returns [`RcfError::InvalidConfig`] when `D == 0`, `capacity ==
+    /// 0`, or `capacity` exceeds the store limit.
+    pub fn new(capacity: u32) -> RcfResult<Self> {
+        if D == 0 {
             return Err(RcfError::InvalidConfig(
                 "RandomCutTree dimension must be > 0".into(),
             ));
         }
         Ok(Self {
             root: None,
-            store: NodeStore::new(capacity)?,
-            dimension,
+            store: NodeStore::<D>::new(capacity)?,
             leaf_index: Vec::new(),
             distinct_count: 0,
         })
@@ -139,10 +141,10 @@ impl RandomCutTree {
         self.root
     }
 
-    /// Configured dimensionality.
+    /// Configured dimensionality (compile-time `D`).
     #[must_use]
-    pub fn dimension(&self) -> usize {
-        self.dimension
+    pub const fn dimension(&self) -> usize {
+        D
     }
 
     /// Number of distinct points currently stored (each leaf counts
@@ -156,7 +158,7 @@ impl RandomCutTree {
     /// Borrow the underlying node store. Used by tests and
     /// persistence (story RCF.8).
     #[must_use]
-    pub fn store(&self) -> &NodeStore {
+    pub fn store(&self) -> &NodeStore<D> {
         &self.store
     }
 
@@ -211,9 +213,9 @@ impl RandomCutTree {
     ) -> RcfResult<()>
     where
         R: RngCore + ?Sized,
-        P: PointAccessor + ?Sized,
+        P: PointAccessor<D> + ?Sized,
     {
-        ensure_dim(point, self.dimension)?;
+        ensure_dim(point, D)?;
         ensure_finite(point)?;
         if self.leaf_index_contains(point_idx) {
             return Err(RcfError::InvalidConfig(format!(
@@ -234,6 +236,12 @@ impl RandomCutTree {
 
     /// Recursive insertion. Returns the (possibly new) `NodeRef` that
     /// occupies the slot previously held by `n`.
+    // `drop(n_bbox)` releases the borrow of `self.store` held by the
+    // `Cow<BoundingBox<D>>` before we call `&mut self` helpers below.
+    // With `[f64; D]` storage `Cow<BoundingBox<D>>` no longer
+    // implements `Drop` directly, so clippy flags the explicit drops
+    // as redundant — they are not, they terminate the borrow.
+    #[allow(clippy::drop_non_drop)]
     fn insert_at<R, P>(
         &mut self,
         n: NodeRef,
@@ -244,7 +252,7 @@ impl RandomCutTree {
     ) -> RcfResult<NodeRef>
     where
         R: RngCore + ?Sized,
-        P: PointAccessor + ?Sized,
+        P: PointAccessor<D> + ?Sized,
     {
         let n_bbox = self.bbox_of(n, points)?;
 
@@ -264,7 +272,7 @@ impl RandomCutTree {
             // Materialise the augmented bbox once — it becomes the
             // cached bbox of the new internal node we are about to
             // splice in (so the allocation is unavoidable here).
-            let mut augmented: BoundingBox = (*n_bbox).clone();
+            let mut augmented: BoundingBox<D> = (*n_bbox).clone();
             drop(n_bbox);
             augmented.extend(point)?;
             self.splice_new_internal(n, point_idx, point, cut, augmented)
@@ -302,7 +310,7 @@ impl RandomCutTree {
         point_idx: usize,
         point: &[f64],
         cut: Cut,
-        bbox: BoundingBox,
+        bbox: BoundingBox<D>,
     ) -> RcfResult<NodeRef> {
         let new_leaf = self.store.add_leaf(point_idx, None, 1)?;
         self.leaf_index_set(point_idx, new_leaf);
@@ -346,7 +354,7 @@ impl RandomCutTree {
     ) -> RcfResult<NodeRef>
     where
         R: RngCore + ?Sized,
-        P: PointAccessor + ?Sized,
+        P: PointAccessor<D> + ?Sized,
     {
         let (existing_cut, left, right) = match self.store.node(n)? {
             Node::Internal {
@@ -449,7 +457,7 @@ impl RandomCutTree {
     ///   look up a referenced point.
     pub fn delete<P>(&mut self, point_idx: usize, points: &P) -> RcfResult<()>
     where
-        P: PointAccessor + ?Sized,
+        P: PointAccessor<D> + ?Sized,
     {
         let leaf = self.leaf_index_get(point_idx).ok_or_else(|| {
             RcfError::InvalidConfig(format!(
@@ -536,7 +544,7 @@ impl RandomCutTree {
     /// children.
     fn recompute_ancestors<P>(&mut self, start: NodeRef, points: &P) -> RcfResult<()>
     where
-        P: PointAccessor + ?Sized,
+        P: PointAccessor<D> + ?Sized,
     {
         let mut cur = Some(start);
         while let Some(node) = cur {
@@ -552,9 +560,9 @@ impl RandomCutTree {
     }
 
     /// Compute the bounding box of an internal node from its children.
-    fn compute_internal_bbox<P>(&self, n: NodeRef, points: &P) -> RcfResult<BoundingBox>
+    fn compute_internal_bbox<P>(&self, n: NodeRef, points: &P) -> RcfResult<BoundingBox<D>>
     where
-        P: PointAccessor + ?Sized,
+        P: PointAccessor<D> + ?Sized,
     {
         let (left, right) = match self.store.node(n)? {
             Node::Internal { left, right, .. } => (*left, *right),
@@ -566,16 +574,16 @@ impl RandomCutTree {
         };
         let lb = self.bbox_of(left, points)?;
         let rb = self.bbox_of(right, points)?;
-        lb.merged(&rb)
+        Ok(lb.merged(&rb))
     }
 
     /// Borrow or build the bounding box of any node (internal: cached
     /// — borrowed via [`Cow::Borrowed`] to skip an allocation; leaf:
     /// built on the fly from the point store entry as
     /// [`Cow::Owned`]).
-    fn bbox_of<'a, P>(&'a self, n: NodeRef, points: &'a P) -> RcfResult<Cow<'a, BoundingBox>>
+    fn bbox_of<'a, P>(&'a self, n: NodeRef, points: &'a P) -> RcfResult<Cow<'a, BoundingBox<D>>>
     where
-        P: PointAccessor + ?Sized,
+        P: PointAccessor<D> + ?Sized,
     {
         match self.store.node(n)? {
             Node::Internal { bbox, .. } => Ok(Cow::Borrowed(bbox)),
@@ -584,7 +592,7 @@ impl RandomCutTree {
                     index: *point_idx,
                     len: 0,
                 })?;
-                Ok(Cow::Owned(BoundingBox::from_point(p)?))
+                Ok(Cow::Owned(BoundingBox::<D>::from_point(p)?))
             }
         }
     }
@@ -598,8 +606,8 @@ impl RandomCutTree {
     /// - [`RcfError::EmptyForest`] when the tree is empty.
     /// - [`RcfError::DimensionMismatch`] when `point.len() != self.dimension()`.
     /// - [`RcfError::NaNValue`] when `point` contains a non-finite component.
-    pub fn traverse<V: Visitor>(&self, point: &[f64], mut visitor: V) -> RcfResult<V::Output> {
-        ensure_dim(point, self.dimension)?;
+    pub fn traverse<V: Visitor<D>>(&self, point: &[f64], mut visitor: V) -> RcfResult<V::Output> {
+        ensure_dim(point, D)?;
         ensure_finite(point)?;
         let Some(root) = self.root else {
             return Err(RcfError::EmptyForest);
@@ -609,7 +617,7 @@ impl RandomCutTree {
     }
 
     /// Recursive helper for [`traverse`](Self::traverse).
-    fn traverse_inner<V: Visitor>(
+    fn traverse_inner<V: Visitor<D>>(
         &self,
         n: NodeRef,
         point: &[f64],
@@ -648,7 +656,7 @@ impl RandomCutTree {
 /// Whether `cut` strictly isolates `point` from `n_bbox` (i.e. `point`
 /// ends up alone on one side of the hyperplane).
 #[inline]
-fn isolates_point(cut: &Cut, point: &[f64], n_bbox: &BoundingBox) -> bool {
+fn isolates_point<const D: usize>(cut: &Cut, point: &[f64], n_bbox: &BoundingBox<D>) -> bool {
     let d = cut.dim();
     let v = cut.value();
     let p_d = point[d];
@@ -674,7 +682,8 @@ mod tests {
 
     use crate::visitor::Visitor;
 
-    /// Visitor that records the path it observed.
+    /// Visitor that records the path it observed. Generic over `D` so
+    /// the trait impl matches every test tree dimensionality.
     struct PathRecorder {
         depths: Vec<usize>,
         leaf_idx: Option<usize>,
@@ -687,14 +696,14 @@ mod tests {
             }
         }
     }
-    impl Visitor for PathRecorder {
+    impl<const D: usize> Visitor<D> for PathRecorder {
         type Output = (Vec<usize>, Option<usize>);
         fn accept_internal(
             &mut self,
             depth: usize,
             _mass: u64,
             _cut: &Cut,
-            _bbox: &BoundingBox,
+            _bbox: &BoundingBox<D>,
             _prob: f64,
             _per_dim: &[f64],
         ) {
@@ -716,7 +725,7 @@ mod tests {
     #[test]
     fn new_rejects_zero_dimension() {
         assert!(matches!(
-            RandomCutTree::new(8, 0).unwrap_err(),
+            RandomCutTree::<0>::new(8).unwrap_err(),
             RcfError::InvalidConfig(_)
         ));
     }
@@ -724,14 +733,14 @@ mod tests {
     #[test]
     fn new_rejects_zero_capacity() {
         assert!(matches!(
-            RandomCutTree::new(0, 2).unwrap_err(),
+            RandomCutTree::<2>::new(0).unwrap_err(),
             RcfError::InvalidConfig(_)
         ));
     }
 
     #[test]
     fn empty_tree_root_is_none() {
-        let t = RandomCutTree::new(8, 2).unwrap();
+        let t = RandomCutTree::<2>::new(8).unwrap();
         assert!(t.root().is_none());
         assert_eq!(t.distinct_point_count(), 0);
         assert_eq!(t.dimension(), 2);
@@ -739,24 +748,21 @@ mod tests {
 
     #[test]
     fn add_first_point_creates_root_leaf() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let mut points: Vec<Vec<f64>> = vec![vec![1.0, 2.0]];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let points: Vec<[f64; 2]> = vec![[1.0, 2.0]];
         let mut rng = fresh_rng(42);
-        t.add(0, &points[0].clone(), &points, &mut rng).unwrap();
+        t.add(0, &points[0], &points, &mut rng).unwrap();
         let root = t.root().unwrap();
         assert!(root.is_leaf());
         assert_eq!(t.distinct_point_count(), 1);
-        // Cleanup: ensure points contain insertion (mock forest workflow).
-        points.push(vec![0.0, 0.0]);
-        let _ = points;
     }
 
     #[test]
     fn add_two_points_creates_internal_root() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let p0 = vec![0.0, 0.0];
-        let p1 = vec![1.0, 1.0];
-        let points = vec![p0.clone(), p1.clone()];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p0 = [0.0_f64, 0.0];
+        let p1 = [1.0_f64, 1.0];
+        let points = vec![p0, p1];
         let mut rng = fresh_rng(7);
         t.add(0, &p0, &points, &mut rng).unwrap();
         t.add(1, &p1, &points, &mut rng).unwrap();
@@ -768,8 +774,8 @@ mod tests {
 
     #[test]
     fn add_rejects_dimension_mismatch() {
-        let mut t = RandomCutTree::new(8, 3).unwrap();
-        let points: Vec<Vec<f64>> = vec![];
+        let mut t = RandomCutTree::<3>::new(8).unwrap();
+        let points: Vec<[f64; 3]> = vec![];
         let mut rng = fresh_rng(1);
         assert!(matches!(
             t.add(0, &[1.0, 2.0], &points, &mut rng).unwrap_err(),
@@ -779,8 +785,8 @@ mod tests {
 
     #[test]
     fn add_rejects_non_finite() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let points: Vec<Vec<f64>> = vec![];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let points: Vec<[f64; 2]> = vec![];
         let mut rng = fresh_rng(1);
         assert!(matches!(
             t.add(0, &[1.0, f64::NAN], &points, &mut rng).unwrap_err(),
@@ -790,9 +796,9 @@ mod tests {
 
     #[test]
     fn add_rejects_duplicate_point_idx() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let p = vec![0.0, 0.0];
-        let points = vec![p.clone()];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p = [0.0_f64, 0.0];
+        let points = vec![p];
         let mut rng = fresh_rng(1);
         t.add(0, &p, &points, &mut rng).unwrap();
         assert!(matches!(
@@ -803,14 +809,12 @@ mod tests {
 
     #[test]
     fn duplicate_coordinate_increments_leaf_mass() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let p = vec![3.0, 4.0];
-        let mut points = vec![p.clone()];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p = [3.0_f64, 4.0];
+        let mut points = vec![p];
         let mut rng = fresh_rng(1);
         t.add(0, &p, &points, &mut rng).unwrap();
-        // Insert the same coordinates with a different idx — should
-        // collapse into the existing leaf.
-        points.push(p.clone());
+        points.push(p);
         t.add(1, &p, &points, &mut rng).unwrap();
         let root = t.root().unwrap();
         assert!(root.is_leaf(), "single-point tree stays a leaf");
@@ -820,13 +824,13 @@ mod tests {
 
     #[test]
     fn add_many_distinct_points_keeps_mass_invariant() {
-        let mut t = RandomCutTree::new(64, 4).unwrap();
+        let mut t = RandomCutTree::<4>::new(64).unwrap();
         let mut rng = fresh_rng(99);
-        let mut points: Vec<Vec<f64>> = Vec::new();
+        let mut points: Vec<[f64; 4]> = Vec::new();
         for i in 0_u32..32 {
             let f = f64::from(i);
-            let p = vec![f, f * 2.0, f * 0.5, -f];
-            points.push(p.clone());
+            let p = [f, f * 2.0, f * 0.5, -f];
+            points.push(p);
             t.add(i as usize, &p, &points, &mut rng).unwrap();
         }
         let root = t.root().unwrap();
@@ -837,8 +841,8 @@ mod tests {
 
     #[test]
     fn delete_unknown_point_idx_is_err() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let points: Vec<Vec<f64>> = vec![];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let points: Vec<[f64; 2]> = vec![];
         assert!(matches!(
             t.delete(99, &points).unwrap_err(),
             RcfError::InvalidConfig(_)
@@ -847,9 +851,9 @@ mod tests {
 
     #[test]
     fn delete_root_leaf_clears_tree() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let p = vec![1.0, 2.0];
-        let points = vec![p.clone()];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p = [1.0_f64, 2.0];
+        let points = vec![p];
         let mut rng = fresh_rng(1);
         t.add(0, &p, &points, &mut rng).unwrap();
         t.delete(0, &points).unwrap();
@@ -860,10 +864,10 @@ mod tests {
 
     #[test]
     fn delete_one_of_two_points_leaves_sibling_as_root() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let p0 = vec![0.0, 0.0];
-        let p1 = vec![1.0, 1.0];
-        let points = vec![p0.clone(), p1.clone()];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p0 = [0.0_f64, 0.0];
+        let p1 = [1.0_f64, 1.0];
+        let points = vec![p0, p1];
         let mut rng = fresh_rng(7);
         t.add(0, &p0, &points, &mut rng).unwrap();
         t.add(1, &p1, &points, &mut rng).unwrap();
@@ -884,9 +888,9 @@ mod tests {
 
     #[test]
     fn delete_duplicate_decrements_mass_only() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let p = vec![1.0, 1.0];
-        let mut points = vec![p.clone(), p.clone()];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p = [1.0_f64, 1.0];
+        let mut points = vec![p, p];
         let mut rng = fresh_rng(1);
         t.add(0, &p, &points, &mut rng).unwrap();
         t.add(1, &p, &points, &mut rng).unwrap();
@@ -895,40 +899,32 @@ mod tests {
         t.delete(1, &points).unwrap();
         assert_eq!(t.store().node(root).unwrap().mass(), 1);
         assert!(t.root().unwrap().is_leaf());
-        // Only one of the two idx mappings survives — the leaf still
-        // holds the original point_idx 0 because we absorbed 1 into
-        // its leaf and removed it on delete.
         assert!(!t.contains(1));
         assert!(t.contains(0));
-        // Remaining mass and point_count.
         assert_eq!(t.store().node(root).unwrap().mass(), 1);
-        // Update points to keep len consistent.
         points.pop();
     }
 
     #[test]
     fn delete_then_re_add_keeps_capacity_bounded() {
-        let mut t = RandomCutTree::new(4, 2).unwrap();
+        let mut t = RandomCutTree::<2>::new(4).unwrap();
         let mut rng = fresh_rng(11);
-        let mut points = Vec::new();
-        // Seed initial 4 distinct points.
+        let mut points: Vec<[f64; 2]> = Vec::new();
         let mut live_idxs: Vec<usize> = Vec::new();
         for i in 0_u32..4 {
             let f = f64::from(i);
-            let p = vec![f, f + 1.0];
-            points.push(p.clone());
+            let p = [f, f + 1.0];
+            points.push(p);
             let idx = i as usize;
             t.add(idx, &p, &points, &mut rng).unwrap();
             live_idxs.push(idx);
         }
-        // Delete the oldest live idx + re-add a fresh one; capacity must
-        // hold across many iterations because freed slots are reused.
         for _ in 0..10 {
             let old = live_idxs.remove(0);
             t.delete(old, &points).unwrap();
             let new_idx = points.len();
-            let p = points[old].clone();
-            points.push(p.clone());
+            let p = points[old];
+            points.push(p);
             t.add(new_idx, &p, &points, &mut rng).unwrap();
             live_idxs.push(new_idx);
         }
@@ -937,7 +933,7 @@ mod tests {
 
     #[test]
     fn traverse_empty_tree_is_err() {
-        let t = RandomCutTree::new(4, 2).unwrap();
+        let t = RandomCutTree::<2>::new(4).unwrap();
         let v = PathRecorder::new();
         assert!(matches!(
             t.traverse(&[1.0, 2.0], v).unwrap_err(),
@@ -947,9 +943,9 @@ mod tests {
 
     #[test]
     fn traverse_single_leaf_visits_only_leaf() {
-        let mut t = RandomCutTree::new(4, 2).unwrap();
-        let p = vec![1.0, 2.0];
-        let points = vec![p.clone()];
+        let mut t = RandomCutTree::<2>::new(4).unwrap();
+        let p = [1.0_f64, 2.0];
+        let points = vec![p];
         let mut rng = fresh_rng(0);
         t.add(0, &p, &points, &mut rng).unwrap();
         let v = PathRecorder::new();
@@ -960,10 +956,10 @@ mod tests {
 
     #[test]
     fn traverse_visits_in_root_to_leaf_order() {
-        let mut t = RandomCutTree::new(8, 2).unwrap();
-        let p0 = vec![0.0, 0.0];
-        let p1 = vec![10.0, 10.0];
-        let points = vec![p0.clone(), p1.clone()];
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p0 = [0.0_f64, 0.0];
+        let p1 = [10.0_f64, 10.0];
+        let points = vec![p0, p1];
         let mut rng = fresh_rng(123);
         t.add(0, &p0, &points, &mut rng).unwrap();
         t.add(1, &p1, &points, &mut rng).unwrap();
@@ -975,9 +971,9 @@ mod tests {
 
     #[test]
     fn traverse_rejects_dim_mismatch_and_nan() {
-        let mut t = RandomCutTree::new(4, 2).unwrap();
-        let p = vec![1.0, 2.0];
-        let points = vec![p.clone()];
+        let mut t = RandomCutTree::<2>::new(4).unwrap();
+        let p = [1.0_f64, 2.0];
+        let points = vec![p];
         let mut rng = fresh_rng(0);
         t.add(0, &p, &points, &mut rng).unwrap();
         assert!(matches!(
@@ -993,14 +989,14 @@ mod tests {
 
     #[test]
     fn deterministic_tree_under_fixed_seed() {
-        fn build(seed: u64) -> RandomCutTree {
-            let mut t = RandomCutTree::new(64, 3).unwrap();
+        fn build(seed: u64) -> RandomCutTree<3> {
+            let mut t = RandomCutTree::<3>::new(64).unwrap();
             let mut rng = fresh_rng(seed);
-            let mut points = Vec::new();
+            let mut points: Vec<[f64; 3]> = Vec::new();
             for i in 0_u32..16 {
                 let f = f64::from(i);
-                let p = vec![f, f * 2.0, f * 0.25 + 1.0];
-                points.push(p.clone());
+                let p = [f, f * 2.0, f * 0.25 + 1.0];
+                points.push(p);
                 t.add(i as usize, &p, &points, &mut rng).unwrap();
             }
             t
@@ -1018,24 +1014,22 @@ mod tests {
 
     #[test]
     fn isolates_point_above_separated() {
-        let mut bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+        let mut bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
         bbox.extend(&[1.0, 1.0]).unwrap();
-        // Point well above on dim 0; cut at value=5 separates them.
         assert!(isolates_point(&Cut::new(0, 5.0), &[10.0, 0.5], &bbox));
-        // Cut INSIDE bbox does NOT isolate.
         assert!(!isolates_point(&Cut::new(0, 0.5), &[10.0, 0.5], &bbox));
     }
 
     #[test]
     fn isolates_point_below_separated() {
-        let mut bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+        let mut bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
         bbox.extend(&[1.0, 1.0]).unwrap();
         assert!(isolates_point(&Cut::new(1, -2.0), &[0.5, -10.0], &bbox));
     }
 
     #[test]
     fn isolates_point_inside_never() {
-        let mut bbox = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+        let mut bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
         bbox.extend(&[10.0, 10.0]).unwrap();
         assert!(!isolates_point(&Cut::new(0, 5.0), &[5.0, 5.0], &bbox));
     }
@@ -1043,7 +1037,7 @@ mod tests {
     // Property test: under uniform-random insertions, the tree depth
     // stays within `4 · ⌈log₂ N⌉ + 4` — the "expected `O(log n)`"
     // bound from Guha 2016 §2 with a generous constant to absorb
-    // the natural variance of random cuts. Backs RCF.4 AC #5.
+    // the natural variance of random cuts.
     proptest::proptest! {
         #![proptest_config(proptest::test_runner::Config { cases: 32, ..proptest::test_runner::Config::default() })]
         #[test]
@@ -1051,15 +1045,16 @@ mod tests {
             const N: usize = 64;
             const D: usize = 4;
             #[allow(clippy::cast_possible_truncation)]
-            let mut t = RandomCutTree::new(N as u32, D).unwrap();
+            let mut t = RandomCutTree::<D>::new(N as u32).unwrap();
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            let mut points: Vec<Vec<f64>> = Vec::with_capacity(N);
+            let mut points: Vec<[f64; D]> = Vec::with_capacity(N);
 
             for i in 0..N {
-                let p: Vec<f64> = (0..D)
-                    .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 100.0)
-                    .collect();
-                points.push(p.clone());
+                let mut p = [0.0_f64; D];
+                for slot in &mut p {
+                    *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 100.0;
+                }
+                points.push(p);
                 t.add(i, &p, &points, &mut rng).unwrap();
             }
 

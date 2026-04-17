@@ -10,7 +10,7 @@ const DIM: usize = 16;
 const ANOM_DIM: usize = 5;
 
 fn main() -> Result<(), RcfError> {
-    let mut forest = ForestBuilder::new(DIM)
+    let mut forest = ForestBuilder::<DIM>::new()
         .num_trees(100)
         .sample_size(128)
         .seed(2026)
@@ -19,12 +19,15 @@ fn main() -> Result<(), RcfError> {
     // Train on points uniformly distributed in [0, 1)^DIM.
     let mut rng = simple_lcg(0x00C0_FFEE);
     for _ in 0..512 {
-        let p: Vec<f64> = (0..DIM).map(|_| rng()).collect();
+        let mut p = [0.0_f64; DIM];
+        for slot in &mut p {
+            *slot = rng();
+        }
         forest.update(p)?;
     }
 
     // Query: anomalous on dim ANOM_DIM only.
-    let mut query = vec![0.5; DIM];
+    let mut query = [0.5_f64; DIM];
     query[ANOM_DIM] = 50.0;
 
     let score = forest.score(&query)?;

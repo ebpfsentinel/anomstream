@@ -4,6 +4,12 @@
 //! from the historical distribution. Anomaly threshold defaults to
 //! `1.5` (caller may override via the first CLI argument).
 //!
+//! Dimensionality is fixed at compile time via the [`DIM`] constant
+//! (default `4`) — every input row must contain exactly `DIM`
+//! comma-separated floats. Edit the constant and rebuild to ingest
+//! a different feature width; the const-generic [`ForestBuilder`]
+//! pins it at the type level so there is no runtime dim parameter.
+//!
 //! Run with `cargo run --example streaming -- 1.8 < data.csv`.
 
 use std::env;
@@ -13,14 +19,19 @@ use rcf_rs::{ForestBuilder, RcfError};
 
 const WARMUP: usize = 200;
 const DEFAULT_THRESHOLD: f64 = 1.5;
+/// Per-point dimensionality this binary expects. Adjust to match
+/// your feature width and rebuild.
+const DIM: usize = 4;
 
-fn parse_row(line: &str) -> Option<Vec<f64>> {
-    line.trim()
+fn parse_row(line: &str) -> Option<[f64; DIM]> {
+    let parts: Result<Vec<f64>, _> = line
+        .trim()
         .split(',')
         .map(str::trim)
         .map(str::parse::<f64>)
-        .collect::<Result<Vec<_>, _>>()
-        .ok()
+        .collect();
+    let parts = parts.ok()?;
+    parts.try_into().ok()
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = io::stdout();
     let mut out = stdout.lock();
 
-    // Pull the first row to discover dimensionality.
+    // Pull the first row.
     let first_line = loop {
         match lines.next() {
             Some(Ok(line)) if !line.trim().is_empty() => break line,
@@ -43,25 +54,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => return Ok(()),
         }
     };
-    let first_point = parse_row(&first_line).ok_or("first row must be numeric CSV")?;
-    let dim = first_point.len();
+    let first_point = parse_row(&first_line)
+        .ok_or_else(|| format!("first row must be {DIM} numeric comma-separated floats"))?;
 
-    let mut forest = ForestBuilder::new(dim)
+    let mut forest = ForestBuilder::<DIM>::new()
         .num_trees(50)
         .sample_size(64)
         .seed(2026)
         .build()?;
 
     // Warmup phase: feed but don't score.
-    forest.update(first_point.clone())?;
+    forest.update(first_point)?;
     let mut warmed = 1;
     while warmed < WARMUP {
         match lines.next() {
             Some(Ok(line)) if !line.trim().is_empty() => {
-                let p = parse_row(&line).ok_or("malformed CSV row")?;
-                if p.len() != dim {
-                    return Err("inconsistent row dimensionality".into());
-                }
+                let p = parse_row(&line)
+                    .ok_or_else(|| format!("malformed CSV row (expected {DIM} floats)"))?;
                 forest.update(p)?;
                 warmed += 1;
             }
@@ -79,10 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if line.trim().is_empty() {
             continue;
         }
-        let p = parse_row(&line).ok_or("malformed CSV row")?;
-        if p.len() != dim {
-            return Err("inconsistent row dimensionality".into());
-        }
+        let p =
+            parse_row(&line).ok_or_else(|| format!("malformed CSV row (expected {DIM} floats)"))?;
         let score: f64 = match forest.score(&p) {
             Ok(s) => s.into(),
             Err(RcfError::EmptyForest) => 0.0,

@@ -69,7 +69,7 @@ impl<'a> AttributionVisitor<'a> {
     }
 }
 
-impl Visitor for AttributionVisitor<'_> {
+impl<const D: usize> Visitor<D> for AttributionVisitor<'_> {
     type Output = DiVector;
 
     fn accept_internal(
@@ -77,7 +77,7 @@ impl Visitor for AttributionVisitor<'_> {
         depth: usize,
         mass: u64,
         _cut: &Cut,
-        bbox: &BoundingBox,
+        bbox: &BoundingBox<D>,
         prob_cut: f64,
         per_dim_prob: &[f64],
     ) {
@@ -135,8 +135,8 @@ mod tests {
     use super::*;
     use crate::domain::BoundingBox;
 
-    fn unit_bbox_2d() -> BoundingBox {
-        let mut b = BoundingBox::from_point(&[0.0, 0.0]).unwrap();
+    fn unit_bbox_2d() -> BoundingBox<2> {
+        let mut b = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
         b.extend(&[1.0, 1.0]).unwrap();
         b
     }
@@ -201,10 +201,10 @@ mod tests {
     fn argmax_identifies_anomalous_dim() {
         // Point anomalous on dim 2 (above bbox), normal otherwise.
         let mut v = AttributionVisitor::new(&[0.5, 0.5, 100.0, 0.5], 16).unwrap();
-        let mut bbox = BoundingBox::from_point(&[0.0; 4]).unwrap();
+        let mut bbox = BoundingBox::<4>::from_point(&[0.0; 4]).unwrap();
         bbox.extend(&[1.0; 4]).unwrap();
         v.accept_internal(2, 8, &Cut::new(2, 0.5), &bbox, 0.6, &[0.0, 0.0, 0.6, 0.0]);
-        let di = v.result();
+        let di = <AttributionVisitor<'_> as Visitor<4>>::result(v);
         assert_eq!(di.argmax(), Some(2));
     }
 
@@ -214,7 +214,7 @@ mod tests {
         let bbox = unit_bbox_2d();
         v.accept_internal(1, 2, &Cut::new(0, 0.5), &bbox, 0.5, &[0.5, 0.0]);
         let raw_high0 = v.current().high()[0];
-        let di = v.result();
+        let di = <AttributionVisitor<'_> as Visitor<2>>::result(v);
         // result divides by normalizer(4) = log2(4) = 2.
         assert!((di.high()[0] - raw_high0 / 2.0).abs() < 1e-12);
     }

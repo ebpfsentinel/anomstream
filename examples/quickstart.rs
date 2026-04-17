@@ -5,7 +5,7 @@ use rcf_rs::{AnomalyScore, ForestBuilder, RcfError};
 
 fn main() -> Result<(), RcfError> {
     // AWS-default forest pinned to a deterministic seed.
-    let mut forest = ForestBuilder::new(2)
+    let mut forest = ForestBuilder::<2>::new()
         .num_trees(50)
         .sample_size(64)
         .seed(42)
@@ -14,7 +14,7 @@ fn main() -> Result<(), RcfError> {
     // Stream a tight cluster around the origin.
     for i in 0..200 {
         let v = f64::from(i) * 0.001;
-        forest.update(vec![v, v + 0.5])?;
+        forest.update([v, v + 0.5])?;
     }
 
     let normal: AnomalyScore = forest.score(&[0.05, 0.55])?;

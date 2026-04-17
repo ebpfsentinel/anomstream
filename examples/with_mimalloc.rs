@@ -16,7 +16,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 fn main() -> Result<(), RcfError> {
     // Same shape as `examples/quickstart.rs` — only the global
     // allocator differs.
-    let mut forest = ForestBuilder::new(4)
+    let mut forest = ForestBuilder::<4>::new()
         .num_trees(50)
         .sample_size(64)
         .seed(42)
@@ -24,7 +24,7 @@ fn main() -> Result<(), RcfError> {
 
     for i in 0..200 {
         let v = f64::from(i) * 0.001;
-        forest.update(vec![v, v + 0.5, v - 0.5, v * 2.0])?;
+        forest.update([v, v + 0.5, v - 0.5, v * 2.0])?;
     }
 
     let outlier = forest.score(&[100.0, 100.0, 100.0, 100.0])?;

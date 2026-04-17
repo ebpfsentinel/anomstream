@@ -1,12 +1,11 @@
-//! End-to-end integration tests for the RCF.6 visitors against a
+//! End-to-end integration tests for the RCF visitors against a
 //! real [`RandomCutTree`].
 //!
-//! Story RCF.6 acceptance criteria #5–#7:
 //! - uniform 2D dataset → low scores
 //! - clustered + outlier → outlier scores ≥ 2× cluster mean
 //! - 16-dim with anomaly only on dim 5 → attribution argmax = 5
 
-#![allow(clippy::cast_precision_loss)] // Tests use small bounded counts.
+#![allow(clippy::cast_precision_loss, clippy::float_cmp)] // Tests use small bounded counts and exact-equality probes.
 
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -14,8 +13,8 @@ use rcf_rs::{AttributionVisitor, RandomCutTree, ScalarScoreVisitor, tree::PointA
 
 const SAMPLE_SIZE: u32 = 256;
 
-fn build_tree(dim: usize, points: &[Vec<f64>], seed: u64) -> RandomCutTree {
-    let mut tree = RandomCutTree::new(SAMPLE_SIZE, dim).expect("tree builds");
+fn build_tree<const D: usize>(points: &[[f64; D]], seed: u64) -> RandomCutTree<D> {
+    let mut tree = RandomCutTree::<D>::new(SAMPLE_SIZE).expect("tree builds");
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     for (idx, p) in points.iter().enumerate() {
         tree.add(idx, p, points, &mut rng).expect("add succeeds");
@@ -23,38 +22,36 @@ fn build_tree(dim: usize, points: &[Vec<f64>], seed: u64) -> RandomCutTree {
     tree
 }
 
-fn root_mass(tree: &RandomCutTree) -> u64 {
+fn root_mass<const D: usize>(tree: &RandomCutTree<D>) -> u64 {
     tree.root()
         .map_or(0, |root| tree.store().node(root).expect("root live").mass())
 }
 
-fn score(tree: &RandomCutTree, point: &[f64]) -> f64 {
+fn score<const D: usize>(tree: &RandomCutTree<D>, point: &[f64; D]) -> f64 {
     let visitor = ScalarScoreVisitor::new(root_mass(tree));
     let s = tree.traverse(point, visitor).expect("traverse succeeds");
     f64::from(s)
 }
 
-fn attribute(tree: &RandomCutTree, point: &[f64]) -> rcf_rs::DiVector {
+fn attribute<const D: usize>(tree: &RandomCutTree<D>, point: &[f64; D]) -> rcf_rs::DiVector {
     let visitor = AttributionVisitor::new(point, root_mass(tree)).expect("visitor builds");
     tree.traverse(point, visitor).expect("traverse succeeds")
 }
 
-/// AC #5: uniform dataset produces low scores almost everywhere.
+/// Uniform dataset produces low scores almost everywhere.
 #[test]
 fn uniform_dataset_yields_low_scores() {
     let mut rng = ChaCha8Rng::seed_from_u64(2026);
-    let mut points: Vec<Vec<f64>> = Vec::with_capacity(200);
+    let mut points: Vec<[f64; 2]> = Vec::with_capacity(200);
     for _ in 0..200 {
-        let p = vec![
+        let p = [
             <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng),
             <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng),
         ];
         points.push(p);
     }
-    let tree = build_tree(2, &points, 7);
+    let tree = build_tree::<2>(&points, 7);
 
-    // Score every member of the dataset itself. The vast majority
-    // should sit well below the AWS "≥3σ" anomaly threshold.
     let mut scores: Vec<f64> = points.iter().map(|p| score(&tree, p)).collect();
     scores.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let p95 = scores[(scores.len() * 95) / 100];
@@ -64,33 +61,25 @@ fn uniform_dataset_yields_low_scores() {
     );
 }
 
-/// AC #6: clustered dataset — a far outlier *not* in the tree
-/// scores significantly higher than cluster members. RCF anomaly
-/// scoring is meaningful for points the tree has not seen; scoring
-/// an inserted outlier walks back to its own leaf and produces
-/// near-zero isolation probability.
+/// Clustered dataset — a far outlier *not* in the tree scores
+/// significantly higher than cluster members.
 #[test]
 fn outlier_scores_above_cluster_mean() {
     let mut rng = ChaCha8Rng::seed_from_u64(123);
-    let mut points: Vec<Vec<f64>> = Vec::with_capacity(200);
-    // Tight cluster around the origin (uniform [−0.05, 0.05]).
+    let mut points: Vec<[f64; 2]> = Vec::with_capacity(200);
     for _ in 0..200 {
-        let p = vec![
+        let p = [
             <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 0.1 - 0.05,
             <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng) * 0.1 - 0.05,
         ];
         points.push(p);
     }
-    let tree = build_tree(2, &points, 11);
+    let tree = build_tree::<2>(&points, 11);
 
-    // Score every cluster member (each member IS in the tree, so this
-    // gives the baseline self-similarity score).
     let cluster_scores: Vec<f64> = points.iter().map(|p| score(&tree, p)).collect();
     let cluster_mean = cluster_scores.iter().sum::<f64>() / cluster_scores.len() as f64;
 
-    // Score a far outlier that was NEVER inserted — this is the
-    // realistic anomaly-detection use case.
-    let outlier = vec![10.0, 10.0];
+    let outlier: [f64; 2] = [10.0, 10.0];
     let outlier_score = score(&tree, &outlier);
 
     assert!(
@@ -99,25 +88,24 @@ fn outlier_scores_above_cluster_mean() {
     );
 }
 
-/// AC #7: 16-dim dataset with anomaly only on dim 5 — attribution
-/// argmax should pick dim 5.
+/// 16-dim dataset with anomaly only on dim 5 — attribution argmax
+/// should pick dim 5.
 #[test]
 fn single_dim_anomaly_attribution_argmax() {
     const DIM: usize = 16;
     const ANOM_DIM: usize = 5;
     let mut rng = ChaCha8Rng::seed_from_u64(42);
-    let mut points: Vec<Vec<f64>> = Vec::with_capacity(200);
+    let mut points: Vec<[f64; DIM]> = Vec::with_capacity(200);
     for _ in 0..200 {
-        let p: Vec<f64> = (0..DIM)
-            .map(|_| <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng))
-            .collect();
+        let mut p = [0.0_f64; DIM];
+        for slot in &mut p {
+            *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+        }
         points.push(p);
     }
-    let tree = build_tree(DIM, &points, 17);
+    let tree = build_tree::<DIM>(&points, 17);
 
-    // Query: a point that matches the cluster on every dim except
-    // dim ANOM_DIM, where it sits far outside.
-    let mut anomaly = vec![0.5; DIM];
+    let mut anomaly = [0.5_f64; DIM];
     anomaly[ANOM_DIM] = 100.0;
 
     let di = attribute(&tree, &anomaly);
@@ -131,13 +119,13 @@ fn single_dim_anomaly_attribution_argmax() {
     );
 }
 
-/// Sanity: the [`PointAccessor`] impl on `Vec<Vec<f64>>` is what we
+/// Sanity: the [`PointAccessor`] impl on `Vec<[f64; D]>` is what we
 /// actually use throughout these tests — make sure the public API
 /// surface lines up.
 #[test]
 fn point_accessor_impl_is_visible() {
-    let v: Vec<Vec<f64>> = vec![vec![1.0, 2.0]];
-    let slice: &[f64] = v.point(0).expect("point present");
-    assert_eq!(slice, &[1.0, 2.0]);
-    assert!(v.point(99).is_none());
+    let v: Vec<[f64; 2]> = vec![[1.0, 2.0]];
+    let arr: &[f64; 2] = <Vec<[f64; 2]> as PointAccessor<2>>::point(&v, 0).expect("point present");
+    assert_eq!(arr, &[1.0, 2.0]);
+    assert!(<Vec<[f64; 2]> as PointAccessor<2>>::point(&v, 99).is_none());
 }

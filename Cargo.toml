@@ -23,7 +23,7 @@ unsafe_code = "forbid"
 [features]
 default = ["std"]
 std = []
-serde = ["dep:serde", "rand_chacha/serde", "smallvec/serde"]
+serde = ["dep:serde", "rand_chacha/serde"]
 serde_json = ["dep:serde_json", "serde"]
 bincode = ["dep:bincode", "serde"]
 parallel = ["dep:rayon"]
@@ -33,7 +33,6 @@ thiserror = "2"
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng"] }
 rand_chacha = { version = "0.9", default-features = false, features = ["std"] }
 getrandom = "0.3"
-smallvec = { version = "1", features = ["union", "const_generics", "const_new"] }
 wide = "0.7"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }

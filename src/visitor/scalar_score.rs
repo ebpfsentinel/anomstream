@@ -55,7 +55,7 @@ impl ScalarScoreVisitor {
     }
 }
 
-impl Visitor for ScalarScoreVisitor {
+impl<const D: usize> Visitor<D> for ScalarScoreVisitor {
     type Output = AnomalyScore;
 
     fn accept_internal(
@@ -63,7 +63,7 @@ impl Visitor for ScalarScoreVisitor {
         depth: usize,
         mass: u64,
         _cut: &Cut,
-        _bbox: &BoundingBox,
+        _bbox: &BoundingBox<D>,
         prob_cut: f64,
         _per_dim_prob: &[f64],
     ) {
@@ -100,9 +100,9 @@ mod tests {
     use super::*;
     use crate::domain::BoundingBox;
 
-    fn unit_bbox(dim: usize) -> BoundingBox {
-        let mut b = BoundingBox::from_point(&vec![0.0; dim]).unwrap();
-        b.extend(&vec![1.0; dim]).unwrap();
+    fn unit_bbox<const D: usize>() -> BoundingBox<D> {
+        let mut b = BoundingBox::<D>::from_point(&vec![0.0; D]).unwrap();
+        b.extend(&vec![1.0; D]).unwrap();
         b
     }
 
@@ -116,7 +116,14 @@ mod tests {
     #[test]
     fn accept_internal_accumulates_blend() {
         let mut v = ScalarScoreVisitor::new(8);
-        v.accept_internal(1, 4, &Cut::new(0, 0.5), &unit_bbox(2), 0.5, &[0.25, 0.25]);
+        v.accept_internal(
+            1,
+            4,
+            &Cut::new(0, 0.5),
+            &unit_bbox::<2>(),
+            0.5,
+            &[0.25, 0.25],
+        );
         // depth=1, mass=4, p=0.5 → blend = 0.5*(1/(1+log2 4)) + 0.5*(1+log2 4)
         //                              = 0.5 * (1/3) + 0.5 * 3
         //                              = 0.16667 + 1.5 = 1.66667
@@ -128,7 +135,7 @@ mod tests {
     #[test]
     fn accept_leaf_adds_seen_contribution() {
         let mut v = ScalarScoreVisitor::new(8);
-        v.accept_leaf(3, 1, 7);
+        <ScalarScoreVisitor as Visitor<2>>::accept_leaf(&mut v, 3, 1, 7);
         // depth=3, mass=1 → score_seen = 1/(3+log2 1) = 1/3
         // damp(1, 8) = 1 / (1 + ln1/ln8) = 1 / (1 + 0) = 1
         let expected = (1.0 / 3.0) * 1.0;
@@ -138,10 +145,10 @@ mod tests {
     #[test]
     fn result_normalises_by_log2_total() {
         let mut v = ScalarScoreVisitor::new(4);
-        v.accept_leaf(2, 1, 0);
+        <ScalarScoreVisitor as Visitor<2>>::accept_leaf(&mut v, 2, 1, 0);
         // accumulated = (1/(2+log2 1)) * damp(1,4) = 0.5 * 1 = 0.5
         // normalizer(4) = log2 4 = 2
-        let score: f64 = v.result().into();
+        let score: f64 = <ScalarScoreVisitor as Visitor<2>>::result(v).into();
         assert!((score - 0.25).abs() < 1e-12);
     }
 
@@ -149,15 +156,15 @@ mod tests {
     fn result_with_total_mass_one_returns_zero() {
         // Single-leaf tree: no anomaly signal.
         let mut v = ScalarScoreVisitor::new(1);
-        v.accept_leaf(0, 1, 0);
-        let score: f64 = v.result().into();
+        <ScalarScoreVisitor as Visitor<2>>::accept_leaf(&mut v, 0, 1, 0);
+        let score: f64 = <ScalarScoreVisitor as Visitor<2>>::result(v).into();
         assert_eq!(score, 0.0);
     }
 
     #[test]
     fn result_returns_non_negative() {
         let v = ScalarScoreVisitor::new(8);
-        let score: f64 = v.result().into();
+        let score: f64 = <ScalarScoreVisitor as Visitor<2>>::result(v).into();
         assert!(score >= 0.0);
     }
 
@@ -168,7 +175,7 @@ mod tests {
             1,
             4,
             &Cut::new(0, 0.5),
-            &unit_bbox(2),
+            &unit_bbox::<2>(),
             1.5, // out of [0, 1]
             &[],
         );
@@ -182,8 +189,8 @@ mod tests {
     fn higher_prob_cut_yields_higher_contribution() {
         let mut low = ScalarScoreVisitor::new(64);
         let mut high = ScalarScoreVisitor::new(64);
-        low.accept_internal(2, 16, &Cut::new(0, 0.5), &unit_bbox(2), 0.0, &[]);
-        high.accept_internal(2, 16, &Cut::new(0, 0.5), &unit_bbox(2), 1.0, &[]);
+        low.accept_internal(2, 16, &Cut::new(0, 0.5), &unit_bbox::<2>(), 0.0, &[]);
+        high.accept_internal(2, 16, &Cut::new(0, 0.5), &unit_bbox::<2>(), 1.0, &[]);
         // p=0 → contribution = score_seen
         // p=1 → contribution = score_unseen
         // score_unseen(2, 16) = 2 + log2 16 = 6
