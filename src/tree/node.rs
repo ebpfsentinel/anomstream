@@ -89,6 +89,11 @@ impl NodeRef {
 /// store (story RCF.7).
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// `Internal` is intentionally larger than `Leaf` — embedding the
+// SmallVec-backed bounding box inline keeps the hot tree-traversal
+// path cache-resident. Boxing the internal variant would put the
+// bbox on the heap and defeat the SmallVec optimisation.
+#[allow(clippy::large_enum_variant)]
 pub enum Node {
     /// Internal node: a cut hyperplane plus the union bounding box of
     /// the subtree, two children, an optional parent and the mass

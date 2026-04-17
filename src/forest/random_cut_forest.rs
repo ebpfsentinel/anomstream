@@ -217,18 +217,7 @@ impl RandomCutForest {
         ensure_dim(point, self.config.dimension)?;
         ensure_finite(point)?;
 
-        let mut total = 0.0_f64;
-        let mut count = 0_usize;
-        for (tree, _) in &self.trees {
-            let Some(root) = tree.root() else {
-                continue;
-            };
-            let mass = tree.store().node(root)?.mass();
-            let visitor = ScalarScoreVisitor::new(mass);
-            let s = tree.traverse(point, visitor)?;
-            total += f64::from(s);
-            count += 1;
-        }
+        let (total, count) = score_aggregate(&self.trees, point)?;
 
         if count == 0 {
             return Err(RcfError::EmptyForest);
@@ -250,18 +239,8 @@ impl RandomCutForest {
         ensure_dim(point, self.config.dimension)?;
         ensure_finite(point)?;
 
-        let mut accumulator = DiVector::zeros(self.config.dimension);
-        let mut count = 0_usize;
-        for (tree, _) in &self.trees {
-            let Some(root) = tree.root() else {
-                continue;
-            };
-            let mass = tree.store().node(root)?.mass();
-            let visitor = AttributionVisitor::new(point.to_vec(), mass)?;
-            let di = tree.traverse(point, visitor)?;
-            accumulator.accumulate(&di)?;
-            count += 1;
-        }
+        let (mut accumulator, count) =
+            attribution_aggregate(&self.trees, self.config.dimension, point)?;
 
         if count == 0 {
             return Err(RcfError::EmptyForest);
@@ -271,6 +250,119 @@ impl RandomCutForest {
         let divisor = count as f64;
         accumulator.scale(divisor)?;
         Ok(accumulator)
+    }
+}
+
+/// Score aggregation across trees. Serial fold or rayon parallel
+/// fold/reduce depending on the `parallel` cargo feature.
+fn score_aggregate(
+    trees: &[(RandomCutTree, ReservoirSampler)],
+    point: &[f64],
+) -> RcfResult<(f64, usize)> {
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        trees
+            .par_iter()
+            .map(|(tree, _)| -> RcfResult<Option<f64>> {
+                let Some(root) = tree.root() else {
+                    return Ok(None);
+                };
+                let mass = tree.store().node(root)?.mass();
+                let visitor = ScalarScoreVisitor::new(mass);
+                let s = tree.traverse(point, visitor)?;
+                Ok(Some(f64::from(s)))
+            })
+            .try_fold(
+                || (0.0_f64, 0_usize),
+                |(t, c), step| {
+                    let s = step?;
+                    Ok::<_, RcfError>(match s {
+                        Some(v) => (t + v, c + 1),
+                        None => (t, c),
+                    })
+                },
+            )
+            .try_reduce(
+                || (0.0_f64, 0_usize),
+                |(t1, c1), (t2, c2)| Ok((t1 + t2, c1 + c2)),
+            )
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    {
+        let mut total = 0.0_f64;
+        let mut count = 0_usize;
+        for (tree, _) in trees {
+            let Some(root) = tree.root() else {
+                continue;
+            };
+            let mass = tree.store().node(root)?.mass();
+            let visitor = ScalarScoreVisitor::new(mass);
+            let s = tree.traverse(point, visitor)?;
+            total += f64::from(s);
+            count += 1;
+        }
+        Ok((total, count))
+    }
+}
+
+/// Attribution aggregation across trees. Serial accumulate or
+/// rayon parallel fold/reduce depending on the `parallel` cargo
+/// feature.
+fn attribution_aggregate(
+    trees: &[(RandomCutTree, ReservoirSampler)],
+    dimension: usize,
+    point: &[f64],
+) -> RcfResult<(DiVector, usize)> {
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        trees
+            .par_iter()
+            .map(|(tree, _)| -> RcfResult<Option<DiVector>> {
+                let Some(root) = tree.root() else {
+                    return Ok(None);
+                };
+                let mass = tree.store().node(root)?.mass();
+                let visitor = AttributionVisitor::new(point.to_vec(), mass)?;
+                Ok(Some(tree.traverse(point, visitor)?))
+            })
+            .try_fold(
+                || (DiVector::zeros(dimension), 0_usize),
+                |(mut acc, c), step| {
+                    if let Some(di) = step? {
+                        acc.accumulate(&di)?;
+                        Ok::<_, RcfError>((acc, c + 1))
+                    } else {
+                        Ok((acc, c))
+                    }
+                },
+            )
+            .try_reduce(
+                || (DiVector::zeros(dimension), 0_usize),
+                |(mut a1, c1), (a2, c2)| {
+                    a1.accumulate(&a2)?;
+                    Ok((a1, c1 + c2))
+                },
+            )
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    {
+        let mut accumulator = DiVector::zeros(dimension);
+        let mut count = 0_usize;
+        for (tree, _) in trees {
+            let Some(root) = tree.root() else {
+                continue;
+            };
+            let mass = tree.store().node(root)?.mass();
+            let visitor = AttributionVisitor::new(point.to_vec(), mass)?;
+            let di = tree.traverse(point, visitor)?;
+            accumulator.accumulate(&di)?;
+            count += 1;
+        }
+        Ok((accumulator, count))
     }
 }
 

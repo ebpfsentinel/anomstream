@@ -17,18 +17,30 @@
 //! [`probability_of_cut`]: BoundingBox::probability_of_cut
 //! [`per_dim_cut_probabilities`]: BoundingBox::per_dim_cut_probabilities
 
+use smallvec::SmallVec;
+
 use crate::domain::cut::Cut;
 use crate::domain::point::ensure_dim;
 use crate::error::{RcfError, RcfResult};
+
+/// Inline capacity used by [`BoundingBox`] storage. The AWS-default
+/// `feature_dim = 16` fits inline, so the common case never touches
+/// the heap. Higher dimensions spill to the inline `SmallVec` heap
+/// path automatically.
+const BBOX_INLINE_DIM: usize = 16;
+
+/// Internal storage type for [`BoundingBox`] corners — `SmallVec`
+/// inline up to [`BBOX_INLINE_DIM`] dims, heap-spill beyond.
+type BBoxStorage = SmallVec<[f64; BBOX_INLINE_DIM]>;
 
 /// Axis-aligned bounding box for `d`-dimensional points.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoundingBox {
     /// Per-dimension lower corner.
-    min: Vec<f64>,
+    min: BBoxStorage,
     /// Per-dimension upper corner.
-    max: Vec<f64>,
+    max: BBoxStorage,
 }
 
 impl BoundingBox {
@@ -42,8 +54,8 @@ impl BoundingBox {
             return Err(RcfError::EmptyBoundingBox);
         }
         Ok(Self {
-            min: point.to_vec(),
-            max: point.to_vec(),
+            min: SmallVec::from_slice(point),
+            max: SmallVec::from_slice(point),
         })
     }
 
