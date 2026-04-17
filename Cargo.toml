@@ -1,0 +1,36 @@
+[package]
+name = "rcf-rs"
+version = "0.1.0-dev"
+edition = "2024"
+rust-version = "1.93"
+license = "Apache-2.0"
+description = "Pure Rust Random Cut Forest for streaming anomaly detection (Guha et al., ICML 2016)"
+repository = "https://github.com/maximewewer/rcf-rs"
+homepage = "https://github.com/maximewewer/rcf-rs"
+documentation = "https://docs.rs/rcf-rs"
+readme = "README.md"
+keywords = ["anomaly-detection", "streaming", "random-cut-forest", "outlier", "ml"]
+categories = ["algorithms", "science", "data-structures"]
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[features]
+default = ["std"]
+std = []
+serde = ["dep:serde"]
+serde_json = ["dep:serde_json", "serde"]
+
+[dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.8", default-features = false, features = ["plotters", "cargo_bench_support"] }
+proptest = "1"
