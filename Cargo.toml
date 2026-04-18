@@ -21,7 +21,7 @@ missing_docs = "warn"
 unsafe_code = "forbid"
 
 [features]
-default = ["std"]
+default = ["std", "parallel", "serde", "bincode"]
 std = []
 serde = ["dep:serde", "rand_chacha/serde"]
 serde_json = ["dep:serde_json", "serde"]

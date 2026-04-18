@@ -11,6 +11,12 @@ the AWS reference (`feature_dim`, `num_trees`, `num_samples_per_tree`).
 
 > **Status**: under active development — APIs are unstable until v0.1.0.
 
+Optional **adaptive-threshold layer** (`ThresholdedForest`) tracks an
+EMA of the anomaly-score stream and derives a continuously updated
+threshold `mean + z · stddev`. Callers receive a graded verdict
+(`is_anomaly` + `grade ∈ [0, 1]`) instead of a raw score to compare
+against a magic constant — see `examples/thresholded.rs`.
+
 ## Quickstart
 
 ```rust,ignore
@@ -61,20 +67,27 @@ Reservoir sampling without replacement is from:
 | Score = average across trees | `forest::RandomCutForest::score` |
 | Anomaly threshold `≥ 3σ` from mean | caller responsibility |
 
-Out of scope for v0.1.0:
-
-- Shingling for 1D time series (consumer can pre-shingle the input)
-- AWS `eval_metrics` (accuracy / precision-recall) — caller owns labels
+Beyond the AWS spec, `rcf-rs` adds a `ThresholdedForest` on top of the
+bare forest — an EMA-driven adaptive `μ + z · σ` threshold inspired
+by AWS's `randomcutforest-parkservices` TRCF, kept deliberately light
+(no short/long-term duality, no near-threshold heuristics).
 
 ## Cargo features
 
 | Feature | Default | Effect |
 |---|---|---|
 | `std` | ✅ | Standard library support (future `no_std` planned) |
-| `parallel` | ❌ | Per-tree parallel insert/score/attribution via `rayon` |
-| `serde` | ❌ | Forest state serialisation |
-| `bincode` | ❌ | Versioned binary persistence helpers (implies `serde`) |
+| `parallel` | ✅ | Per-tree parallel insert/score/attribution via `rayon` |
+| `serde` | ✅ | Forest state serialisation |
+| `bincode` | ✅ | Versioned binary persistence helpers (implies `serde`) |
 | `serde_json` | ❌ | JSON helpers (implies `serde`) |
+
+The production profile (`parallel` + `serde` + `bincode`) is enabled
+by default because the intended deployment target — a long-running
+streaming agent that parallelises across cores and persists its
+forest across restarts — always needs all three. Opt out with
+`default-features = false` for embedded / mono-thread / no-persistence
+scenarios.
 
 ### `parallel` and the dedicated thread pool
 
