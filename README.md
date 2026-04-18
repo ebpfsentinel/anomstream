@@ -66,6 +66,15 @@ forest disagreed. An alert whose driver dim has low confidence is
 likely a lucky coincidence, not a stable signal. Available on all
 three detector types. See `examples/attribution_stability.rs`.
 
+**Meta-drift CUSUM** (`MetaDriftDetector`) runs a two-sided CUSUM
+change-point detector on the anomaly-score stream — the orthogonal
+question to "is this point anomalous?" becomes "is the score
+distribution itself shifting?" Fires `DriftKind::Upward` on a
+sustained score climb (baseline drift) and `DriftKind::Downward` on a
+sustained decline (quiescence / desensitisation), strictly more
+sensitive to small persistent shifts than a `μ + 3σ` gate. Standalone
+type — plug any score-like stream in. See `examples/meta_drift.rs`.
+
 ## Quickstart
 
 ```rust,ignore

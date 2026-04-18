@@ -13,9 +13,7 @@
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
-    FeatureGroups, ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder,
-};
+use rcf_rs::{FeatureGroups, ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn noisy(rng: &mut ChaCha8Rng) -> [f64; 4] {
     [
@@ -85,7 +83,9 @@ fn group_scores_rejects_index_out_of_range() {
         .add("rate", [0, 9]) // 9 out of range for D=4
         .build()
         .unwrap();
-    let err = f.group_scores(&[0.0, 0.0, 0.0, 0.0], &bad_groups).unwrap_err();
+    let err = f
+        .group_scores(&[0.0, 0.0, 0.0, 0.0], &bad_groups)
+        .unwrap_err();
     assert!(matches!(err, RcfError::OutOfBounds { .. }));
 }
 
@@ -106,7 +106,10 @@ fn thresholded_group_scores_match_bare_forest() {
     let groups = rate_vs_payload_groups();
     let via_trcf = d.group_scores(&probe, &groups).unwrap();
     let via_forest = d.forest().group_scores(&probe, &groups).unwrap();
-    assert_eq!(via_trcf, via_forest, "TRCF decomposition should equal forest decomposition");
+    assert_eq!(
+        via_trcf, via_forest,
+        "TRCF decomposition should equal forest decomposition"
+    );
 }
 
 #[test]

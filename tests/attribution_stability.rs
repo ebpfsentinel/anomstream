@@ -20,9 +20,7 @@
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
-    ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder,
-};
+use rcf_rs::{ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn noisy4(rng: &mut ChaCha8Rng) -> [f64; 4] {
     [

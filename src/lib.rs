@@ -42,9 +42,11 @@
 //! detector pool with LRU eviction), `bootstrap` (cold-start replay
 //! helpers for restart resumption from an upstream TSDB),
 //! `group_score` (named-group decomposition of the per-dim
-//! attribution vector), and `attribution_stability` (inter-tree
-//! dispersion + confidence for attribution). The `persistence` module
-//! is gated behind the `serde` feature; `pool` is gated behind `std`.
+//! attribution vector), `attribution_stability` (inter-tree
+//! dispersion + confidence for attribution), and `meta_drift`
+//! (two-sided CUSUM change-point detector over the score stream).
+//! The `persistence` module is gated behind the `serde` feature;
+//! `pool` is gated behind `std`.
 //!
 //! # Example
 //!
@@ -105,6 +107,7 @@ pub mod domain;
 pub mod error;
 pub mod forest;
 pub mod group_score;
+pub mod meta_drift;
 #[cfg(feature = "serde")]
 pub mod persistence;
 #[cfg(feature = "std")]
@@ -121,6 +124,7 @@ pub use domain::{AnomalyScore, BoundingBox, Cut, DiVector, Point};
 pub use error::{RcfError, RcfResult};
 pub use forest::{PointStore, RandomCutForest};
 pub use group_score::{FeatureGroup, FeatureGroups, FeatureGroupsBuilder, GroupScores};
+pub use meta_drift::{CusumConfig, DriftKind, DriftVerdict, MetaDriftDetector};
 #[cfg(feature = "std")]
 pub use pool::TenantForestPool;
 pub use sampler::{ReservoirSampler, SamplerOp};

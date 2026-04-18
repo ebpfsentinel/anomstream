@@ -215,10 +215,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///   component.
     /// - [`RcfError::EmptyForest`] when no tree holds any leaf.
     /// - Any error bubbled up from the per-tree attribution path.
-    pub fn attribution_stability(
-        &self,
-        point: &[f64; D],
-    ) -> RcfResult<AttributionStability> {
+    pub fn attribution_stability(&self, point: &[f64; D]) -> RcfResult<AttributionStability> {
         ensure_finite(point)?;
         let per_tree = collect_per_tree(self, point)?;
         stability_from_collection::<D>(&per_tree)
@@ -233,10 +230,7 @@ impl<const D: usize> ThresholdedForest<D> {
     /// # Errors
     ///
     /// Same as [`RandomCutForest::attribution_stability`].
-    pub fn attribution_stability(
-        &self,
-        point: &[f64; D],
-    ) -> RcfResult<AttributionStability> {
+    pub fn attribution_stability(&self, point: &[f64; D]) -> RcfResult<AttributionStability> {
         self.forest().attribution_stability(point)
     }
 }
@@ -305,9 +299,7 @@ mod tests {
     #[test]
     fn non_finite_point_rejected() {
         let f = trained();
-        let err = f
-            .attribution_stability(&[f64::NAN, 0.0])
-            .unwrap_err();
+        let err = f.attribution_stability(&[f64::NAN, 0.0]).unwrap_err();
         assert!(matches!(err, RcfError::NaNValue));
     }
 

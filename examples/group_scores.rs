@@ -52,7 +52,11 @@ fn main() -> Result<(), RcfError> {
     for (name, value) in decomposition.scores() {
         println!("  {name:<12} = {value:+.4}");
     }
-    println!("  {name:<12} = {value:+.4}", name = "total", value = decomposition.total());
+    println!(
+        "  {name:<12} = {value:+.4}",
+        name = "total",
+        value = decomposition.total()
+    );
     println!(
         "  {name:<12} = {value:.2}",
         name = "coverage",

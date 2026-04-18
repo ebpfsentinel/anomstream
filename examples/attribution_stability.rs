@@ -48,14 +48,8 @@ fn main() -> Result<(), RcfError> {
             c = stability.confidence(d),
         );
     }
-    println!(
-        "  argmax_mean     = {:?}",
-        stability.argmax_mean(),
-    );
-    println!(
-        "  argmax_weighted = {:?}",
-        stability.argmax_weighted(),
-    );
+    println!("  argmax_mean     = {:?}", stability.argmax_mean(),);
+    println!("  argmax_weighted = {:?}", stability.argmax_weighted(),);
 
     println!();
     println!("== scenario 2: marginal probe inside baseline ==");
@@ -69,14 +63,8 @@ fn main() -> Result<(), RcfError> {
             c = stability.confidence(d),
         );
     }
-    println!(
-        "  argmax_mean     = {:?}",
-        stability.argmax_mean(),
-    );
-    println!(
-        "  argmax_weighted = {:?}",
-        stability.argmax_weighted(),
-    );
+    println!("  argmax_mean     = {:?}", stability.argmax_mean(),);
+    println!("  argmax_weighted = {:?}", stability.argmax_weighted(),);
 
     Ok(())
 }

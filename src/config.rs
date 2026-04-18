@@ -515,18 +515,14 @@ mod tests {
 
     #[test]
     fn builder_explicit_time_decay_sticks_across_sample_size_override() {
-        let b = ForestBuilder::<4>::new()
-            .time_decay(0.05)
-            .sample_size(128);
+        let b = ForestBuilder::<4>::new().time_decay(0.05).sample_size(128);
         // Explicit override must not be clobbered by later sample_size.
         assert!((b.config().time_decay - 0.05).abs() < f64::EPSILON);
     }
 
     #[test]
     fn builder_sample_size_override_before_time_decay() {
-        let b = ForestBuilder::<4>::new()
-            .sample_size(128)
-            .time_decay(0.05);
+        let b = ForestBuilder::<4>::new().sample_size(128).time_decay(0.05);
         // Explicit override applied after sample_size wins too.
         assert!((b.config().time_decay - 0.05).abs() < f64::EPSILON);
     }
@@ -546,8 +542,7 @@ mod tests {
     #[test]
     fn default_time_decay_for_default_sample_size_matches_constant() {
         assert!(
-            (default_time_decay_for(DEFAULT_SAMPLE_SIZE) - DEFAULT_TIME_DECAY).abs()
-                < f64::EPSILON,
+            (default_time_decay_for(DEFAULT_SAMPLE_SIZE) - DEFAULT_TIME_DECAY).abs() < f64::EPSILON,
         );
     }
 

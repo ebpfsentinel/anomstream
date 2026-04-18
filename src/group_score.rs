@@ -65,7 +65,10 @@ impl FeatureGroup {
     ///
     /// Returns [`RcfError::InvalidConfig`] when the name is empty or
     /// the indices slice is empty.
-    pub fn new(name: impl Into<String>, indices: impl IntoIterator<Item = usize>) -> RcfResult<Self> {
+    pub fn new(
+        name: impl Into<String>,
+        indices: impl IntoIterator<Item = usize>,
+    ) -> RcfResult<Self> {
         let name = name.into();
         if name.is_empty() {
             return Err(RcfError::InvalidConfig(
@@ -314,11 +317,7 @@ impl GroupScores {
 pub fn decompose(di: &DiVector, groups: &FeatureGroups) -> GroupScores {
     let mut scores = Vec::with_capacity(groups.len());
     for group in groups.groups() {
-        let contribution: f64 = group
-            .indices
-            .iter()
-            .map(|&i| di.per_dim_total(i))
-            .sum();
+        let contribution: f64 = group.indices.iter().map(|&i| di.per_dim_total(i)).sum();
         scores.push((group.name.clone(), contribution));
     }
     GroupScores::new(scores, di.total())
@@ -335,11 +334,7 @@ impl<const D: usize> crate::forest::RandomCutForest<D> {
     /// - [`RcfError::OutOfBounds`] when any group references an
     ///   index `>= D`.
     /// - Any error bubbled up from [`Self::attribution`].
-    pub fn group_scores(
-        &self,
-        point: &[f64; D],
-        groups: &FeatureGroups,
-    ) -> RcfResult<GroupScores> {
+    pub fn group_scores(&self, point: &[f64; D], groups: &FeatureGroups) -> RcfResult<GroupScores> {
         groups.validate_for_dimension(D)?;
         let di = self.attribution(point)?;
         Ok(decompose(&di, groups))
@@ -355,11 +350,7 @@ impl<const D: usize> crate::thresholded::ThresholdedForest<D> {
     /// # Errors
     ///
     /// Same as [`crate::RandomCutForest::group_scores`].
-    pub fn group_scores(
-        &self,
-        point: &[f64; D],
-        groups: &FeatureGroups,
-    ) -> RcfResult<GroupScores> {
+    pub fn group_scores(&self, point: &[f64; D], groups: &FeatureGroups) -> RcfResult<GroupScores> {
         self.forest().group_scores(point, groups)
     }
 }
