@@ -1,35 +1,131 @@
-//! Optional persistence helpers for [`crate::RandomCutForest`].
+//! Optional persistence helpers for [`crate::RandomCutForest`] and
+//! [`crate::ThresholdedForest`].
 //!
-//! Gated behind the `serde` cargo feature. Two encodings are
+//! Gated behind the `serde` cargo feature. Four flavours are
 //! exposed:
 //!
-//! - **Binary** (`RandomCutForest::to_bytes` / `from_bytes`, gated
-//!   on the `bincode` feature): a compact `bincode 2` payload
-//!   prefixed with a 4-byte little-endian version field. Use this
-//!   for on-disk snapshots.
-//! - **JSON** (`RandomCutForest::to_json` / `from_json`, gated on
-//!   the `serde_json` feature): a human-readable text encoding
-//!   wrapping the same versioned envelope. Useful for debugging or
-//!   for callers who already pipe JSON elsewhere.
+//! - **Binary bytes** (`to_bytes` / `from_bytes`, gated on `bincode`):
+//!   a compact `bincode 2` payload prefixed with a 4-byte
+//!   little-endian version field. Use this for on-disk snapshots or
+//!   to ship forests over a network socket.
+//! - **JSON text** (`to_json` / `from_json`, gated on `serde_json`):
+//!   a human-readable text encoding wrapping the same versioned
+//!   envelope. Useful for debugging or for callers who already pipe
+//!   JSON elsewhere.
+//! - **Atomic file path** (`to_path` / `from_path`, gated on
+//!   `bincode + std`): write-tmp-then-rename + `fsync` so a crash or
+//!   power-loss mid-save cannot corrupt the snapshot on disk. Pair
+//!   with periodic checkpointing for **warm reload** — the detector
+//!   resumes exactly where it left off across restarts.
+//! - **JSON file path** (`to_json_path` / `from_json_path`, gated on
+//!   `serde_json + std`): same atomic write discipline, human-readable
+//!   payload.
 //!
 //! The version prefix lives **outside** the serialised payload so a
-//! version skew is detected before any third-party deserialiser
-//! runs against arbitrary bytes — a defence against malformed
+//! version skew is detected before any third-party deserialiser runs
+//! against arbitrary bytes — a defence against malformed
 //! payload-driven panics.
 //!
 //! Both encodings preserve the per-point dimensionality `D` at the
-//! type level — callers must deserialise into a forest with the
-//! same compile-time dimension that produced the payload.
+//! type level — callers must deserialise into a type with the same
+//! compile-time `D` that produced the payload.
 
 #[cfg(any(feature = "bincode", feature = "serde_json"))]
 use crate::error::{RcfError, RcfResult};
 use crate::forest::RandomCutForest;
+#[cfg(feature = "serde")]
+use crate::thresholded::ThresholdedForest;
 
-/// Persistence format version. Bump on any breaking layout change.
+/// Persistence format version for [`RandomCutForest`]. Bump on any
+/// breaking layout change.
 pub const PERSISTENCE_VERSION: u32 = 1;
+
+/// Persistence format version for [`ThresholdedForest`]. Distinct
+/// from [`PERSISTENCE_VERSION`] because the threshold envelope carries
+/// additional state (EMA stats, threshold config) that evolves on its
+/// own cadence.
+pub const THRESHOLDED_PERSISTENCE_VERSION: u32 = 1;
 
 /// Number of bytes reserved for the version prefix.
 pub const VERSION_PREFIX_BYTES: usize = 4;
+
+/// Decode the first four bytes of `bytes` as the persistence version.
+///
+/// # Errors
+///
+/// Returns [`RcfError::DeserializationFailed`] when `bytes` is shorter
+/// than [`VERSION_PREFIX_BYTES`].
+#[cfg(feature = "bincode")]
+fn read_version_prefix(bytes: &[u8]) -> RcfResult<u32> {
+    if bytes.len() < VERSION_PREFIX_BYTES {
+        return Err(RcfError::DeserializationFailed(format!(
+            "payload too short: {} byte(s), need at least {VERSION_PREFIX_BYTES}",
+            bytes.len()
+        )));
+    }
+    let mut v = [0_u8; VERSION_PREFIX_BYTES];
+    v.copy_from_slice(&bytes[..VERSION_PREFIX_BYTES]);
+    Ok(u32::from_le_bytes(v))
+}
+
+/// Path helpers for atomic write-tmp-rename persistence.
+///
+/// The tmp suffix is appended to the caller-supplied path so the temp
+/// file lives in the same filesystem — rename is only atomic within a
+/// single filesystem. The file is `fsync`'d before the rename so a
+/// power-loss between `write` and `rename` cannot leave a partially
+/// written snapshot on disk.
+#[cfg(all(feature = "std", any(feature = "bincode", feature = "serde_json")))]
+mod atomic {
+    use std::ffi::OsString;
+    use std::fs::{File, rename};
+    use std::io::Write;
+    use std::path::{Path, PathBuf};
+
+    use crate::error::{RcfError, RcfResult};
+
+    /// Compute the temporary path used for the atomic write.
+    pub(super) fn tmp_path(path: &Path) -> PathBuf {
+        let mut s: OsString = path.as_os_str().to_owned();
+        s.push(".tmp");
+        PathBuf::from(s)
+    }
+
+    /// Write `bytes` to `path` atomically: tmp file first, fsync,
+    /// then rename onto the target.
+    pub(super) fn write_atomic(path: &Path, bytes: &[u8]) -> RcfResult<()> {
+        let tmp = tmp_path(path);
+        let mut f = File::create(&tmp)
+            .map_err(|e| RcfError::SerializationFailed(format!("create {}: {e}", tmp.display())))?;
+        f.write_all(bytes)
+            .map_err(|e| RcfError::SerializationFailed(format!("write {}: {e}", tmp.display())))?;
+        f.sync_all()
+            .map_err(|e| RcfError::SerializationFailed(format!("fsync {}: {e}", tmp.display())))?;
+        drop(f);
+        rename(&tmp, path).map_err(|e| {
+            RcfError::SerializationFailed(format!(
+                "rename {} -> {}: {e}",
+                tmp.display(),
+                path.display()
+            ))
+        })?;
+        Ok(())
+    }
+
+    /// Read the full byte content of `path`.
+    #[cfg(feature = "bincode")]
+    pub(super) fn read_all(path: &Path) -> RcfResult<Vec<u8>> {
+        std::fs::read(path)
+            .map_err(|e| RcfError::DeserializationFailed(format!("read {}: {e}", path.display())))
+    }
+
+    /// Read the full text content of `path`.
+    #[cfg(feature = "serde_json")]
+    pub(super) fn read_all_string(path: &Path) -> RcfResult<String> {
+        std::fs::read_to_string(path)
+            .map_err(|e| RcfError::DeserializationFailed(format!("read {}: {e}", path.display())))
+    }
+}
 
 impl<const D: usize> RandomCutForest<D> {
     /// Serialise the forest into a versioned binary blob.
@@ -59,15 +155,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///   does not match [`PERSISTENCE_VERSION`].
     #[cfg(feature = "bincode")]
     pub fn from_bytes(bytes: &[u8]) -> RcfResult<Self> {
-        if bytes.len() < VERSION_PREFIX_BYTES {
-            return Err(RcfError::DeserializationFailed(format!(
-                "payload too short: {} byte(s), need at least {VERSION_PREFIX_BYTES}",
-                bytes.len()
-            )));
-        }
-        let mut version_bytes = [0_u8; VERSION_PREFIX_BYTES];
-        version_bytes.copy_from_slice(&bytes[..VERSION_PREFIX_BYTES]);
-        let version = u32::from_le_bytes(version_bytes);
+        let version = read_version_prefix(bytes)?;
         if version != PERSISTENCE_VERSION {
             return Err(RcfError::IncompatibleVersion {
                 found: version,
@@ -80,6 +168,35 @@ impl<const D: usize> RandomCutForest<D> {
         )
         .map_err(|e| RcfError::DeserializationFailed(e.to_string()))?;
         Ok(forest)
+    }
+
+    /// Atomically serialise the forest to `path` using the binary
+    /// encoding. Writes `<path>.tmp`, `fsync`s it, then renames onto
+    /// `path` — a mid-write crash leaves the previous snapshot
+    /// intact.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::SerializationFailed`] for any filesystem or
+    ///   encoder failure.
+    #[cfg(all(feature = "bincode", feature = "std"))]
+    pub fn to_path(&self, path: impl AsRef<std::path::Path>) -> RcfResult<()> {
+        let bytes = self.to_bytes()?;
+        atomic::write_atomic(path.as_ref(), &bytes)
+    }
+
+    /// Reload a forest from `path` using the binary encoding.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::DeserializationFailed`] when the file cannot be
+    ///   read or the payload is malformed.
+    /// - [`RcfError::IncompatibleVersion`] when the embedded version
+    ///   does not match [`PERSISTENCE_VERSION`].
+    #[cfg(all(feature = "bincode", feature = "std"))]
+    pub fn from_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
+        let bytes = atomic::read_all(path.as_ref())?;
+        Self::from_bytes(&bytes)
     }
 
     /// Serialise the forest as JSON. The version field lives at
@@ -117,6 +234,171 @@ impl<const D: usize> RandomCutForest<D> {
         }
         Ok(envelope.forest)
     }
+
+    /// Atomically write the forest as JSON to `path`. Same atomic
+    /// write discipline as [`to_path`](Self::to_path).
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::SerializationFailed`] for any filesystem or
+    ///   encoder failure.
+    #[cfg(all(feature = "serde_json", feature = "std"))]
+    pub fn to_json_path(&self, path: impl AsRef<std::path::Path>) -> RcfResult<()> {
+        let json = self.to_json()?;
+        atomic::write_atomic(path.as_ref(), json.as_bytes())
+    }
+
+    /// Reload a forest from a JSON file at `path`.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::DeserializationFailed`] when the file cannot be
+    ///   read or the JSON is malformed.
+    /// - [`RcfError::IncompatibleVersion`] when the embedded version
+    ///   does not match [`PERSISTENCE_VERSION`].
+    #[cfg(all(feature = "serde_json", feature = "std"))]
+    pub fn from_json_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
+        let json = atomic::read_all_string(path.as_ref())?;
+        Self::from_json(&json)
+    }
+}
+
+impl<const D: usize> ThresholdedForest<D> {
+    /// Serialise the thresholded detector into a versioned binary blob.
+    ///
+    /// The payload carries the underlying forest, the threshold
+    /// configuration, and the EMA statistics — enough for a receiver
+    /// to resume scoring and emitting graded verdicts without a
+    /// warmup gap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::SerializationFailed`] when the underlying
+    /// `bincode` encoder rejects the payload.
+    #[cfg(feature = "bincode")]
+    pub fn to_bytes(&self) -> RcfResult<Vec<u8>> {
+        let mut out = Vec::with_capacity(VERSION_PREFIX_BYTES + 4096);
+        out.extend_from_slice(&THRESHOLDED_PERSISTENCE_VERSION.to_le_bytes());
+        let payload = bincode::serde::encode_to_vec(self, bincode::config::standard())
+            .map_err(|e| RcfError::SerializationFailed(e.to_string()))?;
+        out.extend_from_slice(&payload);
+        Ok(out)
+    }
+
+    /// Reload a thresholded detector previously produced by
+    /// [`to_bytes`](Self::to_bytes).
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::DeserializationFailed`] when the byte slice is
+    ///   too short to hold the version prefix or the bincode payload
+    ///   is malformed.
+    /// - [`RcfError::IncompatibleVersion`] when the embedded version
+    ///   does not match [`THRESHOLDED_PERSISTENCE_VERSION`].
+    #[cfg(feature = "bincode")]
+    pub fn from_bytes(bytes: &[u8]) -> RcfResult<Self> {
+        let version = read_version_prefix(bytes)?;
+        if version != THRESHOLDED_PERSISTENCE_VERSION {
+            return Err(RcfError::IncompatibleVersion {
+                found: version,
+                expected: THRESHOLDED_PERSISTENCE_VERSION,
+            });
+        }
+        let (detector, _consumed) = bincode::serde::decode_from_slice::<Self, _>(
+            &bytes[VERSION_PREFIX_BYTES..],
+            bincode::config::standard(),
+        )
+        .map_err(|e| RcfError::DeserializationFailed(e.to_string()))?;
+        Ok(detector)
+    }
+
+    /// Atomically serialise the thresholded detector to `path`. Same
+    /// atomic write discipline as [`RandomCutForest::to_path`].
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::SerializationFailed`] for any filesystem or
+    ///   encoder failure.
+    #[cfg(all(feature = "bincode", feature = "std"))]
+    pub fn to_path(&self, path: impl AsRef<std::path::Path>) -> RcfResult<()> {
+        let bytes = self.to_bytes()?;
+        atomic::write_atomic(path.as_ref(), &bytes)
+    }
+
+    /// Reload a thresholded detector from `path`.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::DeserializationFailed`] when the file cannot be
+    ///   read or the payload is malformed.
+    /// - [`RcfError::IncompatibleVersion`] when the embedded version
+    ///   does not match [`THRESHOLDED_PERSISTENCE_VERSION`].
+    #[cfg(all(feature = "bincode", feature = "std"))]
+    pub fn from_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
+        let bytes = atomic::read_all(path.as_ref())?;
+        Self::from_bytes(&bytes)
+    }
+
+    /// Serialise the thresholded detector as JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::SerializationFailed`] when `serde_json`
+    /// rejects the payload.
+    #[cfg(feature = "serde_json")]
+    pub fn to_json(&self) -> RcfResult<String> {
+        let envelope = ThresholdedJsonEnvelope {
+            version: THRESHOLDED_PERSISTENCE_VERSION,
+            detector: self,
+        };
+        serde_json::to_string(&envelope).map_err(|e| RcfError::SerializationFailed(e.to_string()))
+    }
+
+    /// Reload a thresholded detector from JSON.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::DeserializationFailed`] when the JSON is malformed.
+    /// - [`RcfError::IncompatibleVersion`] when the embedded version
+    ///   does not match [`THRESHOLDED_PERSISTENCE_VERSION`].
+    #[cfg(feature = "serde_json")]
+    pub fn from_json(json: &str) -> RcfResult<Self> {
+        let envelope: ThresholdedJsonEnvelopeOwned<D> = serde_json::from_str(json)
+            .map_err(|e| RcfError::DeserializationFailed(e.to_string()))?;
+        if envelope.version != THRESHOLDED_PERSISTENCE_VERSION {
+            return Err(RcfError::IncompatibleVersion {
+                found: envelope.version,
+                expected: THRESHOLDED_PERSISTENCE_VERSION,
+            });
+        }
+        Ok(envelope.detector)
+    }
+
+    /// Atomically write the thresholded detector as JSON to `path`.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::SerializationFailed`] for any filesystem or
+    ///   encoder failure.
+    #[cfg(all(feature = "serde_json", feature = "std"))]
+    pub fn to_json_path(&self, path: impl AsRef<std::path::Path>) -> RcfResult<()> {
+        let json = self.to_json()?;
+        atomic::write_atomic(path.as_ref(), json.as_bytes())
+    }
+
+    /// Reload a thresholded detector from a JSON file at `path`.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::DeserializationFailed`] when the file cannot be
+    ///   read or the JSON is malformed.
+    /// - [`RcfError::IncompatibleVersion`] when the embedded version
+    ///   does not match [`THRESHOLDED_PERSISTENCE_VERSION`].
+    #[cfg(all(feature = "serde_json", feature = "std"))]
+    pub fn from_json_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
+        let json = atomic::read_all_string(path.as_ref())?;
+        Self::from_json(&json)
+    }
 }
 
 /// JSON envelope used by [`RandomCutForest::to_json`] — borrows the
@@ -139,6 +421,26 @@ struct JsonEnvelopeOwned<const D: usize> {
     version: u32,
     /// Reconstructed forest owned by the envelope.
     forest: RandomCutForest<D>,
+}
+
+/// JSON envelope for [`ThresholdedForest::to_json`].
+#[cfg(feature = "serde_json")]
+#[derive(serde::Serialize)]
+struct ThresholdedJsonEnvelope<'a, const D: usize> {
+    /// Persistence format version embedded alongside the payload.
+    version: u32,
+    /// Borrowed detector to be serialised.
+    detector: &'a ThresholdedForest<D>,
+}
+
+/// JSON envelope for [`ThresholdedForest::from_json`].
+#[cfg(feature = "serde_json")]
+#[derive(serde::Deserialize)]
+struct ThresholdedJsonEnvelopeOwned<const D: usize> {
+    /// Persistence format version embedded alongside the payload.
+    version: u32,
+    /// Reconstructed detector owned by the envelope.
+    detector: ThresholdedForest<D>,
 }
 
 #[cfg(all(test, feature = "bincode"))]

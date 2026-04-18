@@ -24,6 +24,13 @@ points do not dominate the sample. `1.0` (default) disables the gate;
 AWS's `CompactSampler` uses `0.125`. Configure via
 `ForestBuilder::initial_accept_fraction`.
 
+**Warm reload**: both `RandomCutForest` and `ThresholdedForest` expose
+`to_path` / `from_path` (binary) and `to_json_path` / `from_json_path`
+(JSON) helpers. Writes go through a tmp-then-rename dance with
+`fsync` so a crash mid-save leaves the previous snapshot intact. Pair
+with periodic checkpointing so restarts resume exactly where they left
+off — see `examples/warm_reload.rs`.
+
 ## Quickstart
 
 ```rust,ignore

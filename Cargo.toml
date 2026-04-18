@@ -44,6 +44,10 @@ criterion = { version = "0.8", default-features = false, features = ["plotters",
 proptest = "1"
 mimalloc = { version = "0.1", default-features = false }
 
+[[example]]
+name = "warm_reload"
+required-features = ["bincode", "std"]
+
 [[bench]]
 name = "forest_throughput"
 harness = false
