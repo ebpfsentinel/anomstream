@@ -172,6 +172,15 @@ impl<const D: usize> ThresholdedForestBuilder<D> {
         self
     }
 
+    /// Override the warmup admission fraction forwarded to each
+    /// per-tree reservoir. Forwarded to
+    /// [`ForestBuilder::initial_accept_fraction`].
+    #[must_use]
+    pub fn initial_accept_fraction(mut self, f: f64) -> Self {
+        self.forest = self.forest.initial_accept_fraction(f);
+        self
+    }
+
     /// Override the threshold's z-factor.
     #[must_use]
     pub fn z_factor(mut self, z: f64) -> Self {
@@ -306,10 +315,12 @@ mod tests {
             .score_decay(0.05)
             .min_observations(10)
             .min_threshold(0.5)
+            .initial_accept_fraction(0.125)
             .seed(7);
         assert_eq!(b.forest_builder().config().num_trees, 150);
         assert_eq!(b.forest_builder().config().sample_size, 128);
         assert_eq!(b.forest_builder().config().seed, Some(7));
+        assert!((b.forest_builder().config().initial_accept_fraction - 0.125).abs() < f64::EPSILON);
         assert_eq!(b.thresholded_config().z_factor, 2.5);
         assert_eq!(b.thresholded_config().score_decay, 0.05);
         assert_eq!(b.thresholded_config().min_observations, 10);

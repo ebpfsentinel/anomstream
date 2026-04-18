@@ -17,6 +17,13 @@ threshold `mean + z · stddev`. Callers receive a graded verdict
 (`is_anomaly` + `grade ∈ [0, 1]`) instead of a raw score to compare
 against a magic constant — see `examples/thresholded.rs`.
 
+Optional **cold-start warmup** (`initial_accept_fraction`) ramps the
+reservoir's admission probability over the first
+`initial_accept_fraction · sample_size` offers so the very first
+points do not dominate the sample. `1.0` (default) disables the gate;
+AWS's `CompactSampler` uses `0.125`. Configure via
+`ForestBuilder::initial_accept_fraction`.
+
 ## Quickstart
 
 ```rust,ignore

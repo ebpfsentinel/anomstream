@@ -107,7 +107,11 @@ impl<const D: usize> RandomCutForest<D> {
                         config.sample_size
                     ))
                 })?)?;
-            let sampler = ReservoirSampler::new(config.sample_size, config.time_decay)?;
+            let sampler = ReservoirSampler::with_initial_accept_fraction(
+                config.sample_size,
+                config.time_decay,
+                config.initial_accept_fraction,
+            )?;
             let tree_rng = ChaCha8Rng::seed_from_u64(master.next_u64());
             trees.push((tree, sampler, tree_rng));
         }

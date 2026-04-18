@@ -31,6 +31,10 @@ pub const MAX_SAMPLE_SIZE: usize = 2_048;
 pub const DEFAULT_SAMPLE_SIZE: usize = 256;
 /// Default time-decay (no decay — uniform reservoir sampling).
 pub const DEFAULT_TIME_DECAY: f64 = 0.0;
+/// Default warmup admission fraction — `1.0` disables the gate and
+/// matches the classic reservoir behaviour. Set below `1.0` (AWS
+/// uses `0.125`) to ramp admission during the cold-start period.
+pub const DEFAULT_INITIAL_ACCEPT_FRACTION: f64 = 1.0;
 
 /// Validated forest hyperparameters (dimension is encoded separately
 /// at the type level).
@@ -66,6 +70,22 @@ pub struct RcfConfig {
     /// callers can isolate this forest from the rest of the
     /// application's rayon workload. Ignored without `parallel`.
     pub num_threads: Option<usize>,
+    /// Warmup admission fraction forwarded to every per-tree
+    /// [`crate::ReservoirSampler`]. See that type's module-level docs
+    /// for semantics. `1.0` disables the gate; smaller values ramp
+    /// admission during the cold-start period so the reservoir is
+    /// less dominated by the first few stream entries.
+    #[cfg_attr(feature = "serde", serde(default = "default_initial_accept_fraction"))]
+    pub initial_accept_fraction: f64,
+}
+
+/// Serde default for [`RcfConfig::initial_accept_fraction`] so payloads
+/// persisted before the warmup knob existed deserialise with the
+/// gate disabled.
+#[cfg(feature = "serde")]
+#[must_use]
+fn default_initial_accept_fraction() -> f64 {
+    DEFAULT_INITIAL_ACCEPT_FRACTION
 }
 
 impl RcfConfig {
@@ -105,6 +125,15 @@ impl RcfConfig {
                 "num_threads must be > 0 when set; use None to fall back to rayon's global pool"
                     .into(),
             ));
+        }
+        if !self.initial_accept_fraction.is_finite()
+            || self.initial_accept_fraction <= 0.0
+            || self.initial_accept_fraction > 1.0
+        {
+            return Err(RcfError::InvalidConfig(format!(
+                "initial_accept_fraction {} out of (0.0, 1.0]",
+                self.initial_accept_fraction
+            )));
         }
         Ok(())
     }
@@ -172,6 +201,7 @@ impl<const D: usize> ForestBuilder<D> {
                 time_decay: DEFAULT_TIME_DECAY,
                 seed: None,
                 num_threads: None,
+                initial_accept_fraction: DEFAULT_INITIAL_ACCEPT_FRACTION,
             },
         }
     }
@@ -214,6 +244,17 @@ impl<const D: usize> ForestBuilder<D> {
         self
     }
 
+    /// Override the warmup admission fraction forwarded to each
+    /// per-tree reservoir. See
+    /// [`crate::ReservoirSampler`] module-level docs for semantics.
+    /// `1.0` (the default) disables the gate; AWS's `CompactSampler`
+    /// uses `0.125`.
+    #[must_use]
+    pub fn initial_accept_fraction(mut self, f: f64) -> Self {
+        self.config.initial_accept_fraction = f;
+        self
+    }
+
     /// Read-only access to the config under construction.
     #[must_use]
     pub fn config(&self) -> &RcfConfig {
@@ -250,6 +291,7 @@ mod tests {
             time_decay: td,
             seed: None,
             num_threads: None,
+            initial_accept_fraction: DEFAULT_INITIAL_ACCEPT_FRACTION,
         }
     }
 
@@ -353,6 +395,47 @@ mod tests {
     fn builder_num_threads_sets_field() {
         let b = ForestBuilder::<4>::new().num_threads(8);
         assert_eq!(b.config().num_threads, Some(8));
+    }
+
+    #[test]
+    fn validate_accepts_initial_accept_fraction_at_bounds() {
+        let mut c = cfg(100, 256, 0.0);
+        c.initial_accept_fraction = 0.001;
+        c.validate().unwrap();
+        c.initial_accept_fraction = 1.0;
+        c.validate().unwrap();
+    }
+
+    #[test]
+    fn validate_rejects_initial_accept_fraction_out_of_range() {
+        let mut c = cfg(100, 256, 0.0);
+        c.initial_accept_fraction = 0.0;
+        assert!(c.validate().is_err());
+        c.initial_accept_fraction = -0.1;
+        assert!(c.validate().is_err());
+        c.initial_accept_fraction = 1.01;
+        assert!(c.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_non_finite_initial_accept_fraction() {
+        let mut c = cfg(100, 256, 0.0);
+        c.initial_accept_fraction = f64::NAN;
+        assert!(c.validate().is_err());
+        c.initial_accept_fraction = f64::INFINITY;
+        assert!(c.validate().is_err());
+    }
+
+    #[test]
+    fn builder_initial_accept_fraction_sets_field() {
+        let b = ForestBuilder::<4>::new().initial_accept_fraction(0.125);
+        assert!((b.config().initial_accept_fraction - 0.125).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn builder_defaults_initial_accept_fraction_to_one() {
+        let b = ForestBuilder::<4>::new();
+        assert!((b.config().initial_accept_fraction - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
