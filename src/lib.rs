@@ -105,6 +105,7 @@
 // fail-fast idioms and opt out here.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::panic))]
 
+pub mod alert_cluster;
 pub mod attribution_stability;
 pub mod audit;
 pub mod bootstrap;
@@ -131,6 +132,7 @@ pub mod thresholded;
 pub mod tree;
 pub mod visitor;
 
+pub use alert_cluster::{AlertCluster, AlertClusterer, ClusterDecision};
 pub use attribution_stability::AttributionStability;
 pub use audit::{ALERT_RECORD_VERSION, AlertContext, AlertRecord};
 pub use bootstrap::BootstrapReport;

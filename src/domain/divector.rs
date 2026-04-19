@@ -39,6 +39,25 @@ impl DiVector {
         }
     }
 
+    /// Build a `DiVector` from explicit `high` / `low` vectors.
+    /// Useful for tests and downstream code that wants to pipe a
+    /// ready-made attribution back into the crate's helpers (e.g.
+    /// [`crate::AlertClusterer`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::DimensionMismatch`] when
+    /// `high.len() != low.len()`.
+    pub fn from_arrays(high: Vec<f64>, low: Vec<f64>) -> RcfResult<Self> {
+        if high.len() != low.len() {
+            return Err(RcfError::DimensionMismatch {
+                expected: high.len(),
+                got: low.len(),
+            });
+        }
+        Ok(Self { high, low })
+    }
+
     /// Dimensionality.
     #[must_use]
     pub fn dim(&self) -> usize {

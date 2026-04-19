@@ -225,6 +225,19 @@ pub mod names {
     pub const BOOTSTRAP_POINTS_TOTAL: &str = "rcf_bootstrap_points_total";
     /// Counter: bootstrap/replay points skipped for being non-finite.
     pub const BOOTSTRAP_SKIPPED_TOTAL: &str = "rcf_bootstrap_skipped_total";
+    /// Counter: every `AlertClusterer::observe` call — total alerts
+    /// ingested, pre-dedup.
+    pub const ALERTS_OBSERVED_TOTAL: &str = "rcf_alerts_observed_total";
+    /// Counter: alerts that opened a brand-new cluster (no existing
+    /// cluster passed the similarity threshold).
+    pub const ALERT_CLUSTERS_NEW_TOTAL: &str = "rcf_alert_clusters_new_total";
+    /// Counter: alerts merged into an existing cluster — the dedup
+    /// win. Pair with `ALERTS_OBSERVED_TOTAL` to derive the dedup
+    /// ratio.
+    pub const ALERT_CLUSTERS_JOINED_TOTAL: &str = "rcf_alert_clusters_joined_total";
+    /// Counter: clusters pruned because their most recent alert fell
+    /// outside the sliding window.
+    pub const ALERT_CLUSTERS_PRUNED_TOTAL: &str = "rcf_alert_clusters_pruned_total";
 
     /// Gauge: number of trees held by a forest.
     pub const FOREST_TREES: &str = "rcf_forest_trees";
@@ -247,6 +260,8 @@ pub mod names {
     /// dashboards benefit from being able to chart
     /// `TENANTS_RESIDENT / TENANT_CAPACITY` pressure ratios.
     pub const TENANT_CAPACITY: &str = "rcf_tenant_capacity";
+    /// Gauge: active clusters held by an `AlertClusterer`.
+    pub const ALERT_CLUSTERS_ACTIVE: &str = "rcf_alert_clusters_active";
 
     /// Histogram: raw anomaly score per scored point.
     pub const SCORE_OBSERVATION: &str = "rcf_score";

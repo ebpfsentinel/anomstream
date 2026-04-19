@@ -247,6 +247,28 @@ Source: `src/severity.rs`.
 
 Example: `examples/severity.rs`.
 
+### Alert clustering / dedup
+
+`AlertClusterer<K, D>` groups near-duplicate `AlertRecord`s in a
+sliding window so SOC dashboards see one cluster summary per
+incident instead of hundreds of individual rows. Similarity is
+cosine on the flattened attribution `DiVector` (`high ⧺ low`) —
+two alerts with the same dominant driver and magnitude profile
+cluster; unrelated attributions stay apart. Window is pruned
+automatically on every `observe` call (or explicitly via
+`prune_stale(now_ms)`).
+
+Returns `ClusterDecision::{NewCluster(idx), Joined(idx)}` so
+upstream can gate SIEM-write on `NewCluster` only and keep the
+hot path cheap. Emits `rcf_alerts_observed_total`,
+`rcf_alert_clusters_new_total`, `rcf_alert_clusters_joined_total`,
+`rcf_alert_clusters_pruned_total` counters and the
+`rcf_alert_clusters_active` gauge.
+
+Types: `AlertClusterer`, `AlertCluster`, `ClusterDecision`.
+
+Source: `src/alert_cluster.rs`.
+
 ### Audit trail (NIS2 / SOC2)
 
 `AlertRecord<K, D>` packages every analytic output (`score`,
@@ -327,6 +349,11 @@ Canonical metric names (`metrics::names::*`):
 | counter | `rcf_tenant_created_total` | pool factory invocation (fresh tenant) |
 | counter | `rcf_bootstrap_points_total` | bootstrap-ingested points |
 | counter | `rcf_bootstrap_skipped_total` | bootstrap points skipped (non-finite) |
+| counter | `rcf_alerts_observed_total` | every `AlertClusterer::observe` |
+| counter | `rcf_alert_clusters_new_total` | new cluster opened |
+| counter | `rcf_alert_clusters_joined_total` | alert merged into existing cluster |
+| counter | `rcf_alert_clusters_pruned_total` | cluster dropped by window prune |
+| gauge | `rcf_alert_clusters_active` | active clusters in `AlertClusterer` |
 | gauge | `rcf_forest_trees` | tree count of a forest |
 | gauge | `rcf_threshold_current` | TRCF adaptive threshold |
 | gauge | `rcf_ema_mean` | TRCF score-stream EMA mean |
