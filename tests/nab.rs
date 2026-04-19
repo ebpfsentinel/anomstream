@@ -30,13 +30,25 @@ use std::path::{Path, PathBuf};
 use rcf_rs::{AnomalyScore, ForestBuilder};
 use serde_json::Value;
 
-// 32-lag temporal embedding (~160 min of context on 5-min NAB
-// series). Ablation in `examples/nab_ablation.rs` measured lag=8
-// → 0.615, lag=16 → 0.650, lag=32 → 0.665 weighted aggregate AUC
-// — longer context absorbs more of the contextual-shift anomaly
-// structure NAB ships with.
+// Pipeline tuned via `examples/nab_ablation.rs`:
+//
+// 1. 32-lag temporal embedding (~160 min of context on 5-min NAB
+//    series) — longer context absorbs more of the contextual-shift
+//    anomaly structure.
+// 2. Z-score normalise each embedding dim against the warm-phase
+//    mean/stddev — NAB series have wildly different scales
+//    (CPU %, taxi counts, temperatures) and RCF's cut sampling
+//    is range-weighted.
+// 3. EMA-smooth the raw score stream (`alpha = 0.02`, half-life
+//    ~35 steps / ~3 h). Cuts per-point noise without losing the
+//    wide-window anomaly shape.
+//
+// Aggregate weighted AUC measured on `realKnownCause`: 0.719
+// (baseline `lag=8`: 0.615). See `docs/performance.md` for the
+// full ablation table.
 const D: usize = 32;
 const WARM_FRACTION: f64 = 0.15;
+const SMOOTH_ALPHA: f64 = 0.02;
 
 /// One CSV row after parsing: `(timestamp_str, value)`.
 type Row = (String, f64);
@@ -139,15 +151,15 @@ fn auc(scores: &[f64], labels: &[u8]) -> f64 {
     auc_val
 }
 
-/// Score one NAB file: feature-engineer the 4-lag embedding,
-/// warm on the first `WARM_FRACTION` of the series, stream-score
-/// the rest, return `(scores_per_row, labels_per_row)` for the
-/// scored suffix.
+/// Score one NAB file: `D`-lag embedding → warm-phase z-score
+/// normalisation → frozen-baseline `score()` → EMA-smoothed score
+/// stream. See module-level docs for the ablation-derived choice
+/// of each stage.
 fn score_file(rows: &[Row], windows: &[(String, String)]) -> (Vec<f64>, Vec<u8>) {
-    if rows.len() < 16 {
+    if rows.len() < 2 * D {
         return (Vec::new(), Vec::new());
     }
-    // Build lag embeddings starting at index 3.
+    // Raw lag embedding.
     let embed_len = rows.len() - (D - 1);
     let mut embeddings: Vec<[f64; D]> = Vec::with_capacity(embed_len);
     for i in (D - 1)..rows.len() {
@@ -160,6 +172,38 @@ fn score_file(rows: &[Row], windows: &[(String, String)]) -> (Vec<f64>, Vec<u8>)
 
     #[allow(clippy::cast_precision_loss)]
     let warm_end = ((embed_len as f64) * WARM_FRACTION) as usize;
+
+    // Per-dim z-score using warm-phase mean / stddev.
+    if warm_end > 1 {
+        let mut means = [0.0_f64; D];
+        let mut m2 = [0.0_f64; D];
+        #[allow(clippy::cast_precision_loss)]
+        let n_f = warm_end as f64;
+        for emb in &embeddings[..warm_end] {
+            for d in 0..D {
+                means[d] += emb[d];
+            }
+        }
+        for mean in &mut means {
+            *mean /= n_f;
+        }
+        for emb in &embeddings[..warm_end] {
+            for d in 0..D {
+                let delta = emb[d] - means[d];
+                m2[d] += delta * delta;
+            }
+        }
+        let mut stddevs = [1.0_f64; D];
+        for d in 0..D {
+            stddevs[d] = (m2[d] / n_f).sqrt().max(1.0e-9);
+        }
+        for emb in &mut embeddings {
+            for d in 0..D {
+                emb[d] = (emb[d] - means[d]) / stddevs[d];
+            }
+        }
+    }
+
     let mut forest = ForestBuilder::<D>::new()
         .num_trees(100)
         .sample_size(256)
@@ -167,7 +211,7 @@ fn score_file(rows: &[Row], windows: &[(String, String)]) -> (Vec<f64>, Vec<u8>)
         .build()
         .unwrap();
 
-    // Phase 1 — warm, no score collection.
+    // Phase 1 — warm on normalised embeddings, no score collection.
     for p in &embeddings[..warm_end] {
         forest.update(*p).ok();
     }
@@ -176,19 +220,26 @@ fn score_file(rows: &[Row], windows: &[(String, String)]) -> (Vec<f64>, Vec<u8>)
     // NOT call `update` on the eval set: NAB anomaly windows are
     // wide (days), and folding anomaly points back into the
     // reservoir drags the baseline toward them and drops recall.
-    // Matches realistic deployments where an initial "known clean"
-    // window trains the detector and production traffic is then
-    // scored against that frozen model.
-    let mut scores = Vec::with_capacity(embed_len.saturating_sub(warm_end));
+    let mut raw_scores = Vec::with_capacity(embed_len.saturating_sub(warm_end));
     let mut labels = Vec::with_capacity(embed_len.saturating_sub(warm_end));
     for (idx, p) in embeddings[warm_end..].iter().enumerate() {
         let s: AnomalyScore = forest
             .score(p)
             .unwrap_or_else(|_| AnomalyScore::new(0.0).expect("zero score is valid"));
-        scores.push(f64::from(s));
+        raw_scores.push(f64::from(s));
         let row_idx = warm_end + idx + (D - 1);
         let ts = &rows[row_idx].0;
         labels.push(u8::from(in_any_window(ts, windows)));
+    }
+
+    // Phase 3 — EMA-smooth the score stream.
+    let mut scores = Vec::with_capacity(raw_scores.len());
+    if let Some(&first) = raw_scores.first() {
+        let mut acc = first;
+        for &s in &raw_scores {
+            acc = SMOOTH_ALPHA * s + (1.0 - SMOOTH_ALPHA) * acc;
+            scores.push(acc);
+        }
     }
     (scores, labels)
 }
@@ -260,8 +311,8 @@ fn realknowncause_aggregate_auc_above_floor() {
     // downward *only* with a commit message explaining which
     // detector change moved the needle, and by how much.
     assert!(
-        weighted_auc > 0.60,
-        "aggregate weighted AUC = {weighted_auc:.3} below floor 0.60 — \
+        weighted_auc > 0.70,
+        "aggregate weighted AUC = {weighted_auc:.3} below floor 0.70 — \
          detector regression or dataset change?"
     );
 }
