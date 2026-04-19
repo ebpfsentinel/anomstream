@@ -322,8 +322,16 @@ impl MetaDriftDetector {
                 .observe_histogram(names::DRIFT_S_HIGH, self.s_high);
             self.metrics
                 .observe_histogram(names::DRIFT_S_LOW, self.s_low);
-            if drift.is_some() {
-                self.metrics.inc_counter(names::DRIFT_FIRES_TOTAL, 1);
+            match drift {
+                Some(DriftKind::Upward) => {
+                    self.metrics.inc_counter(names::DRIFT_FIRES_TOTAL, 1);
+                    self.metrics.inc_counter(names::DRIFT_UP_TOTAL, 1);
+                }
+                Some(DriftKind::Downward) => {
+                    self.metrics.inc_counter(names::DRIFT_FIRES_TOTAL, 1);
+                    self.metrics.inc_counter(names::DRIFT_DOWN_TOTAL, 1);
+                }
+                None => {}
             }
         }
 

@@ -86,7 +86,9 @@ Example: `examples/early_term.rs`.
 probe through every resident tenant's detector and returns a
 `Vec<(K, AnomalyGrade)>` sorted by descending grade. Warming-up
 tenants are dropped. Intended for MSSP / threat-intel lateral
-scans. Read-only — no tenant creation, no state mutation.
+scans. Read-only — no tenant creation, no state mutation. Under
+`parallel`, rayon fans out one `score_only` per tenant
+(`O(N)` cost, near-linear at ~6.7 ms for 512 tenants).
 
 Example: `examples/cross_tenant.rs`.
 
@@ -278,11 +280,34 @@ adapter against the trait.
 
 Canonical metric names (`metrics::names::*`):
 
-| Type | Name |
-|---|---|
-| counter | `rcf_updates_total`, `rcf_process_total`, `rcf_anomalies_fired_total`, `rcf_drift_fires_total`, `rcf_deletes_total`, `rcf_tenant_evictions_total` |
-| gauge | `rcf_forest_trees`, `rcf_threshold_current`, `rcf_tenants_resident` |
-| histogram | `rcf_score`, `rcf_grade`, `rcf_drift_s_high`, `rcf_drift_s_low`, `rcf_early_term_trees` |
+| Type | Name | Source |
+|---|---|---|
+| counter | `rcf_updates_total` | every `RandomCutForest::update` |
+| counter | `rcf_deletes_total` | every `delete` that actually removed a point |
+| counter | `rcf_attribution_total` | every successful `attribution` |
+| counter | `rcf_rejected_nan_total` | per-call NaN/±inf rejection, data-quality signal |
+| counter | `rcf_early_term_stopped_total` | `score_early_term` short-circuits |
+| counter | `rcf_process_total` | every `ThresholdedForest::process` |
+| counter | `rcf_anomalies_fired_total` | `process` whose verdict was `is_anomaly` |
+| counter | `rcf_drift_fires_total` | aggregate CUSUM fire (up + down) |
+| counter | `rcf_drift_up_total` | CUSUM upward drift fires |
+| counter | `rcf_drift_down_total` | CUSUM downward drift fires |
+| counter | `rcf_tenant_evictions_total` | pool LRU eviction |
+| counter | `rcf_tenant_created_total` | pool factory invocation (fresh tenant) |
+| counter | `rcf_bootstrap_points_total` | bootstrap-ingested points |
+| counter | `rcf_bootstrap_skipped_total` | bootstrap points skipped (non-finite) |
+| gauge | `rcf_forest_trees` | tree count of a forest |
+| gauge | `rcf_threshold_current` | TRCF adaptive threshold |
+| gauge | `rcf_ema_mean` | TRCF score-stream EMA mean |
+| gauge | `rcf_ema_stddev` | TRCF score-stream EMA stddev |
+| gauge | `rcf_observations_seen` | TRCF EMA observation count (warmup progress) |
+| gauge | `rcf_tenants_resident` | live tenants in pool |
+| gauge | `rcf_tenant_capacity` | configured pool capacity |
+| histogram | `rcf_score` | raw anomaly score per scored point |
+| histogram | `rcf_grade` | graded verdict `[0, 1]` per processed point |
+| histogram | `rcf_drift_s_high` | CUSUM upward accumulator |
+| histogram | `rcf_drift_s_low` | CUSUM downward accumulator |
+| histogram | `rcf_early_term_trees` | trees walked per `score_early_term` |
 
 Source: `src/metrics.rs`.
 
@@ -313,5 +338,9 @@ score-stream EMA (`mean`, `stddev`). Similarity =
 with thousands of tenants — identify clusters for tiered
 alerting or spot a tenant whose baseline drifts away from its
 peer group. Tenants below `min_obs` samples are excluded.
+
+`similarity_matrix` parallelises the pair enumeration under
+`parallel`; `most_similar` uses a bounded `BinaryHeap<top_n>` for
+`O(N · log top_n)` — microsecond-scale at 512 tenants (~9 µs).
 
 Example: `examples/tenant_similarity.rs`.

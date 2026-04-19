@@ -164,3 +164,159 @@ fn histogram_merge_produces_union_distribution() {
     a.merge(&b).unwrap();
     assert_eq!(a.total(), 300);
 }
+
+#[test]
+fn forest_sink_records_attribution_and_nan_rejection() {
+    let sink = Arc::new(TestSink::new());
+    let mut f = ForestBuilder::<2>::new()
+        .num_trees(50)
+        .sample_size(16)
+        .seed(11)
+        .build()
+        .unwrap()
+        .with_metrics_sink(sink.clone());
+
+    let mut rng = ChaCha8Rng::seed_from_u64(11);
+    for _ in 0..20 {
+        f.update(noisy(&mut rng)).unwrap();
+    }
+    for _ in 0..3 {
+        let _ = f.attribution(&[0.05, 0.05]).unwrap();
+    }
+    // NaN must go to REJECTED_NAN_TOTAL without panicking.
+    assert!(f.score(&[f64::NAN, 0.0]).is_err());
+    assert!(f.update([0.0, f64::INFINITY]).is_err());
+
+    assert_eq!(sink.counter(names::ATTRIBUTION_TOTAL), 3);
+    assert_eq!(sink.counter(names::REJECTED_NAN_TOTAL), 2);
+}
+
+#[test]
+fn forest_sink_records_early_term_stops() {
+    use rcf_rs::EarlyTermConfig;
+    let sink = Arc::new(TestSink::new());
+    let mut f = ForestBuilder::<2>::new()
+        .num_trees(100)
+        .sample_size(32)
+        .seed(12)
+        .build()
+        .unwrap()
+        .with_metrics_sink(sink.clone());
+    let mut rng = ChaCha8Rng::seed_from_u64(12);
+    for _ in 0..80 {
+        f.update(noisy(&mut rng)).unwrap();
+    }
+    // Loose threshold → short-circuits routinely.
+    let loose = EarlyTermConfig {
+        min_trees: 16,
+        confidence_threshold: 0.5,
+    };
+    for _ in 0..10 {
+        let _ = f.score_early_term(&[0.05, 0.05], loose).unwrap();
+    }
+    assert!(
+        sink.counter(names::EARLY_TERM_STOPPED_TOTAL) >= 1,
+        "loose early-term must have short-circuited at least once",
+    );
+    assert!(!sink.histogram(names::EARLY_TERM_TREES).is_empty());
+}
+
+#[test]
+fn trcf_sink_exposes_ema_and_observation_gauges() {
+    let sink = Arc::new(TestSink::new());
+    let mut d = ThresholdedForestBuilder::<2>::new()
+        .num_trees(50)
+        .sample_size(16)
+        .min_observations(4)
+        .seed(13)
+        .build()
+        .unwrap()
+        .with_metrics_sink(sink.clone());
+    let mut rng = ChaCha8Rng::seed_from_u64(13);
+    for _ in 0..20 {
+        d.process(noisy(&mut rng)).unwrap();
+    }
+    assert!(sink.gauge(names::EMA_MEAN).is_some());
+    assert!(sink.gauge(names::EMA_STDDEV).is_some());
+    let obs = sink.gauge(names::OBSERVATIONS_SEEN).unwrap();
+    assert!(obs >= 1.0, "expected observations gauge >= 1, got {obs}");
+}
+
+#[test]
+fn pool_sink_records_tenant_created_and_capacity() {
+    let sink = Arc::new(TestSink::new());
+    let mut pool: TenantForestPool<u32, 2> = TenantForestPool::new(4, || {
+        ThresholdedForestBuilder::<2>::new()
+            .num_trees(50)
+            .sample_size(16)
+            .seed(14)
+            .build()
+    })
+    .unwrap()
+    .with_metrics_sink(sink.clone());
+    let mut rng = ChaCha8Rng::seed_from_u64(14);
+    pool.process(&10, noisy(&mut rng)).unwrap();
+    pool.process(&11, noisy(&mut rng)).unwrap();
+    pool.process(&10, noisy(&mut rng)).unwrap(); // repeat — no new tenant
+
+    assert_eq!(sink.counter(names::TENANT_CREATED_TOTAL), 2);
+    assert_eq!(sink.gauge(names::TENANT_CAPACITY), Some(4.0));
+}
+
+#[test]
+fn bootstrap_sink_records_points_and_skips() {
+    let sink = Arc::new(TestSink::new());
+    let mut f = ForestBuilder::<2>::new()
+        .num_trees(50)
+        .sample_size(16)
+        .seed(15)
+        .build()
+        .unwrap()
+        .with_metrics_sink(sink.clone());
+    let points = vec![
+        [0.1, 0.2],
+        [f64::NAN, 0.0], // skip
+        [0.3, 0.4],
+        [0.0, f64::INFINITY], // skip
+        [0.5, 0.6],
+    ];
+    let report = f.bootstrap(points).unwrap();
+    assert_eq!(report.points_ingested, 3);
+    assert_eq!(report.points_skipped, 2);
+    assert_eq!(sink.counter(names::BOOTSTRAP_POINTS_TOTAL), 3);
+    assert_eq!(sink.counter(names::BOOTSTRAP_SKIPPED_TOTAL), 2);
+}
+
+#[test]
+fn drift_sink_splits_upward_and_downward() {
+    let sink = Arc::new(TestSink::new());
+    let mut drift = MetaDriftDetector::new(CusumConfig {
+        allowance_k: 0.5,
+        threshold_h: 3.0,
+        min_observations: 8,
+        decay: 0.1,
+    })
+    .unwrap()
+    .with_metrics_sink(sink.clone());
+
+    // Warm the EMA, then drive score upward.
+    for _ in 0..64 {
+        drift.observe(1.0);
+    }
+    for _ in 0..200 {
+        if drift.observe(5.0).drift.is_some() {
+            break;
+        }
+    }
+    // Reset accumulators, drive downward.
+    drift.reset();
+    for _ in 0..200 {
+        if drift.observe(-5.0).drift.is_some() {
+            break;
+        }
+    }
+    assert!(sink.counter(names::DRIFT_UP_TOTAL) >= 1);
+    assert!(sink.counter(names::DRIFT_DOWN_TOTAL) >= 1);
+    let total = sink.counter(names::DRIFT_UP_TOTAL) + sink.counter(names::DRIFT_DOWN_TOTAL);
+    assert_eq!(sink.counter(names::DRIFT_FIRES_TOTAL), total);
+}

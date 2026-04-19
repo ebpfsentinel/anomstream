@@ -115,6 +115,13 @@ impl<const D: usize> RandomCutForest<D> {
                 Err(other) => return Err(other),
             }
         }
+        #[cfg(feature = "std")]
+        {
+            use crate::metrics::names;
+            let sink = self.metrics_sink();
+            sink.inc_counter(names::BOOTSTRAP_POINTS_TOTAL, ingested);
+            sink.inc_counter(names::BOOTSTRAP_SKIPPED_TOTAL, skipped);
+        }
         Ok(BootstrapReport {
             points_ingested: ingested,
             points_skipped: skipped,
@@ -157,6 +164,13 @@ impl<const D: usize> ThresholdedForest<D> {
                 Err(RcfError::NaNValue) => skipped = skipped.saturating_add(1),
                 Err(other) => return Err(other),
             }
+        }
+        #[cfg(feature = "std")]
+        {
+            use crate::metrics::names;
+            let sink = self.metrics_sink();
+            sink.inc_counter(names::BOOTSTRAP_POINTS_TOTAL, ingested);
+            sink.inc_counter(names::BOOTSTRAP_SKIPPED_TOTAL, skipped);
         }
         Ok(BootstrapReport {
             points_ingested: ingested,

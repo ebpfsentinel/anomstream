@@ -475,6 +475,12 @@ impl<const D: usize> ThresholdedForest<D> {
         }
         self.metrics
             .set_gauge(names::THRESHOLD_CURRENT, self.current_threshold());
+        self.metrics.set_gauge(names::EMA_MEAN, self.stats.mean());
+        self.metrics
+            .set_gauge(names::EMA_STDDEV, self.stats.stddev());
+        #[allow(clippy::cast_precision_loss)]
+        self.metrics
+            .set_gauge(names::OBSERVATIONS_SEEN, self.stats.observations() as f64);
     }
 
     /// Translate a raw anomaly score into a graded verdict using the

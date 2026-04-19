@@ -263,6 +263,22 @@ impl<const D: usize> RandomCutForest<D> {
         &self.trees
     }
 
+    /// Metered [`ensure_finite`] — bumps the `REJECTED_NAN_TOTAL`
+    /// counter on the installed sink before propagating the error.
+    /// Upstream bad-data volume is a first-class SOC signal.
+    #[inline]
+    fn ensure_finite_metered(&self, point: &[f64; D]) -> RcfResult<()> {
+        match ensure_finite(point) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                #[cfg(feature = "std")]
+                self.metrics
+                    .inc_counter(crate::metrics::names::REJECTED_NAN_TOTAL, 1);
+                Err(e)
+            }
+        }
+    }
+
     /// Pessimistic memory upper bound (in bytes) of the forest's
     /// payload: point store + per-tree node arenas + per-tree sampler
     /// heaps + per-tree RNG state.
@@ -418,7 +434,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// [`Self::update`] and [`Self::update_indexed`] so the hot-path
     /// logic lives in exactly one place.
     fn insert_point(&mut self, point: [f64; D]) -> RcfResult<usize> {
-        ensure_finite(&point)?;
+        self.ensure_finite_metered(&point)?;
 
         let new_idx = self.point_store.add(point)?;
 
@@ -523,7 +539,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Propagates [`Self::delete`] errors.
     pub fn delete_by_value(&mut self, point: &[f64; D]) -> RcfResult<usize> {
-        ensure_finite(point)?;
+        self.ensure_finite_metered(point)?;
         // Stored points live in the forest's scaled space — scale
         // the caller query so the bit-exact comparison matches.
         let scaled = self.scale_point_copy(point);
@@ -590,7 +606,7 @@ impl<const D: usize> RandomCutForest<D> {
     ) -> RcfResult<EarlyTermScore> {
         use crate::visitor::ScalarScoreVisitor;
 
-        ensure_finite(point)?;
+        self.ensure_finite_metered(point)?;
         config.validate()?;
         let scaled = self.scale_point_copy(point);
         let probe: &[f64; D] = &scaled;
@@ -647,6 +663,9 @@ impl<const D: usize> RandomCutForest<D> {
             #[allow(clippy::cast_precision_loss)]
             self.metrics
                 .observe_histogram(names::EARLY_TERM_TREES, n as f64);
+            if early {
+                self.metrics.inc_counter(names::EARLY_TERM_STOPPED_TOTAL, 1);
+            }
         }
         Ok(EarlyTermScore {
             score,
@@ -664,7 +683,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// - [`RcfError::NaNValue`] when `point` contains a non-finite component.
     /// - [`RcfError::EmptyForest`] when no tree currently holds any leaf.
     pub fn score(&self, point: &[f64; D]) -> RcfResult<AnomalyScore> {
-        ensure_finite(point)?;
+        self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
         let point = &scaled;
 
@@ -699,7 +718,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Same as [`score`](Self::score).
     pub fn attribution(&self, point: &[f64; D]) -> RcfResult<DiVector> {
-        ensure_finite(point)?;
+        self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
         let point = &scaled;
 
@@ -720,6 +739,9 @@ impl<const D: usize> RandomCutForest<D> {
         #[allow(clippy::cast_precision_loss)]
         let divisor = count as f64;
         accumulator.scale(divisor)?;
+        #[cfg(feature = "std")]
+        self.metrics
+            .inc_counter(crate::metrics::names::ATTRIBUTION_TOTAL, 1);
         Ok(accumulator)
     }
 
@@ -846,7 +868,7 @@ impl<const D: usize> RandomCutForest<D> {
         &self,
         point: &[f64; D],
     ) -> RcfResult<crate::forensic::ForensicBaseline<D>> {
-        ensure_finite(point)?;
+        self.ensure_finite_metered(point)?;
 
         // Bitmap dedup: point_idx is a slot index bounded by
         // `point_store.capacity()`. A flat `Vec<bool>` sized at

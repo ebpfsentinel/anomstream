@@ -206,6 +206,8 @@ where
             crate::metrics::names::TENANTS_RESIDENT,
             self.forests.len() as f64,
         );
+        #[allow(clippy::cast_precision_loss)]
+        sink.set_gauge(crate::metrics::names::TENANT_CAPACITY, self.capacity as f64);
         self.metrics = sink;
         self
     }
@@ -785,6 +787,8 @@ where
                     last_access: tick,
                 },
             );
+            self.metrics
+                .inc_counter(crate::metrics::names::TENANT_CREATED_TOTAL, 1);
             self.emit_resident_gauge();
         }
         // At this point the entry exists; bump its access stamp and

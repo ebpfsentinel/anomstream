@@ -181,22 +181,58 @@ pub mod names {
     /// whose verdict was flagged `is_anomaly`.
     pub const ANOMALIES_FIRED_TOTAL: &str = "rcf_anomalies_fired_total";
     /// Counter: every [`crate::MetaDriftDetector::observe`] call
-    /// that returned `Some(DriftKind::*)`.
+    /// that returned `Some(DriftKind::*)` — aggregate of up + down.
     pub const DRIFT_FIRES_TOTAL: &str = "rcf_drift_fires_total";
+    /// Counter: CUSUM upward drift fires (`DriftKind::Upward`).
+    pub const DRIFT_UP_TOTAL: &str = "rcf_drift_up_total";
+    /// Counter: CUSUM downward drift fires (`DriftKind::Downward`).
+    pub const DRIFT_DOWN_TOTAL: &str = "rcf_drift_down_total";
     /// Counter: every [`crate::RandomCutForest::delete`] call that
     /// actually removed a point.
     pub const DELETES_TOTAL: &str = "rcf_deletes_total";
+    /// Counter: every [`crate::RandomCutForest::attribution`] call
+    /// that returned successfully.
+    pub const ATTRIBUTION_TOTAL: &str = "rcf_attribution_total";
+    /// Counter: inputs rejected because they contained a non-finite
+    /// component (NaN / ±inf). Bumped once per rejected public call
+    /// — upstream data-quality signal for SOC dashboards.
+    pub const REJECTED_NAN_TOTAL: &str = "rcf_rejected_nan_total";
+    /// Counter: [`crate::RandomCutForest::score_early_term`] calls
+    /// that short-circuited (walked fewer than `num_trees`). Pair
+    /// with the call site's total to derive the early-stop ratio.
+    pub const EARLY_TERM_STOPPED_TOTAL: &str = "rcf_early_term_stopped_total";
     /// Counter: every [`crate::TenantForestPool`] LRU eviction.
     pub const TENANT_EVICTIONS_TOTAL: &str = "rcf_tenant_evictions_total";
+    /// Counter: pool-factory invocations — a fresh tenant entered
+    /// the resident set. Diverges from `TENANT_EVICTIONS_TOTAL` so
+    /// churn (create − evict) is observable.
+    pub const TENANT_CREATED_TOTAL: &str = "rcf_tenant_created_total";
+    /// Counter: bootstrap/replay points successfully ingested.
+    pub const BOOTSTRAP_POINTS_TOTAL: &str = "rcf_bootstrap_points_total";
+    /// Counter: bootstrap/replay points skipped for being non-finite.
+    pub const BOOTSTRAP_SKIPPED_TOTAL: &str = "rcf_bootstrap_skipped_total";
 
     /// Gauge: number of trees held by a forest.
     pub const FOREST_TREES: &str = "rcf_forest_trees";
     /// Gauge: current adaptive threshold
     /// ([`crate::ThresholdedForest::current_threshold`]).
     pub const THRESHOLD_CURRENT: &str = "rcf_threshold_current";
+    /// Gauge: EMA mean of the score stream on a `ThresholdedForest`.
+    pub const EMA_MEAN: &str = "rcf_ema_mean";
+    /// Gauge: EMA stddev of the score stream on a `ThresholdedForest`.
+    pub const EMA_STDDEV: &str = "rcf_ema_stddev";
+    /// Gauge: observations folded into the TRCF score-stream EMA.
+    /// Combined with the configured `min_observations`, exposes the
+    /// warmup progress of a fresh detector.
+    pub const OBSERVATIONS_SEEN: &str = "rcf_observations_seen";
     /// Gauge: number of tenants resident in a
     /// [`crate::TenantForestPool`] after each public op.
     pub const TENANTS_RESIDENT: &str = "rcf_tenants_resident";
+    /// Gauge: configured tenant capacity of a
+    /// [`crate::TenantForestPool`]. Static after construction but
+    /// dashboards benefit from being able to chart
+    /// `TENANTS_RESIDENT / TENANT_CAPACITY` pressure ratios.
+    pub const TENANT_CAPACITY: &str = "rcf_tenant_capacity";
 
     /// Histogram: raw anomaly score per scored point.
     pub const SCORE_OBSERVATION: &str = "rcf_score";
