@@ -54,3 +54,7 @@ required-features = ["postcard", "std"]
 [[bench]]
 name = "forest_throughput"
 harness = false
+
+[[bench]]
+name = "extended"
+harness = false
