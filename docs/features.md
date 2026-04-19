@@ -59,6 +59,12 @@ preserve dormant entries. Orthogonal paths; both emit
 `rcf_tenant_evictions_total`, TTL path also emits
 `rcf_tenant_idle_evictions_total`.
 
+`readiness_summary()` returns a `ReadinessSummary`
+(`resident / warming / ready / capacity / tenants_{created,evicted}_lifetime`)
+for `/healthz` / `/readyz` endpoints — zero-allocation `O(resident)`
+scan, no metrics-sink plumbing required. Helpers `readiness_ratio()`,
+`is_fully_ready()`, `is_at_capacity()` give one-line health gates.
+
 Source: `src/pool/`.
 
 Example: `examples/tenant_pool.rs`.

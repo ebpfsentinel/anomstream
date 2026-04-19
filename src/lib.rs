@@ -148,7 +148,7 @@ pub use histogram::{HistogramConfig, ScoreHistogram};
 pub use meta_drift::{CusumConfig, DriftKind, DriftVerdict, MetaDriftDetector};
 pub use metrics::{MetricsSink, NoopSink};
 #[cfg(feature = "std")]
-pub use pool::TenantForestPool;
+pub use pool::{ReadinessSummary, TenantForestPool};
 pub use sampler::{ReservoirSampler, SamplerOp};
 pub use severity::{Severity, SeverityBands};
 pub use thresholded::{

@@ -9,4 +9,4 @@
 
 pub mod tenant_pool;
 
-pub use tenant_pool::TenantForestPool;
+pub use tenant_pool::{ReadinessSummary, TenantForestPool};

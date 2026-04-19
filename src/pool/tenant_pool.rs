@@ -87,6 +87,71 @@ impl<K: Clone> PartialOrd for MostSimilarHeapEntry<K> {
     }
 }
 
+/// Aggregate readiness snapshot of a [`TenantForestPool`].
+///
+/// Surface for health-check / readiness-probe endpoints:
+///
+/// - `resident` = tenants currently in the pool
+/// - `warming` = resident tenants whose TRCF has not yet reached
+///   `min_observations` (`grade.ready()` would return `false`)
+/// - `ready` = resident tenants whose TRCF *is* warm
+///   (`grade.ready()` true)
+/// - `capacity` = configured capacity ceiling
+/// - `tenants_created_lifetime` / `tenants_evicted_lifetime` —
+///   lifetime counters tracked internally so a liveness endpoint
+///   doesn't need to plumb a [`crate::MetricsSink`].
+///
+/// `warming + ready = resident` invariant always holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ReadinessSummary {
+    /// Tenants currently held by the pool.
+    pub resident: usize,
+    /// Subset of `resident` that has not yet satisfied
+    /// `min_observations`. These tenants' `process` calls return
+    /// warming-up verdicts (`ready = false`).
+    pub warming: usize,
+    /// Subset of `resident` that *has* satisfied `min_observations`.
+    pub ready: usize,
+    /// Configured capacity ceiling of the pool.
+    pub capacity: usize,
+    /// Lifetime count of pool-factory invocations (fresh tenants).
+    pub tenants_created_lifetime: u64,
+    /// Lifetime count of evictions (LRU + TTL combined).
+    pub tenants_evicted_lifetime: u64,
+}
+
+impl ReadinessSummary {
+    /// Fraction of resident tenants that are warm (`ready / resident`)
+    /// — `1.0` when every tenant is ready, `0.0` when all are
+    /// warming, `NaN` on an empty pool (caller decides UX: report
+    /// `1.0` as "vacuously healthy" or surface the NaN).
+    #[must_use]
+    pub fn readiness_ratio(&self) -> f64 {
+        if self.resident == 0 {
+            #[allow(clippy::cast_precision_loss)]
+            return f64::NAN;
+        }
+        #[allow(clippy::cast_precision_loss)]
+        {
+            self.ready as f64 / self.resident as f64
+        }
+    }
+
+    /// Whether **every** resident tenant is ready. Vacuously `true`
+    /// on an empty pool — an empty pool has zero warming tenants.
+    #[must_use]
+    pub fn is_fully_ready(&self) -> bool {
+        self.warming == 0
+    }
+
+    /// Whether the pool has hit its capacity ceiling.
+    #[must_use]
+    pub fn is_at_capacity(&self) -> bool {
+        self.resident >= self.capacity
+    }
+}
+
 impl<K: Clone> Ord for MostSimilarHeapEntry<K> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         // Inverted: larger `sim` → smaller cmp → sinks in the
@@ -139,6 +204,12 @@ where
     /// Monotonic access counter — bumped on every `process`,
     /// `get`, `get_mut`, or `score_only` call.
     access_counter: u64,
+    /// Lifetime total of pool-factory invocations (fresh tenants).
+    /// Surfaced by [`TenantForestPool::readiness_summary`] so
+    /// health-check endpoints don't need to plumb a metrics sink.
+    tenants_created_lifetime: u64,
+    /// Lifetime total of evictions (LRU + TTL, both paths).
+    tenants_evicted_lifetime: u64,
     /// Factory used to build a detector when a tenant is seen for
     /// the first time (or after its entry has been evicted).
     factory: Box<ForestFactory<D>>,
@@ -159,6 +230,8 @@ where
             .field("capacity", &self.capacity)
             .field("len", &self.forests.len())
             .field("access_counter", &self.access_counter)
+            .field("tenants_created_lifetime", &self.tenants_created_lifetime)
+            .field("tenants_evicted_lifetime", &self.tenants_evicted_lifetime)
             .field("tenants", &self.forests.keys().collect::<Vec<_>>())
             .field("factory", &"<dyn Fn>")
             .field("metrics", &self.metrics)
@@ -194,6 +267,8 @@ where
             forests: HashMap::with_capacity(capacity),
             capacity,
             access_counter: 0,
+            tenants_created_lifetime: 0,
+            tenants_evicted_lifetime: 0,
             factory: Box::new(factory),
             metrics: crate::metrics::default_sink(),
         })
@@ -757,6 +832,38 @@ where
         self.forests.keys().cloned().collect()
     }
 
+    /// Snapshot aggregate readiness of the pool — how many tenants
+    /// are warm vs warming, capacity headroom, and lifetime
+    /// create/evict counters. Cheap `O(resident)` scan.
+    ///
+    /// Use for `/healthz` / `/readyz` endpoints: a pool with
+    /// `readiness_ratio() < 0.5` on a mature deployment typically
+    /// indicates either bootstrap lag or aggressive eviction
+    /// thrashing.
+    #[must_use]
+    pub fn readiness_summary(&self) -> ReadinessSummary {
+        let mut warming = 0_usize;
+        let mut ready = 0_usize;
+        for slot in self.forests.values() {
+            let cfg = slot.forest.thresholded_config();
+            if slot.forest.stats().observations() >= cfg.min_observations
+                && slot.forest.stats().stddev() > 0.0
+            {
+                ready = ready.saturating_add(1);
+            } else {
+                warming = warming.saturating_add(1);
+            }
+        }
+        ReadinessSummary {
+            resident: self.forests.len(),
+            warming,
+            ready,
+            capacity: self.capacity,
+            tenants_created_lifetime: self.tenants_created_lifetime,
+            tenants_evicted_lifetime: self.tenants_evicted_lifetime,
+        }
+    }
+
     /// Evict the least-recently-used tenant explicitly. Returns the
     /// evicted `(key, detector)` pair so callers can persist it
     /// before release.
@@ -771,6 +878,7 @@ where
             .min_by_key(|(_, slot)| slot.last_access)
             .map(|(k, _)| k.clone())?;
         let slot = self.forests.remove(&victim_key)?;
+        self.tenants_evicted_lifetime = self.tenants_evicted_lifetime.saturating_add(1);
         self.metrics
             .inc_counter(crate::metrics::names::TENANT_EVICTIONS_TOTAL, 1);
         self.emit_resident_gauge();
@@ -811,6 +919,7 @@ where
         let mut evicted = Vec::with_capacity(victims.len());
         for key in victims {
             if let Some(slot) = self.forests.remove(&key) {
+                self.tenants_evicted_lifetime = self.tenants_evicted_lifetime.saturating_add(1);
                 self.metrics
                     .inc_counter(crate::metrics::names::TENANT_EVICTIONS_TOTAL, 1);
                 self.metrics
@@ -849,6 +958,7 @@ where
                     last_access_instant: now,
                 },
             );
+            self.tenants_created_lifetime = self.tenants_created_lifetime.saturating_add(1);
             self.metrics
                 .inc_counter(crate::metrics::names::TENANT_CREATED_TOTAL, 1);
             self.emit_resident_gauge();
@@ -1032,6 +1142,53 @@ mod tests {
         let mut p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
         let evicted = p.evict_idle(std::time::Duration::from_secs(1));
         assert!(evicted.is_empty());
+    }
+
+    #[test]
+    fn readiness_summary_empty_pool() {
+        let p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
+        let s = p.readiness_summary();
+        assert_eq!(s.resident, 0);
+        assert_eq!(s.warming, 0);
+        assert_eq!(s.ready, 0);
+        assert_eq!(s.capacity, 4);
+        assert_eq!(s.tenants_created_lifetime, 0);
+        assert_eq!(s.tenants_evicted_lifetime, 0);
+        assert!(s.is_fully_ready()); // vacuous
+        assert!(!s.is_at_capacity());
+        assert!(s.readiness_ratio().is_nan());
+    }
+
+    #[test]
+    fn readiness_summary_counts_warming_and_ready() {
+        let mut p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
+        // Warm tenant "a" past min_observations (factory_2d default 4).
+        for i in 0_u32..16 {
+            let v = f64::from(i) * 0.01;
+            p.process(&"a", [v, v]).unwrap();
+        }
+        // "b" only 2 obs — warming.
+        p.process(&"b", [0.0, 0.0]).unwrap();
+        p.process(&"b", [0.01, 0.01]).unwrap();
+        let s = p.readiness_summary();
+        assert_eq!(s.resident, 2);
+        assert_eq!(s.ready, 1);
+        assert_eq!(s.warming, 1);
+        assert!((s.readiness_ratio() - 0.5).abs() < 1.0e-9);
+        assert!(!s.is_fully_ready());
+    }
+
+    #[test]
+    fn readiness_summary_tracks_lifetime_counters() {
+        let mut p = TenantForestPool::<&'static str, 2>::new(2, factory_2d()).unwrap();
+        p.process(&"a", [0.0, 0.0]).unwrap();
+        p.process(&"b", [1.0, 1.0]).unwrap();
+        p.process(&"c", [2.0, 2.0]).unwrap(); // evicts "a"
+        let s = p.readiness_summary();
+        assert_eq!(s.tenants_created_lifetime, 3);
+        assert_eq!(s.tenants_evicted_lifetime, 1);
+        assert_eq!(s.resident, 2);
+        assert!(s.is_at_capacity());
     }
 
     #[test]
