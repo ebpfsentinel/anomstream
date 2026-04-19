@@ -1,67 +1,80 @@
-# AWS `randomcutforest-java` comparison outline
+# AWS `randomcutforest-java` comparison
 
-Not a runnable script — too many moving parts (Maven, JDK, JMH).
-Sketch for someone willing to wire it up manually.
+The `java-driver/RcfBench.java` harness reads the same CSV shape
+as `gen_points.py` and reports inserts/s, scores/s, AUC — same
+metric surface as the rcf-rs / rrcf / sklearn runners.
 
-## Environment
+## Prerequisites
 
-```bash
-sudo apt install -y openjdk-26-jdk maven
-git clone https://github.com/aws/random-cut-forest-by-aws.git
-cd random-cut-forest-by-aws
-mvn -pl core install -DskipTests
-```
-
-## Minimal driver
-
-Create a `RcfBench.java` that reads `data.csv` (same format as
-`gen_points.py`), builds an `RandomCutForest` with the same
-`(num_trees, sample_size, dim)` as rcf-rs, and times the same
-update + score loop:
-
-```java
-import com.amazon.randomcutforest.RandomCutForest;
-
-public class RcfBench {
-    public static void main(String[] args) throws Exception {
-        int D = 16;
-        int trees = 100;
-        int sample = 256;
-        RandomCutForest forest = RandomCutForest.builder()
-            .dimensions(D)
-            .numberOfTrees(trees)
-            .sampleSize(sample)
-            .randomSeed(2026L)
-            .build();
-
-        // Load CSV (label, d0 .. dD-1) into a List<double[]>.
-        // Measure with System.nanoTime() around update + getAnomalyScore
-        // loops the same way the Python / Rust drivers do.
-    }
-}
-```
-
-Run with:
+- OpenJDK ≥ 21 (tested with 26). Only `javac` + `java` needed.
 
 ```bash
-mvn -pl core exec:java -Dexec.mainClass=RcfBench -Dexec.args="data.csv 100 256"
+sudo apt install -y openjdk-26-jdk     # Ubuntu 25.10+ / Debian testing
 ```
 
-## Expected comparison points
+## Grab the prebuilt jar
 
-- **Updates/s**: AWS Java ~5–15× slower than rcf-rs on wallclock
-  (JIT vs native + allocation profile). Not a fair comparison
-  for cold-start — JVM warmup dominates short runs.
-- **Scores/s**: closer, JVM vectorises score aggregation well.
-- **AUC**: should match rcf-rs within floating-point noise on
-  separable data.
+AWS publishes `randomcutforest-core-4.4.0` on Maven Central.
+**Do not build from source** — the upstream pom pins
+`lombok 1.18.30` which does not handle the JDK 21+ module
+layout, so the compile pipeline fails on modern JDKs.
+
+```bash
+mkdir -p /tmp/aws-rcf
+curl -sLo /tmp/aws-rcf/randomcutforest-core-4.4.0.jar \
+    https://repo1.maven.org/maven2/software/amazon/randomcutforest/randomcutforest-core/4.4.0/randomcutforest-core-4.4.0.jar
+# SHA-256:
+#   2e851c82add6d4bcdd13e5cd85fdd091b8a28185fe104775761e8ff6606fd51b
+```
+
+## Synthetic-corpus bench
+
+```bash
+cd rcf-rs
+python3 scripts/external-bench/gen_points.py \
+    --n 10000 --dim 16 --seed 2026 > data.csv
+
+JAR=/tmp/aws-rcf/randomcutforest-core-4.4.0.jar
+cd scripts/external-bench/java-driver
+javac -cp "$JAR" RcfBench.java
+java -cp ".:$JAR" RcfBench ../../../data.csv 100 256
+```
+
+## NAB corpus bench
+
+```bash
+./scripts/nab/fetch.sh /opt/nab
+
+JAR=/tmp/aws-rcf/randomcutforest-core-4.4.0.jar
+cd scripts/nab
+javac -cp "$JAR" RcfBenchNab.java
+java -cp ".:$JAR" RcfBenchNab /opt/nab
+```
+
+## Reference numbers (i7-1370P, JDK 26)
+
+Synthetic (D=16, 10k points, 1 % outliers, 30 % warm):
+
+```
+points=10000 dim=16 trees=100 sample=256 warm=3000
+  inserts        = 3000, total 767 ms   (3.9k/s)
+  scores         = 7000, total 328 ms   (21k/s)
+  auc            = 1.000
+```
+
+NAB `realKnownCause` aggregate weighted AUC: **0.757**.
 
 ## Caveats
 
-- JMH is the right tool for JVM micro-benchmarks. `System.nanoTime()`
-  around a bare loop does not handle JIT warmup, GC pauses, or
-  thermal drift. Treat numbers produced by the sketch above as
-  *indicative only*.
-- AWS's library also ships a `ThresholdedRandomCutForest` wrapper
-  analogous to rcf-rs's `ThresholdedForest`; compare the TRCF
-  layer separately (`grade` emission cost + `stats()` bookkeeping).
+- Numbers above are **cold JVM** — no JMH warmup. A proper JVM
+  micro-benchmark should warm JIT for 5–10 s before measuring.
+  For our purposes (order-of-magnitude comparison vs native
+  Rust) the cold numbers are informative as-is: they represent
+  a realistic process-startup cost for a shell-invoked job.
+- AWS Java's `getAnomalyScore` uses a probability-of-separation
+  visitor (probe-based), closer to `rrcf`'s `codisp` than to
+  `rcf-rs`'s isolation-depth `score()` — this drives the ~0.14
+  NAB AUC gap.
+- Building AWS RCF from source on JDK 26 fails on Lombok; bumping
+  Lombok to 1.18.38 in the pom does not fix it. Use the Maven
+  Central jar unless you specifically need a modified source.

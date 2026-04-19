@@ -138,22 +138,23 @@ path is reported — it already saturates on vectorised SIMD.
 | Impl | Backend | Updates / s | Scores / s | AUC |
 |---|---|---|---|---|
 | `rcf-rs` 0.0.0-dev | native Rust, rayon-parallel | **32.5k** | **203k** | 1.000 |
+| `randomcutforest-java` 4.4.0 | AWS reference, JVM (JDK 26) | 3.9k | 21k | 1.000 |
 | `rrcf` 0.4.4 | pure Python + NumPy | 0.15k | 184k | 0.992 |
 | `sklearn.IsolationForest` | NumPy + Cython, batch-fit | batch-fit ≈ 48k/s | 234k | 1.000 |
 
 Commentary:
-- **Streaming updates**: `rcf-rs` inserts ~220× faster than
-  `rrcf`. `rrcf`'s per-insert cost is dominated by Python object
-  churn on every `insert_point` call. `sklearn`'s IsolationForest
+- **Streaming updates**: `rcf-rs` inserts ~10× faster than AWS's
+  reference JVM impl and ~220× faster than `rrcf`. AWS Java pays
+  JVM JIT warmup + GC on every run; `rrcf`'s per-insert cost is
+  dominated by Python object churn. `sklearn`'s IsolationForest
   is batch-only — no streaming-update API — so its "Updates/s"
   entry is the batch `.fit()` cost amortised per training point.
-- **Score throughput**: all three land in the same order of
-  magnitude once parallelism / vectorisation are on.
+- **Score throughput**: `sklearn` + `rrcf` + `rcf-rs` land in
+  the same order of magnitude on fast vectorised / parallel
+  paths; AWS Java trails at 16k/s (cold JVM, no JMH warmup).
   `sklearn` edges out on pure score-batch because its per-point
-  decision is a BLAS-vectorised matrix walk; `rcf-rs`'s
-  `score_many` stays competitive and is within 15 % of the
-  sklearn batch number.
-- **Detection quality**: all three sit within 1 % of perfect on
+  decision is a BLAS-vectorised matrix walk.
+- **Detection quality**: all four sit within 1 % of perfect on
   the synthetic separable corpus — as expected; the interesting
   comparison is NAB below.
 
@@ -173,45 +174,48 @@ embedding, 15 % warm fraction, 100 trees × 256 sample. Scoring
 semantics differ slightly (see commentary below) — that is itself
 the interesting data point.
 
-| File | `rcf-rs` AUC | `rrcf` AUC |
-|---|---|---|
-| `ambient_temperature_system_failure` | 0.604 | **0.734** |
-| `cpu_utilization_asg_misconfiguration` | 0.749 | **0.849** |
-| `ec2_request_latency_system_failure` | **0.525** | 0.481 |
-| `machine_temperature_system_failure` | 0.584 | **0.880** |
-| `nyc_taxi` | **0.588** | 0.571 |
-| `rogue_agent_key_hold` | 0.379 | **0.535** |
-| `rogue_agent_key_updown` | 0.544 | **0.657** |
-| **weighted aggregate** | 0.615 | **0.748** |
+| File | `rcf-rs` | `rrcf` | AWS Java |
+|---|---|---|---|
+| `ambient_temperature_system_failure` | 0.604 | 0.734 | **0.786** |
+| `cpu_utilization_asg_misconfiguration` | 0.749 | 0.849 | **0.906** |
+| `ec2_request_latency_system_failure` | **0.525** | 0.481 | 0.482 |
+| `machine_temperature_system_failure` | 0.584 | 0.880 | **0.883** |
+| `nyc_taxi` | **0.588** | 0.571 | 0.540 |
+| `rogue_agent_key_hold` | 0.379 | 0.535 | **0.633** |
+| `rogue_agent_key_updown` | **0.544** | 0.657 | 0.542 |
+| **weighted aggregate** | 0.615 | 0.748 | **0.757** |
 
 Commentary:
 
-- `rrcf` wins on 5 / 7 files and the weighted aggregate. The gap
-  (~13 absolute points) is driven by scoring semantics: `rrcf`'s
-  `codisp` temporarily inserts the probe into every tree and
-  queries its *collusive displacement* (how much mass would move
-  if the point were removed). `rcf-rs`'s `score()` walks the
-  existing tree and scores by expected isolation depth — never
-  mutates the forest. Both are valid RCF scoring conventions;
-  `codisp` is closer to the "AWS paper" reference semantic and
-  trades throughput (insert-then-remove per probe = ~18× slower
-  at scoring) for accuracy on context-sensitive anomalies.
+- Both `rrcf` and AWS Java beat `rcf-rs` on the aggregate — by
+  ~13 and ~14 absolute points respectively. The two leaders sit
+  within 1 point of each other (0.748 vs 0.757) which **confirms
+  the scoring-semantic diagnosis**: `rrcf`'s `codisp` and AWS
+  Java's default `getAnomalyScore` (which uses a probability-of-
+  separation visitor) both temporarily treat the probe as a
+  member of the tree; `rcf-rs`'s `score()` walks the existing
+  tree by isolation depth and never mutates the forest. Both
+  families are valid RCF scoring conventions; the probe-based
+  variant is closer to the AWS paper's "displacement" reference
+  and costs ~18× more per score.
 - NAB is not RCF's strongest home turf — anomaly windows are
   wide contextual shifts where time-aware detectors (HTM, LSTM)
-  typically land in the 0.75–0.85 range. Both `rcf-rs` and
-  `rrcf` are within the published RCF ballpark for the corpus.
-- **Action item**: wiring a `codisp`-style scoring path on top of
-  `rcf-rs` is a tracked future item — the current `score()` API
-  is frozen for the 0.1 release. Expected gain on NAB ≈ +0.10
-  aggregate AUC based on the `rrcf` delta.
+  typically land in the 0.75–0.85 range. All three RCF impls
+  cluster inside the published RCF ballpark for the corpus.
+- **Action item**: wiring a `codisp`-style scoring path on top
+  of `rcf-rs` is a tracked future item — the 0.1 API is frozen
+  on the faster isolation-depth score. Expected gain on NAB
+  ≈ +0.10 aggregate AUC based on the `rrcf` / AWS deltas.
 
-Run both via:
+Run all three via:
 
 ```bash
 ./scripts/nab/fetch.sh /opt/nab
 RCF_NAB_PATH=/opt/nab \
     cargo test --test nab --all-features -- --ignored --nocapture
 python3 scripts/nab/bench_rrcf_nab.py --nab /opt/nab
+# AWS Java driver — requires a locally built randomcutforest-core-4.4.0.jar
+java -cp ".:/path/to/randomcutforest-core-4.4.0.jar" RcfBenchNab /opt/nab
 ```
 
 ## Tenant pool at scale
