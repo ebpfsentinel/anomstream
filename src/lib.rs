@@ -130,6 +130,7 @@ pub mod score_ci;
 #[cfg(feature = "serde")]
 pub(crate) mod serde_util;
 pub mod severity;
+pub mod tdigest;
 pub mod thresholded;
 pub mod tree;
 pub mod visitor;
@@ -155,6 +156,7 @@ pub use pool::{ReadinessSummary, TenantForestPool};
 pub use sampler::{ReservoirSampler, SamplerOp};
 pub use score_ci::{DEFAULT_Z_FACTOR as DEFAULT_CI_Z_FACTOR, ScoreWithConfidence};
 pub use severity::{Severity, SeverityBands};
+pub use tdigest::{Centroid, DEFAULT_COMPRESSION as TDIGEST_DEFAULT_COMPRESSION, TDigest};
 pub use thresholded::{
     AnomalyGrade, EmaStats, ThresholdedConfig, ThresholdedForest, ThresholdedForestBuilder,
 };

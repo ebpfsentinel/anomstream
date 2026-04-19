@@ -409,6 +409,23 @@ Canonical metric names (`metrics::names::*`):
 
 Source: `src/metrics.rs`.
 
+### T-digest streaming quantiles
+
+`TDigest` is a streaming quantile estimator (Dunning 2019) with
+sub-percent accuracy on tail quantiles (p99, p99.9) where
+`ScoreHistogram`'s fixed bins lose resolution. `record(x)` is
+`O(1)` amortised, `quantile(q)` is `O(δ)` where `δ` is the
+compression parameter (default `100`). Merge via `merge(&other)`
+for multi-shard aggregation; `postcard`-serialisable under the
+`serde` feature for persistence.
+
+Uses scale function 1 (`k_1(q) = (δ / 2π) · asin(2q − 1)`) — the
+canonical choice for uniform error across the quantile range.
+
+Types: `TDigest`, `Centroid`, `TDIGEST_DEFAULT_COMPRESSION`.
+
+Source: `src/tdigest.rs`.
+
 ### `ScoreHistogram`
 
 Standalone fixed-bin histogram for score / grade / CUSUM
