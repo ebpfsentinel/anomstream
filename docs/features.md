@@ -18,6 +18,11 @@ Hot-path API: `update`, `update_indexed`, `score`, `attribution`,
 
 Source: `src/forest/`, `src/config.rs`.
 
+Examples: `examples/quickstart.rs` (minimal 30-line demo),
+`examples/streaming.rs` (CSV stdin loop),
+`examples/attribution_explain.rs` (top-dim breakdown),
+`examples/with_mimalloc.rs` (allocator swap).
+
 ### `ThresholdedForest<D>` — adaptive threshold (TRCF)
 
 Tracks an EMA of the anomaly-score stream and derives a
@@ -56,10 +61,11 @@ Example: `examples/tenant_pool.rs`.
 
 `score_many(&[[f64; D]])` / `score_many_early_term(&[…], cfg)` /
 `attribution_many(&[…])`. Under `parallel`, rayon parallelises
-across points on top of the per-tree parallelism — 5-8× speedup on
-backfill / SOC replay. First error aborts the batch. Available on
-`RandomCutForest`, `ThresholdedForest`, and `TenantForestPool`
-(per-tenant; absent-tenant returns `None` on read paths).
+across points on top of the per-tree parallelism — 5-6× speedup
+on backfill / SOC replay (see `docs/performance.md`). First error
+aborts the batch. Available on `RandomCutForest`,
+`ThresholdedForest`, and `TenantForestPool` (per-tenant;
+absent-tenant returns `None` on read paths).
 
 Example: `examples/bulk_scoring.rs`.
 
@@ -344,3 +350,34 @@ peer group. Tenants below `min_obs` samples are excluded.
 `O(N · log top_n)` — microsecond-scale at 512 tenants (~9 µs).
 
 Example: `examples/tenant_similarity.rs`.
+
+## Quality
+
+### AWS SageMaker conformance
+
+`tests/aws_conformance.rs` asserts the hyperparameter bounds,
+score-averaging semantics and reservoir behaviour against the
+published AWS RCF spec. Regression-guards the wire-level
+compatibility story whenever the crate's internals move.
+
+### Property-based fuzz suite
+
+`tests/fuzz_properties.rs` runs eight adversarial properties via
+`proptest` on stable: postcard + JSON roundtrip preserve scores,
+non-finite inputs (`NaN` / ±inf / subnormals) are rejected cleanly
+without poisoning forest state, `score_many` is bit-exact with
+the serial `score` loop, `delete_by_value` shrinks live count by
+exactly the number of matches, TRCF `process` never panics on
+arbitrary input, `score_across_tenants` output is sorted
+descending, `forensic_baseline` stays within the observed
+per-dim `[min, max]`. Ships a regression file on failure so CI
+pins the offending input.
+
+### Benchmark suites
+
+`benches/forest_throughput.rs` (core insert/score/attribution
+sweep over the `(trees, samples, D)` matrix) and
+`benches/extended.rs` (bulk, early-term, forensic, tenant
+similarity/cross-tenant) pin `mimalloc` globally and measure
+wall-clock with criterion. See `docs/performance.md` for the
+current reference numbers on `x86_64`.
