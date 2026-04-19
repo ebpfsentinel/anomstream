@@ -225,6 +225,8 @@ pub mod names {
     pub const BOOTSTRAP_POINTS_TOTAL: &str = "rcf_bootstrap_points_total";
     /// Counter: bootstrap/replay points skipped for being non-finite.
     pub const BOOTSTRAP_SKIPPED_TOTAL: &str = "rcf_bootstrap_skipped_total";
+    /// Counter: every `FeatureDriftDetector::observe` call.
+    pub const FEATURE_DRIFT_OBSERVED_TOTAL: &str = "rcf_feature_drift_observed_total";
     /// Counter: every `AlertClusterer::observe` call — total alerts
     /// ingested, pre-dedup.
     pub const ALERTS_OBSERVED_TOTAL: &str = "rcf_alerts_observed_total";
@@ -262,6 +264,9 @@ pub mod names {
     pub const TENANT_CAPACITY: &str = "rcf_tenant_capacity";
     /// Gauge: active clusters held by an `AlertClusterer`.
     pub const ALERT_CLUSTERS_ACTIVE: &str = "rcf_alert_clusters_active";
+    /// Gauge: maximum per-dim PSI of a
+    /// `FeatureDriftDetector`. Set on every `psi()` call.
+    pub const FEATURE_DRIFT_MAX_PSI: &str = "rcf_feature_drift_max_psi";
 
     /// Histogram: raw anomaly score per scored point.
     pub const SCORE_OBSERVATION: &str = "rcf_score";

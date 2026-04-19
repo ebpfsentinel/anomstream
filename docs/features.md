@@ -235,6 +235,23 @@ Example: `examples/forensic.rs`.
 
 ## Drift & calibration
 
+### Feature-distribution drift (PSI / KL)
+
+`FeatureDriftDetector<D>` pins a baseline per-dim histogram, folds
+live traffic into a mirror histogram with identical bin edges, and
+reports Population Stability Index (`Σ (Q − P) · ln(Q/P)`) and KL
+divergence `D_KL(Q || P)` per feature. CUSUM on the score stream
+catches the detector *re-centring*; PSI on the features catches
+the data *itself drifting*. Industry thresholds wired into
+`DriftLevel::{Stable, Watch, Alert}` (`< 0.10`, `0.10..0.25`,
+`≥ 0.25`). `argmax_psi()` pins the offending dim; `reset_production()`
+starts a fresh monitoring window without invalidating the baseline.
+
+Types: `FeatureDriftDetector`, `DriftLevel`, `PSI_WATCH_THRESHOLD`,
+`PSI_ALERT_THRESHOLD`.
+
+Source: `src/feature_drift.rs`.
+
 ### Meta-drift CUSUM
 
 `MetaDriftDetector` runs a two-sided CUSUM on the anomaly-score
@@ -375,6 +392,8 @@ Canonical metric names (`metrics::names::*`):
 | counter | `rcf_alert_clusters_joined_total` | alert merged into existing cluster |
 | counter | `rcf_alert_clusters_pruned_total` | cluster dropped by window prune |
 | gauge | `rcf_alert_clusters_active` | active clusters in `AlertClusterer` |
+| counter | `rcf_feature_drift_observed_total` | every `FeatureDriftDetector::observe` |
+| gauge | `rcf_feature_drift_max_psi` | max per-dim PSI on `psi()` call |
 | gauge | `rcf_forest_trees` | tree count of a forest |
 | gauge | `rcf_threshold_current` | TRCF adaptive threshold |
 | gauge | `rcf_ema_mean` | TRCF score-stream EMA mean |
