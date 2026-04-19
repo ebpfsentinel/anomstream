@@ -233,3 +233,60 @@ RCF_NAB_PATH=/opt/nab cargo test --test nab --all-features -- --ignored --nocapt
 python3 scripts/nab/bench_rrcf_nab.py --nab /opt/nab
 java -cp ".:/tmp/aws-rcf/randomcutforest-core-4.4.0.jar" RcfBenchNab /opt/nab
 ```
+
+## Detection quality — TSB-AD-M (multivariate)
+
+TSB-AD-M (TheDatumOrg, 2024): 200 multivariate series across 16
+source datasets, per-point binary labels, native multivariate
+(no lag embedding). Pipeline: per-dim z-score on the upstream
+`tr_<N>` train split, frozen-baseline `score()`, EMA-smooth
+α = 0.02. Forest `(100, 256)`, seed `2026`. Const-generic
+whitelist `{2, 3, 7, 8, 9, 12, 16, 17, 18, 19, 25, 29, 31, 38, 51,
+55, 66}` covers **192 / 200 files (96 %)**; the eight D=248 files
+are skipped. Runtime: ~12 min on the reference hardware.
+
+| Source dataset | Files | Positives | rcf-rs AUC |
+|---|---|---|---|
+| Genesis | 1 | 50 | **0.968** |
+| SMAP | 27 | 6 424 | **0.803** |
+| MSL | 16 | 2 350 | 0.705 |
+| SVDB | 31 | 325 527 | 0.692 |
+| SMD | 22 | 21 145 | 0.618 |
+| PSM | 1 | 24 381 | 0.608 |
+| LTDB | 5 | 77 568 | 0.601 |
+| MITDB | 13 | 111 842 | 0.601 |
+| CreditCard | 1 | 492 | 0.589 |
+| CATSv2 | 6 | 63 600 | 0.580 |
+| Exathlon | 27 | 171 692 | 0.491 |
+| GHL | 25 | 56 569 | 0.454 |
+| TAO | 13 | 10 841 | 0.451 |
+| GECCO | 1 | 1 726 | 0.412 |
+| Daphnet | 1 | 2 306 | 0.309 |
+| SWaT | 2 | 52 104 | 0.282 |
+| **aggregate weighted** | **192** | **928 617** | **0.584** |
+
+`tests/tsb_ad_m.rs` pins aggregate floor at 0.55 — regression
+guard, not a quality claim.
+
+Caveats:
+
+- Plain point-wise ROC-AUC; the official TSB-AD leaderboard ranks
+  on **VUS-PR** (Paparrizos et al. 2022) which integrates
+  range-based precision/recall across a sliding window. For an
+  apples-to-apples submission, export raw score streams and run
+  [TheDatumOrg/VUS](https://github.com/TheDatumOrg/VUS) offline.
+- RCF is classical by design — transformer-based SOTA (TimesNet,
+  Anomaly Transformer) outscores it on heavy-physics datasets
+  (SWaT, Daphnet, GECCO) where the anomaly signature is deep in
+  higher-order cross-channel structure. RCF stays competitive on
+  Genesis / SMAP / MSL / SVDB where per-dim statistical drift is
+  the dominant signature — closer to eBPFsentinel's production
+  feature mix (rate, ratio, entropy, cardinality).
+
+Reproduce:
+
+```bash
+scripts/tsb_ad/fetch.sh /tmp/tsb-ad
+RCF_TSB_AD_M_PATH=/tmp/tsb-ad/TSB-AD-M \
+    cargo test --release --test tsb_ad_m --all-features -- --ignored --nocapture
+```

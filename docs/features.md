@@ -490,6 +490,19 @@ score-averaging semantics and reservoir behaviour against the
 published AWS RCF spec. Regression-guards the wire-level
 compatibility story whenever the crate's internals move.
 
+### Detection-quality regression guards
+
+`tests/detection_quality.rs` pins AUC floors on synthetic
+corpora (separable clusters > 0.95, transition > 0.90).
+`tests/nab.rs` (ignored by default, needs `RCF_NAB_PATH`) pins
+the NAB `realKnownCause` weighted aggregate at 0.70 via the
+lag=32 + zscore + smooth(0.02) pipeline.
+`tests/tsb_ad_m.rs` (ignored, needs `RCF_TSB_AD_M_PATH`) pins the
+TSB-AD multivariate track aggregate at 0.55 via per-dim z-score
++ frozen-baseline `score()` — exercises the native multivariate
+path across 192 / 200 files spanning D ∈ {2 .. 66}. See
+`docs/performance.md` for the per-source breakdown.
+
 ### Property-based fuzz suite
 
 `tests/fuzz_properties.rs` runs eight adversarial properties via
