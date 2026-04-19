@@ -22,8 +22,12 @@ absent; the imputation concept is repurposed as a SOC-triage
 See [docs/features.md](docs/features.md) for the catalogue of
 optional modules on top of the bare forest (TRCF, tenant pool,
 bootstrap, warm reload, group scores, attribution stability,
-CUSUM meta-drift, bulk batch scoring, timestamp retention, early
-termination, metrics sink / histogram, …).
+forensic baseline, Platt calibrator, severity bands, alert
+clustering, audit trail, CUSUM meta-drift, feature drift PSI/KL,
+t-digest streaming quantiles, score histogram, bulk batch
+scoring, timestamp retention, early termination,
+probe-based codisp scoring, score confidence intervals,
+metrics sink, …).
 
 ## Quickstart
 

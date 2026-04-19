@@ -16,7 +16,8 @@ Regression test: `tests/aws_conformance.rs` pins every row below.
 | `time_decay = 0.1 / sample_size` | resolved by `ForestBuilder`; pass `.time_decay(0.0)` to disable |
 | `initial_accept_fraction ∈ [0, 1]`, default `1.0` (disabled) | `ForestBuilder::initial_accept_fraction` — pass `0.125` to match AWS `CompactSampler` |
 | Reservoir sampling without replacement | `sampler::ReservoirSampler` |
-| Score = average across trees | `forest::RandomCutForest::score` |
+| Score = average across trees (isolation depth) | `forest::RandomCutForest::score` (fast, non-mutating, parallel) |
+| Collusive-displacement score (AWS Java / rrcf default) | `forest::RandomCutForest::score_codisp` (probe-based, mutating) |
 | Anomaly threshold `≥ 3σ` from mean | `ThresholdedForest` (default `z_factor = 3.0`), else caller responsibility |
 
 Extensions beyond the AWS signature:
@@ -35,6 +36,13 @@ Extensions beyond the AWS signature:
   `expected / stddev / delta / zscore`.
 - `score_early_term` — sequential early-termination scoring on
   converged per-tree means, cuts latency on easy points.
+- `score_codisp` — probe-based codisp walk (leaf → root,
+  `max(sibling.mass / subtree.mass)` per level). Matches AWS
+  Java / rrcf scoring semantic; ~30× slower than `score()`.
+  On NAB `realKnownCause` it lifts aggregate AUC 0.719 → 0.776.
+- `score_with_confidence` — mean + per-tree dispersion
+  (`stddev`, `stderr`), `ci95()` / `ci(z)` helpers for Gaussian
+  confidence intervals.
 
 Deliberately absent from `rcf-rs` (out of scope for streaming
 network anomaly detection):

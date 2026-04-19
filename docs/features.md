@@ -104,6 +104,21 @@ Types: `ScoreWithConfidence`, `DEFAULT_CI_Z_FACTOR` (`1.96`).
 
 Source: `src/score_ci.rs`.
 
+### Probe-based codisp scoring
+
+`RandomCutForest::score_codisp(&point)` inserts the probe, walks
+leaf → root in every tree accumulating
+`max(sibling.mass / subtree.mass)` per level, then deletes the
+probe. Matches the rrcf / AWS Java `codisp` semantic — captures
+contextual displacement better than pure isolation depth on
+wide-window anomalies. ~30× slower than `score()` (sequential
+per tree, mutates the reservoir), intended for SOC triage /
+forensic replay, not the eBPF hot path. On NAB `realKnownCause`
+it lifts aggregate AUC from 0.719 (`score()`) to 0.776 —
+beats both rrcf (0.748) and AWS Java (0.757).
+
+Source: `src/forest/random_cut_forest.rs`.
+
 ### Early-termination scoring
 
 `score_early_term(&point, config)` walks trees sequentially and
