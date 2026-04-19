@@ -15,9 +15,9 @@
 //!   stored cuts, dispatching per-node callbacks to a
 //!   [`crate::visitor::Visitor`].
 //!
-//! The tree never owns point coordinates — callers (the forest layer
-//! in story RCF.7) hand a [`PointAccessor`] in for any operation that
-//! needs to know a leaf's location.
+//! The tree never owns point coordinates — callers (the forest
+//! layer) hand a [`PointAccessor`] in for any operation that needs
+//! to know a leaf's location.
 
 use std::borrow::Cow;
 
@@ -181,7 +181,7 @@ impl<const D: usize> RandomCutTree<D> {
     }
 
     /// Borrow the underlying node store. Used by tests and
-    /// persistence (story RCF.8).
+    /// persistence.
     #[must_use]
     pub fn store(&self) -> &NodeStore<D> {
         &self.store

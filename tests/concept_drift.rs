@@ -1,8 +1,8 @@
 //! Concept-drift integration test for [`rcf_rs::RandomCutForest`].
 //!
-//! Story RCF.9 AC #3: a stream that switches from cluster A to
-//! cluster B should initially flag cluster B as anomalous, then
-//! settle back to baseline once the reservoir refreshes.
+//! A stream that switches from cluster A to cluster B should
+//! initially flag cluster B as anomalous, then settle back to
+//! baseline once the reservoir refreshes.
 
 #![allow(clippy::cast_precision_loss)]
 

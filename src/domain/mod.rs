@@ -10,7 +10,7 @@
 //! - [`cut::Cut`] — a single random cut (dimension + value) sampled
 //!   weighted by the bounding box's per-dimension range
 //! - [`divector::DiVector`] — per-feature attribution vector for
-//!   `AttributionVisitor` (story RCF.6, not yet shipped)
+//!   [`crate::visitor::AttributionVisitor`]
 //! - [`score::AnomalyScore`] — `NaN`-safe newtype around `f64`
 
 pub mod bounding_box;

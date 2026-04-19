@@ -6,13 +6,13 @@
 //! freed slot first — which keeps the live working set compact and
 //! cache-friendly.
 //!
-//! Bounding-box semantics: only internal nodes carry a cached bounding
-//! box. Leaves know their point only through `point_idx` into the
-//! future `PointStore` (story RCF.7); when a caller needs a leaf
-//! bounding box it builds a degenerate one from the point itself.
-//! This keeps leaf storage at 24 bytes (idx + parent + mass) instead of
-//! duplicating per-leaf coordinate data, saving ~6 MB at default
-//! configuration.
+//! Bounding-box semantics: only internal nodes carry a cached
+//! bounding box. Leaves know their point only through `point_idx`
+//! into the [`crate::forest::PointStore`]; when a caller needs a
+//! leaf bounding box it builds a degenerate one from the point
+//! itself. This keeps leaf storage at 24 bytes (idx + parent +
+//! mass) instead of duplicating per-leaf coordinate data, saving
+//! ~6 MB at default configuration.
 
 use crate::domain::{BoundingBox, Cut};
 use crate::error::{RcfError, RcfResult};
@@ -297,8 +297,7 @@ impl<const D: usize> NodeStore<D> {
     /// - [`RcfError::OutOfBounds`] when the node does not exist.
     /// - [`RcfError::InvalidConfig`] when called on a leaf — leaf
     ///   bounding boxes are degenerate single-point boxes; build them
-    ///   from the underlying point store entry on the consumer side
-    ///   (story RCF.7).
+    ///   from the underlying point store entry on the consumer side.
     pub fn internal_bbox(&self, n: NodeRef) -> RcfResult<&BoundingBox<D>> {
         match self.node(n)? {
             Node::Internal { bbox, .. } => Ok(bbox),
@@ -354,8 +353,8 @@ impl<const D: usize> NodeStore<D> {
         }
     }
 
-    /// Replace the children of an internal node. Used by the future
-    /// `RandomCutTree::delete` (story RCF.4) when merging a sibling
+    /// Replace the children of an internal node. Used by
+    /// [`crate::RandomCutTree`] `delete` when merging a sibling
     /// into its grandparent's slot.
     ///
     /// # Errors
@@ -380,7 +379,7 @@ impl<const D: usize> NodeStore<D> {
         }
     }
 
-    /// Replace the cut of an internal node. Used by RCF.4 when a tree
+    /// Replace the cut of an internal node. Used when a tree
     /// rearrangement preserves the slot but swaps in a new cut.
     ///
     /// # Errors

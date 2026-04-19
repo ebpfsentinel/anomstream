@@ -33,7 +33,7 @@ pub enum RcfError {
     },
 
     /// A configuration value falls outside the AWS `SageMaker` spec
-    /// bounds enforced by `ForestBuilder` (story RCF.7).
+    /// bounds enforced by `ForestBuilder`.
     #[error("invalid configuration: {0}")]
     InvalidConfig(String),
 

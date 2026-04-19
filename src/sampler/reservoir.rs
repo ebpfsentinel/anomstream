@@ -46,7 +46,7 @@
 //!
 //! Membership is the caller's contract: every `point_idx` passed to
 //! [`ReservoirSampler::accept`] must be unique. The forest layer
-//! (story RCF.7) guarantees this through its
+//! guarantees this through its
 //! [`crate::forest`-stored point indices](crate::tree::PointAccessor).
 
 use std::cmp::Ordering;
@@ -303,7 +303,7 @@ impl ReservoirSampler {
     /// Iterate over every point index currently in the reservoir, in
     /// no particular order. Used by tests, by the forest layer to
     /// detect duplicate insertion attempts, and by the persistence
-    /// layer (story RCF.8).
+    /// layer.
     pub fn iter_indices(&self) -> impl Iterator<Item = usize> + '_ {
         self.heap.iter().map(|entry| entry.point_idx)
     }
