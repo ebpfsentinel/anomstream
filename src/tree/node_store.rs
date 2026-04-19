@@ -16,7 +16,7 @@
 
 use crate::domain::{BoundingBox, Cut};
 use crate::error::{RcfError, RcfResult};
-use crate::tree::node::{Node, NodeRef};
+use crate::tree::node::{InternalData, LeafData, NodeRef, NodeView, NodeViewMut};
 
 /// Flat-array storage for [`Node`]s with `O(1)` allocation and
 /// deallocation via per-arena free lists.
@@ -34,10 +34,15 @@ use crate::tree::node::{Node, NodeRef};
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NodeStore<const D: usize> {
-    /// Internal-node arena. `None` slots are free.
-    internals: Vec<Option<Node<D>>>,
-    /// Leaf arena. `None` slots are free.
-    leaves: Vec<Option<Node<D>>>,
+    /// Internal-node arena. `None` slots are free. Split from the
+    /// leaves so each slot is exactly the size of one
+    /// [`InternalData<D>`] record instead of paying the full
+    /// `Node<D>`-enum worst-case.
+    internals: Vec<Option<InternalData<D>>>,
+    /// Leaf arena. `None` slots are free. Each slot holds a
+    /// small [`LeafData`] record (24 bytes + `Option` overhead)
+    /// instead of the old enum-sized ~320 bytes at `D = 16`.
+    leaves: Vec<Option<LeafData>>,
     /// LIFO stack of free internal slot indices.
     internal_free: Vec<u32>,
     /// LIFO stack of free leaf slot indices.
@@ -125,7 +130,7 @@ impl<const D: usize> NodeStore<D> {
             .internal_free
             .pop()
             .ok_or_else(|| RcfError::InvalidConfig("NodeStore internal arena exhausted".into()))?;
-        self.internals[idx as usize] = Some(Node::Internal {
+        self.internals[idx as usize] = Some(InternalData {
             cut,
             bbox,
             left,
@@ -152,7 +157,7 @@ impl<const D: usize> NodeStore<D> {
             .leaf_free
             .pop()
             .ok_or_else(|| RcfError::InvalidConfig("NodeStore leaf arena exhausted".into()))?;
-        self.leaves[idx as usize] = Some(Node::Leaf {
+        self.leaves[idx as usize] = Some(LeafData {
             point_idx,
             parent,
             mass,
@@ -175,18 +180,17 @@ impl<const D: usize> NodeStore<D> {
                 len: self.capacity as usize,
             });
         }
-        let slot = if n.is_leaf() {
-            &mut self.leaves[idx]
+        let was_live = if n.is_leaf() {
+            self.leaves[idx].take().is_some()
         } else {
-            &mut self.internals[idx]
+            self.internals[idx].take().is_some()
         };
-        if slot.is_none() {
+        if !was_live {
             return Err(RcfError::OutOfBounds {
                 index: idx,
                 len: self.capacity as usize,
             });
         }
-        *slot = None;
         if n.is_leaf() {
             #[allow(clippy::cast_possible_truncation)]
             self.leaf_free.push(idx as u32);
@@ -197,13 +201,15 @@ impl<const D: usize> NodeStore<D> {
         Ok(())
     }
 
-    /// Borrow a node by reference.
+    /// Zero-copy immutable view of a node. Pattern-match on the
+    /// returned [`NodeView`] to branch on internal-vs-leaf without
+    /// cloning the underlying record.
     ///
     /// # Errors
     ///
     /// Returns [`RcfError::OutOfBounds`] when the slot is empty or
     /// `n.index() >= capacity()`.
-    pub fn node(&self, n: NodeRef) -> RcfResult<&Node<D>> {
+    pub fn view(&self, n: NodeRef) -> RcfResult<NodeView<'_, D>> {
         let idx = n.index();
         if idx >= self.capacity as usize {
             return Err(RcfError::OutOfBounds {
@@ -211,24 +217,97 @@ impl<const D: usize> NodeStore<D> {
                 len: self.capacity as usize,
             });
         }
-        let slot = if n.is_leaf() {
-            &self.leaves[idx]
+        if n.is_leaf() {
+            self.leaves[idx]
+                .as_ref()
+                .map(NodeView::Leaf)
+                .ok_or(RcfError::OutOfBounds {
+                    index: idx,
+                    len: self.capacity as usize,
+                })
         } else {
-            &self.internals[idx]
-        };
-        slot.as_ref().ok_or(RcfError::OutOfBounds {
+            self.internals[idx]
+                .as_ref()
+                .map(NodeView::Internal)
+                .ok_or(RcfError::OutOfBounds {
+                    index: idx,
+                    len: self.capacity as usize,
+                })
+        }
+    }
+
+    /// Zero-copy mutable view of a node — see [`Self::view`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::OutOfBounds`] when the slot is empty or
+    /// `n.index() >= capacity()`.
+    pub fn view_mut(&mut self, n: NodeRef) -> RcfResult<NodeViewMut<'_, D>> {
+        let idx = n.index();
+        if idx >= self.capacity as usize {
+            return Err(RcfError::OutOfBounds {
+                index: idx,
+                len: self.capacity as usize,
+            });
+        }
+        if n.is_leaf() {
+            self.leaves[idx]
+                .as_mut()
+                .map(NodeViewMut::Leaf)
+                .ok_or(RcfError::OutOfBounds {
+                    index: idx,
+                    len: self.capacity as usize,
+                })
+        } else {
+            self.internals[idx]
+                .as_mut()
+                .map(NodeViewMut::Internal)
+                .ok_or(RcfError::OutOfBounds {
+                    index: idx,
+                    len: self.capacity as usize,
+                })
+        }
+    }
+
+    /// Typed immutable accessor for an internal node. Prefer this
+    /// when the caller already knows the node is internal —
+    /// one-level shallower than going through [`Self::view`] + match.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::OutOfBounds`] when the slot is empty or OOB.
+    /// - [`RcfError::InvalidConfig`] when called on a leaf reference.
+    pub fn internal(&self, n: NodeRef) -> RcfResult<&InternalData<D>> {
+        if n.is_leaf() {
+            return Err(RcfError::InvalidConfig(
+                "NodeStore::internal: called on a leaf reference".into(),
+            ));
+        }
+        let idx = n.index();
+        if idx >= self.capacity as usize {
+            return Err(RcfError::OutOfBounds {
+                index: idx,
+                len: self.capacity as usize,
+            });
+        }
+        self.internals[idx].as_ref().ok_or(RcfError::OutOfBounds {
             index: idx,
             len: self.capacity as usize,
         })
     }
 
-    /// Mutably borrow a node by reference.
+    /// Typed mutable accessor for an internal node — see
+    /// [`Self::internal`].
     ///
     /// # Errors
     ///
-    /// Returns [`RcfError::OutOfBounds`] when the slot is empty or
-    /// `n.index() >= capacity()`.
-    pub fn node_mut(&mut self, n: NodeRef) -> RcfResult<&mut Node<D>> {
+    /// Same as [`Self::internal`].
+    pub fn internal_mut(&mut self, n: NodeRef) -> RcfResult<&mut InternalData<D>> {
+        if n.is_leaf() {
+            return Err(RcfError::InvalidConfig(
+                "NodeStore::internal_mut: called on a leaf reference".into(),
+            ));
+        }
         let idx = n.index();
         if idx >= self.capacity as usize {
             return Err(RcfError::OutOfBounds {
@@ -236,12 +315,56 @@ impl<const D: usize> NodeStore<D> {
                 len: self.capacity as usize,
             });
         }
-        let slot = if n.is_leaf() {
-            &mut self.leaves[idx]
-        } else {
-            &mut self.internals[idx]
-        };
-        slot.as_mut().ok_or(RcfError::OutOfBounds {
+        self.internals[idx].as_mut().ok_or(RcfError::OutOfBounds {
+            index: idx,
+            len: self.capacity as usize,
+        })
+    }
+
+    /// Typed immutable accessor for a leaf node.
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::OutOfBounds`] when the slot is empty or OOB.
+    /// - [`RcfError::InvalidConfig`] when called on an internal reference.
+    pub fn leaf(&self, n: NodeRef) -> RcfResult<&LeafData> {
+        if !n.is_leaf() {
+            return Err(RcfError::InvalidConfig(
+                "NodeStore::leaf: called on an internal reference".into(),
+            ));
+        }
+        let idx = n.index();
+        if idx >= self.capacity as usize {
+            return Err(RcfError::OutOfBounds {
+                index: idx,
+                len: self.capacity as usize,
+            });
+        }
+        self.leaves[idx].as_ref().ok_or(RcfError::OutOfBounds {
+            index: idx,
+            len: self.capacity as usize,
+        })
+    }
+
+    /// Typed mutable accessor for a leaf node — see [`Self::leaf`].
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::leaf`].
+    pub fn leaf_mut(&mut self, n: NodeRef) -> RcfResult<&mut LeafData> {
+        if !n.is_leaf() {
+            return Err(RcfError::InvalidConfig(
+                "NodeStore::leaf_mut: called on an internal reference".into(),
+            ));
+        }
+        let idx = n.index();
+        if idx >= self.capacity as usize {
+            return Err(RcfError::OutOfBounds {
+                index: idx,
+                len: self.capacity as usize,
+            });
+        }
+        self.leaves[idx].as_mut().ok_or(RcfError::OutOfBounds {
             index: idx,
             len: self.capacity as usize,
         })
@@ -253,7 +376,7 @@ impl<const D: usize> NodeStore<D> {
     ///
     /// Returns [`RcfError::OutOfBounds`] when the node does not exist.
     pub fn parent(&self, n: NodeRef) -> RcfResult<Option<NodeRef>> {
-        Ok(self.node(n)?.parent())
+        Ok(self.view(n)?.parent())
     }
 
     /// Sibling of a node.
@@ -271,22 +394,21 @@ impl<const D: usize> NodeStore<D> {
         let Some(parent_ref) = self.parent(n)? else {
             return Ok(None);
         };
-        match self.node(parent_ref)? {
-            Node::Internal { left, right, .. } => {
-                let n_raw = n.raw();
-                if left.raw() == n_raw {
-                    Ok(Some(*right))
-                } else if right.raw() == n_raw {
-                    Ok(Some(*left))
-                } else {
-                    Err(RcfError::InvalidConfig(
-                        "NodeStore::sibling: child not registered with parent".into(),
-                    ))
-                }
-            }
-            Node::Leaf { .. } => Err(RcfError::InvalidConfig(
+        if parent_ref.is_leaf() {
+            return Err(RcfError::InvalidConfig(
                 "NodeStore::sibling: parent is a leaf — invariant violated".into(),
-            )),
+            ));
+        }
+        let parent = self.internal(parent_ref)?;
+        let n_raw = n.raw();
+        if parent.left.raw() == n_raw {
+            Ok(Some(parent.right))
+        } else if parent.right.raw() == n_raw {
+            Ok(Some(parent.left))
+        } else {
+            Err(RcfError::InvalidConfig(
+                "NodeStore::sibling: child not registered with parent".into(),
+            ))
         }
     }
 
@@ -299,12 +421,7 @@ impl<const D: usize> NodeStore<D> {
     ///   bounding boxes are degenerate single-point boxes; build them
     ///   from the underlying point store entry on the consumer side.
     pub fn internal_bbox(&self, n: NodeRef) -> RcfResult<&BoundingBox<D>> {
-        match self.node(n)? {
-            Node::Internal { bbox, .. } => Ok(bbox),
-            Node::Leaf { .. } => Err(RcfError::InvalidConfig(
-                "NodeStore::internal_bbox: called on a leaf".into(),
-            )),
-        }
+        Ok(&self.internal(n)?.bbox)
     }
 
     /// Set the parent of a node.
@@ -313,12 +430,15 @@ impl<const D: usize> NodeStore<D> {
     ///
     /// Returns [`RcfError::OutOfBounds`] when the node does not exist.
     pub fn set_parent(&mut self, n: NodeRef, parent: Option<NodeRef>) -> RcfResult<()> {
-        match self.node_mut(n)? {
-            Node::Internal { parent: p, .. } | Node::Leaf { parent: p, .. } => {
-                *p = parent;
-                Ok(())
+        match self.view_mut(n)? {
+            NodeViewMut::Internal(i) => {
+                i.parent = parent;
+            }
+            NodeViewMut::Leaf(l) => {
+                l.parent = parent;
             }
         }
+        Ok(())
     }
 
     /// Replace the mass of a node.
@@ -327,12 +447,15 @@ impl<const D: usize> NodeStore<D> {
     ///
     /// Returns [`RcfError::OutOfBounds`] when the node does not exist.
     pub fn set_mass(&mut self, n: NodeRef, mass: u64) -> RcfResult<()> {
-        match self.node_mut(n)? {
-            Node::Internal { mass: m, .. } | Node::Leaf { mass: m, .. } => {
-                *m = mass;
-                Ok(())
+        match self.view_mut(n)? {
+            NodeViewMut::Internal(i) => {
+                i.mass = mass;
+            }
+            NodeViewMut::Leaf(l) => {
+                l.mass = mass;
             }
         }
+        Ok(())
     }
 
     /// Replace the cached bounding box of an internal node.
@@ -342,15 +465,8 @@ impl<const D: usize> NodeStore<D> {
     /// - [`RcfError::OutOfBounds`] when the node does not exist.
     /// - [`RcfError::InvalidConfig`] when called on a leaf.
     pub fn set_internal_bbox(&mut self, n: NodeRef, bbox: BoundingBox<D>) -> RcfResult<()> {
-        match self.node_mut(n)? {
-            Node::Internal { bbox: b, .. } => {
-                *b = bbox;
-                Ok(())
-            }
-            Node::Leaf { .. } => Err(RcfError::InvalidConfig(
-                "NodeStore::set_internal_bbox: called on a leaf".into(),
-            )),
-        }
+        self.internal_mut(n)?.bbox = bbox;
+        Ok(())
     }
 
     /// Replace the children of an internal node. Used by
@@ -367,16 +483,10 @@ impl<const D: usize> NodeStore<D> {
         new_left: NodeRef,
         new_right: NodeRef,
     ) -> RcfResult<()> {
-        match self.node_mut(n)? {
-            Node::Internal { left, right, .. } => {
-                *left = new_left;
-                *right = new_right;
-                Ok(())
-            }
-            Node::Leaf { .. } => Err(RcfError::InvalidConfig(
-                "NodeStore::set_internal_children: called on a leaf".into(),
-            )),
-        }
+        let i = self.internal_mut(n)?;
+        i.left = new_left;
+        i.right = new_right;
+        Ok(())
     }
 
     /// Replace the cut of an internal node. Used when a tree
@@ -387,15 +497,8 @@ impl<const D: usize> NodeStore<D> {
     /// - [`RcfError::OutOfBounds`] when the node does not exist.
     /// - [`RcfError::InvalidConfig`] when called on a leaf.
     pub fn set_internal_cut(&mut self, n: NodeRef, new_cut: Cut) -> RcfResult<()> {
-        match self.node_mut(n)? {
-            Node::Internal { cut, .. } => {
-                *cut = new_cut;
-                Ok(())
-            }
-            Node::Leaf { .. } => Err(RcfError::InvalidConfig(
-                "NodeStore::set_internal_cut: called on a leaf".into(),
-            )),
-        }
+        self.internal_mut(n)?.cut = new_cut;
+        Ok(())
     }
 }
 
@@ -522,35 +625,27 @@ mod tests {
     }
 
     #[test]
-    fn node_returns_inserted_value() {
+    fn leaf_returns_inserted_value() {
         let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(42, None, 1).unwrap();
-        match s.node(l).unwrap() {
-            Node::Leaf {
-                point_idx, mass, ..
-            } => {
-                assert_eq!(*point_idx, 42);
-                assert_eq!(*mass, 1);
-            }
-            Node::Internal { .. } => panic!("expected leaf"),
-        }
+        let data = s.leaf(l).unwrap();
+        assert_eq!(data.point_idx, 42);
+        assert_eq!(data.mass, 1);
     }
 
     #[test]
-    fn node_mut_allows_inplace_update() {
+    fn leaf_mut_allows_inplace_update() {
         let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(1, None, 1).unwrap();
-        if let Node::Leaf { mass, .. } = s.node_mut(l).unwrap() {
-            *mass = 5;
-        }
-        assert_eq!(s.node(l).unwrap().mass(), 5);
+        s.leaf_mut(l).unwrap().mass = 5;
+        assert_eq!(s.view(l).unwrap().mass(), 5);
     }
 
     #[test]
-    fn node_oob_returns_err() {
+    fn view_oob_returns_err() {
         let s = NodeStore::<2>::new(2).unwrap();
         assert!(matches!(
-            s.node(NodeRef::leaf(7)).unwrap_err(),
+            s.view(NodeRef::leaf(7)).unwrap_err(),
             RcfError::OutOfBounds { .. }
         ));
     }
@@ -631,7 +726,7 @@ mod tests {
         let mut s = NodeStore::<2>::new(2).unwrap();
         let l = s.add_leaf(0, None, 1).unwrap();
         s.set_mass(l, 9).unwrap();
-        assert_eq!(s.node(l).unwrap().mass(), 9);
+        assert_eq!(s.view(l).unwrap().mass(), 9);
     }
 
     #[test]
@@ -658,13 +753,9 @@ mod tests {
             .add_internal(Cut::new(0, 0.5), unit_bbox::<2>(), l1, l2, None, 2)
             .unwrap();
         s.set_internal_children(i, l1, l3).unwrap();
-        match s.node(i).unwrap() {
-            Node::Internal { left, right, .. } => {
-                assert_eq!(*left, l1);
-                assert_eq!(*right, l3);
-            }
-            Node::Leaf { .. } => panic!("expected internal"),
-        }
+        let data = s.internal(i).unwrap();
+        assert_eq!(data.left, l1);
+        assert_eq!(data.right, l3);
     }
 
     #[test]
@@ -676,10 +767,9 @@ mod tests {
             .add_internal(Cut::new(0, 0.5), unit_bbox::<2>(), l1, l2, None, 2)
             .unwrap();
         s.set_internal_cut(i, Cut::new(1, 9.0)).unwrap();
-        if let Node::Internal { cut, .. } = s.node(i).unwrap() {
-            assert_eq!(cut.dim(), 1);
-            assert_eq!(cut.value(), 9.0);
-        }
+        let data = s.internal(i).unwrap();
+        assert_eq!(data.cut.dim(), 1);
+        assert_eq!(data.cut.value(), 9.0);
     }
 
     #[test]

@@ -154,7 +154,7 @@ fn collect_per_tree<const D: usize>(
         let Some(root) = tree.root() else {
             continue;
         };
-        let mass = tree.store().node(root)?.mass();
+        let mass = tree.store().view(root)?.mass();
         let visitor = AttributionVisitor::new(point, mass)?;
         let di = tree.traverse(point, visitor)?;
         out.push(di);

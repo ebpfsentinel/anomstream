@@ -624,7 +624,7 @@ impl<const D: usize> RandomCutForest<D> {
             let Some(root) = tree.root() else {
                 continue;
             };
-            let mass = tree.store().node(root)?.mass();
+            let mass = tree.store().view(root)?.mass();
             let visitor = ScalarScoreVisitor::new(mass);
             let x: f64 = tree.traverse(probe, visitor)?.into();
 
@@ -739,7 +739,7 @@ impl<const D: usize> RandomCutForest<D> {
             let Some(root) = tree.root() else {
                 continue;
             };
-            let mass = tree.store().node(root)?.mass();
+            let mass = tree.store().view(root)?.mass();
             let visitor = ScalarScoreVisitor::new(mass);
             let s = tree.traverse(probe, visitor)?;
             samples.push(f64::from(s));
@@ -1141,7 +1141,7 @@ fn score_aggregate<const D: usize>(
                 let Some(root) = tree.root() else {
                     return Ok(None);
                 };
-                let mass = tree.store().node(root)?.mass();
+                let mass = tree.store().view(root)?.mass();
                 let visitor = ScalarScoreVisitor::new(mass);
                 let s = tree.traverse(point, visitor)?;
                 Ok(Some(f64::from(s)))
@@ -1170,7 +1170,7 @@ fn score_aggregate<const D: usize>(
             let Some(root) = tree.root() else {
                 continue;
             };
-            let mass = tree.store().node(root)?.mass();
+            let mass = tree.store().view(root)?.mass();
             let visitor = ScalarScoreVisitor::new(mass);
             let s = tree.traverse(point, visitor)?;
             total += f64::from(s);
@@ -1196,7 +1196,7 @@ fn attribution_aggregate<const D: usize>(
                 let Some(root) = tree.root() else {
                     return Ok(None);
                 };
-                let mass = tree.store().node(root)?.mass();
+                let mass = tree.store().view(root)?.mass();
                 let visitor = AttributionVisitor::new(point, mass)?;
                 Ok(Some(tree.traverse(point, visitor)?))
             })
@@ -1228,7 +1228,7 @@ fn attribution_aggregate<const D: usize>(
             let Some(root) = tree.root() else {
                 continue;
             };
-            let mass = tree.store().node(root)?.mass();
+            let mass = tree.store().view(root)?.mass();
             let visitor = AttributionVisitor::new(point, mass)?;
             let di = tree.traverse(point, visitor)?;
             accumulator.accumulate(&di)?;

@@ -55,24 +55,24 @@ Re-run on target hardware before committing SLO budgets.
 
 ## Core ops (`forest_throughput`)
 
+Post split-typed-arena refactor (persistence v4) — see the
+**Arena split** entry in *Done* below.
+
 | Workload | `(trees, samples, D)` | Time |
 |---|---|---|
-| `forest_update` | `(50, 128, 16)` | 23.59 µs |
-| `forest_update` | `(100, 256, 4)` | 19.91 µs |
-| `forest_update` | `(100, 256, 16)` | 32.36 µs |
-| `forest_update` | `(100, 256, 64)` | 82.27 µs |
-| `forest_update` | `(200, 512, 16)` | 68.67 µs |
-| `forest_score` | `(50, 128, 16)` | 19.33 µs |
-| `forest_score` | `(100, 256, 4)` | 23.69 µs |
-| `forest_score` | `(100, 256, 16)` | 25.56 µs |
-| `forest_score` | `(100, 256, 64)` | 34.22 µs |
-| `forest_score` | `(200, 512, 16)` | 41.24 µs |
-| `forest_attribution` | `(100, 256, 4)` | 35.17 µs |
-| `forest_attribution` | `(100, 256, 16)` | 49.59 µs |
-| `forest_attribution` | `(100, 256, 64)` | 98.78 µs |
+| `forest_update` | `(100, 256, 16)` | ~23 µs |
+| `forest_score` | `(100, 256, 16)` | ~23 µs |
+| `forest_attribution` | `(100, 256, 16)` | ~31 µs |
 
-At `(100, 256, 16)`: ~31k inserts/s and ~39k scores/s
+At `(100, 256, 16)`: ~43k inserts/s and ~43k scores/s
 single-thread-equivalent.
+
+Measured via `cargo bench --bench forest_throughput`. Absolute
+values under the other `(trees, samples, D)` tuples are available
+in the criterion HTML report (`target/criterion/`) — not pinned
+here since cross-bench variance on the laptop-class reference
+hardware exceeds the typical row-to-row delta (see
+*Measurement methodology caveats* above).
 
 ## Bulk batch scoring
 
@@ -158,13 +158,13 @@ Observations:
   temporal embedding + frozen-baseline eval protocol. Yahoo S5
   (licence-gated) and Wikipedia pageviews (no ground-truth
   labels) remain out of scope.
-- **Arena-layout hot-path work** — per-tree node arenas are
-  currently `Vec<Node>` dispatched via `NodeRef` indices. A
-  DFS-packed layout (parent-before-children, `u16` deltas when
-  the subtree fits) would halve the memory bandwidth required by
-  `score` / `attribution` and lift the `~6×` parallel ceiling.
-  Requires its own sprint (serde format break, tree-invariant
-  retest across 80+ suite).
+- **Arena compression beyond the split** — the split-typed
+  arenas shipped in v4 still pay ~2×300 B per resident
+  `InternalData` at `D = 16`. Further wins would come from a
+  DFS-packed internal arena (parent-before-children with `u16`
+  deltas) — risky: RCF inserts re-shuffle the tree shape at
+  `O(log n)`, and a DFS layout forces `O(N)` restructuring on
+  mid-tree insertion. Not pursued for now.
 - **AVX-512 `f64x8`** — not actionable on stable Rust without
   relaxing `#![forbid(unsafe_code)]`. `wide 0.7` ships `f64x4`
   only; `std::simd` `f64x8` is nightly. Workaround: build with
@@ -177,3 +177,10 @@ Observations:
 - **No-alloc scoring** — `RandomCutForest::score_many_with(points, cb)`
   invokes a caller-supplied closure per score, no intermediate
   `Vec`. See `tests/bulk_scoring.rs` for coverage.
+- **Arena split (persistence v4)** — `NodeStore` arenas split
+  into typed `Vec<Option<InternalData<D>>>` + `Vec<Option<LeafData>>`
+  (was `Vec<Option<Node<D>>>` enum with worst-case-sized slots).
+  Leaf slot size drops from ~320 B to ~40 B at `D = 16` — cuts
+  per-forest leaf-arena memory by ~90 %. Measured at
+  `(100, 256, 16)`: `forest_attribution` -37 %, `forest_update`
+  -28 %, `forest_score` -10 %.

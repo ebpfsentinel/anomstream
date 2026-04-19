@@ -25,7 +25,7 @@ use rand::RngCore;
 
 use crate::domain::{BoundingBox, Cut, ensure_dim, ensure_finite};
 use crate::error::{RcfError, RcfResult};
-use crate::tree::node::{Node, NodeRef};
+use crate::tree::node::{NodeRef, NodeView, NodeViewMut};
 use crate::tree::node_store::NodeStore;
 use crate::visitor::Visitor;
 
@@ -205,11 +205,11 @@ impl<const D: usize> RandomCutTree<D> {
 
     /// Recursive helper for [`max_depth`](Self::max_depth).
     fn subtree_depth(&self, n: NodeRef, depth: usize) -> RcfResult<usize> {
-        match self.store.node(n)? {
-            Node::Leaf { .. } => Ok(depth),
-            Node::Internal { left, right, .. } => {
-                let l = self.subtree_depth(*left, depth + 1)?;
-                let r = self.subtree_depth(*right, depth + 1)?;
+        match self.store.view(n)? {
+            NodeView::Leaf(_) => Ok(depth),
+            NodeView::Internal(i) => {
+                let l = self.subtree_depth(i.left, depth + 1)?;
+                let r = self.subtree_depth(i.right, depth + 1)?;
                 Ok(l.max(r))
             }
         }
@@ -315,12 +315,12 @@ impl<const D: usize> RandomCutTree<D> {
                 "RandomCutTree::absorb_duplicate called on internal node".into(),
             ));
         }
-        let mass = self.store.node(n)?.mass();
+        let mass = self.store.view(n)?.mass();
         self.store.set_mass(n, mass + 1)?;
         self.leaf_index_set(point_idx, n);
         let mut cur = n;
         while let Some(parent) = self.store.parent(cur)? {
-            let m = self.store.node(parent)?.mass();
+            let m = self.store.view(parent)?.mass();
             self.store.set_mass(parent, m + 1)?;
             cur = parent;
         }
@@ -341,7 +341,7 @@ impl<const D: usize> RandomCutTree<D> {
         self.leaf_index_set(point_idx, new_leaf);
 
         let parent_of_n = self.store.parent(n)?;
-        let n_mass = self.store.node(n)?.mass();
+        let n_mass = self.store.view(n)?.mass();
         let new_mass = n_mass + 1;
 
         let (left, right) = if cut.left_of(point) {
@@ -381,11 +381,9 @@ impl<const D: usize> RandomCutTree<D> {
         R: RngCore + ?Sized,
         P: PointAccessor<D> + ?Sized,
     {
-        let (existing_cut, left, right) = match self.store.node(n)? {
-            Node::Internal {
-                cut, left, right, ..
-            } => (*cut, *left, *right),
-            Node::Leaf { .. } => {
+        let (existing_cut, left, right) = match self.store.view(n)? {
+            NodeView::Internal(i) => (i.cut, i.left, i.right),
+            NodeView::Leaf(_) => {
                 // Cut over a non-degenerate augmented bbox always
                 // isolates one of two distinct points; reaching here
                 // would indicate a bug elsewhere.
@@ -426,9 +424,9 @@ impl<const D: usize> RandomCutTree<D> {
             self.root = Some(new);
             return Ok(());
         };
-        let (l, r) = match self.store.node(parent)? {
-            Node::Internal { left, right, .. } => (*left, *right),
-            Node::Leaf { .. } => {
+        let (l, r) = match self.store.view(parent)? {
+            NodeView::Internal(i) => (i.left, i.right),
+            NodeView::Leaf(_) => {
                 return Err(RcfError::InvalidConfig(
                     "RandomCutTree::replace_in_parent: parent is leaf".into(),
                 ));
@@ -448,22 +446,20 @@ impl<const D: usize> RandomCutTree<D> {
 
     /// Walk from `start` up to the root incrementing mass and
     /// extending each cached internal bounding box by `point` —
-    /// in-place extend via [`NodeStore::node_mut`] avoids the
+    /// in-place extend via [`NodeStore::view_mut`] avoids the
     /// `bbox.clone() + set_internal_bbox` round trip on every level.
     fn update_ancestors_after_insert(&mut self, start: NodeRef, point: &[f64]) -> RcfResult<()> {
         let mut cur = Some(start);
         while let Some(node) = cur {
-            let parent = match self.store.node_mut(node)? {
-                Node::Internal {
-                    bbox, mass, parent, ..
-                } => {
-                    *mass += 1;
-                    bbox.extend(point)?;
-                    *parent
+            let parent = match self.store.view_mut(node)? {
+                NodeViewMut::Internal(i) => {
+                    i.mass += 1;
+                    i.bbox.extend(point)?;
+                    i.parent
                 }
-                Node::Leaf { mass, parent, .. } => {
-                    *mass += 1;
-                    *parent
+                NodeViewMut::Leaf(l) => {
+                    l.mass += 1;
+                    l.parent
                 }
             };
             cur = parent;
@@ -490,12 +486,12 @@ impl<const D: usize> RandomCutTree<D> {
             ))
         })?;
 
-        let leaf_mass = self.store.node(leaf)?.mass();
+        let leaf_mass = self.store.view(leaf)?.mass();
         if leaf_mass > 1 {
             self.store.set_mass(leaf, leaf_mass - 1)?;
             let mut cur = leaf;
             while let Some(parent) = self.store.parent(cur)? {
-                let m = self.store.node(parent)?.mass();
+                let m = self.store.view(parent)?.mass();
                 self.store.set_mass(parent, m - 1)?;
                 cur = parent;
             }
@@ -516,15 +512,15 @@ impl<const D: usize> RandomCutTree<D> {
             return Ok(());
         };
 
-        let sibling = match self.store.node(parent)? {
-            Node::Internal { left, right, .. } => {
-                if left.raw() == leaf.raw() {
-                    *right
+        let sibling = match self.store.view(parent)? {
+            NodeView::Internal(i) => {
+                if i.left.raw() == leaf.raw() {
+                    i.right
                 } else {
-                    *left
+                    i.left
                 }
             }
-            Node::Leaf { .. } => {
+            NodeView::Leaf(_) => {
                 return Err(RcfError::InvalidConfig(
                     "RandomCutTree::delete: parent is leaf".into(),
                 ));
@@ -540,9 +536,9 @@ impl<const D: usize> RandomCutTree<D> {
                 self.root = Some(sibling);
             }
             Some(gp) => {
-                let (l, r) = match self.store.node(gp)? {
-                    Node::Internal { left, right, .. } => (*left, *right),
-                    Node::Leaf { .. } => {
+                let (l, r) = match self.store.view(gp)? {
+                    NodeView::Internal(i) => (i.left, i.right),
+                    NodeView::Leaf(_) => {
                         return Err(RcfError::InvalidConfig(
                             "RandomCutTree::delete: grandparent is leaf".into(),
                         ));
@@ -573,7 +569,7 @@ impl<const D: usize> RandomCutTree<D> {
     {
         let mut cur = Some(start);
         while let Some(node) = cur {
-            let m = self.store.node(node)?.mass();
+            let m = self.store.view(node)?.mass();
             self.store.set_mass(node, m - 1)?;
             if node.is_internal() {
                 let new_bbox = self.compute_internal_bbox(node, points)?;
@@ -589,9 +585,9 @@ impl<const D: usize> RandomCutTree<D> {
     where
         P: PointAccessor<D> + ?Sized,
     {
-        let (left, right) = match self.store.node(n)? {
-            Node::Internal { left, right, .. } => (*left, *right),
-            Node::Leaf { .. } => {
+        let (left, right) = match self.store.view(n)? {
+            NodeView::Internal(i) => (i.left, i.right),
+            NodeView::Leaf(_) => {
                 return Err(RcfError::InvalidConfig(
                     "RandomCutTree::compute_internal_bbox called on leaf".into(),
                 ));
@@ -610,11 +606,11 @@ impl<const D: usize> RandomCutTree<D> {
     where
         P: PointAccessor<D> + ?Sized,
     {
-        match self.store.node(n)? {
-            Node::Internal { bbox, .. } => Ok(Cow::Borrowed(bbox)),
-            Node::Leaf { point_idx, .. } => {
-                let p = points.point(*point_idx).ok_or(RcfError::OutOfBounds {
-                    index: *point_idx,
+        match self.store.view(n)? {
+            NodeView::Internal(i) => Ok(Cow::Borrowed(&i.bbox)),
+            NodeView::Leaf(l) => {
+                let p = points.point(l.point_idx).ok_or(RcfError::OutOfBounds {
+                    index: l.point_idx,
                     len: 0,
                 })?;
                 Ok(Cow::Owned(BoundingBox::<D>::from_point(p)?))
@@ -649,29 +645,24 @@ impl<const D: usize> RandomCutTree<D> {
         depth: usize,
         visitor: &mut V,
     ) -> RcfResult<()> {
-        match self.store.node(n)? {
-            Node::Leaf {
-                mass, point_idx, ..
-            } => {
-                visitor.accept_leaf(depth, *mass, *point_idx);
+        match self.store.view(n)? {
+            NodeView::Leaf(l) => {
+                visitor.accept_leaf(depth, l.mass, l.point_idx);
                 Ok(())
             }
-            Node::Internal {
-                cut,
-                bbox,
-                mass,
-                left,
-                right,
-                ..
-            } => {
+            NodeView::Internal(i) => {
                 if visitor.needs_per_dim_prob() {
-                    let (prob, per_dim) = bbox.probability_of_cut(point)?;
-                    visitor.accept_internal(depth, *mass, cut, bbox, prob, &per_dim);
+                    let (prob, per_dim) = i.bbox.probability_of_cut(point)?;
+                    visitor.accept_internal(depth, i.mass, &i.cut, &i.bbox, prob, &per_dim);
                 } else {
-                    let prob = bbox.total_probability_of_cut(point)?;
-                    visitor.accept_internal(depth, *mass, cut, bbox, prob, &[]);
+                    let prob = i.bbox.total_probability_of_cut(point)?;
+                    visitor.accept_internal(depth, i.mass, &i.cut, &i.bbox, prob, &[]);
                 }
-                let next = if cut.left_of(point) { *left } else { *right };
+                let next = if i.cut.left_of(point) {
+                    i.left
+                } else {
+                    i.right
+                };
                 self.traverse_inner(next, point, depth + 1, visitor)
             }
         }
@@ -794,7 +785,7 @@ mod tests {
         let root = t.root().unwrap();
         assert!(root.is_internal());
         assert_eq!(t.distinct_point_count(), 2);
-        assert_eq!(t.store().node(root).unwrap().mass(), 2);
+        assert_eq!(t.store().view(root).unwrap().mass(), 2);
     }
 
     #[test]
@@ -843,7 +834,7 @@ mod tests {
         t.add(1, &p, &points, &mut rng).unwrap();
         let root = t.root().unwrap();
         assert!(root.is_leaf(), "single-point tree stays a leaf");
-        assert_eq!(t.store().node(root).unwrap().mass(), 2);
+        assert_eq!(t.store().view(root).unwrap().mass(), 2);
         assert_eq!(t.distinct_point_count(), 2);
     }
 
@@ -860,7 +851,7 @@ mod tests {
         }
         let root = t.root().unwrap();
         assert!(root.is_internal());
-        assert_eq!(t.store().node(root).unwrap().mass(), 32);
+        assert_eq!(t.store().view(root).unwrap().mass(), 32);
         assert_eq!(t.distinct_point_count(), 32);
     }
 
@@ -899,15 +890,9 @@ mod tests {
         t.delete(0, &points).unwrap();
         let root = t.root().unwrap();
         assert!(root.is_leaf());
-        match t.store().node(root).unwrap() {
-            Node::Leaf {
-                point_idx, mass, ..
-            } => {
-                assert_eq!(*point_idx, 1);
-                assert_eq!(*mass, 1);
-            }
-            Node::Internal { .. } => panic!("expected leaf"),
-        }
+        let leaf = t.store().leaf(root).unwrap();
+        assert_eq!(leaf.point_idx, 1);
+        assert_eq!(leaf.mass, 1);
         assert_eq!(t.store().live_count(), 1);
     }
 
@@ -920,13 +905,13 @@ mod tests {
         t.add(0, &p, &points, &mut rng).unwrap();
         t.add(1, &p, &points, &mut rng).unwrap();
         let root = t.root().unwrap();
-        assert_eq!(t.store().node(root).unwrap().mass(), 2);
+        assert_eq!(t.store().view(root).unwrap().mass(), 2);
         t.delete(1, &points).unwrap();
-        assert_eq!(t.store().node(root).unwrap().mass(), 1);
+        assert_eq!(t.store().view(root).unwrap().mass(), 1);
         assert!(t.root().unwrap().is_leaf());
         assert!(!t.contains(1));
         assert!(t.contains(0));
-        assert_eq!(t.store().node(root).unwrap().mass(), 1);
+        assert_eq!(t.store().view(root).unwrap().mass(), 1);
         points.pop();
     }
 

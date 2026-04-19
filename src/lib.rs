@@ -160,5 +160,7 @@ pub use tdigest::{Centroid, DEFAULT_COMPRESSION as TDIGEST_DEFAULT_COMPRESSION, 
 pub use thresholded::{
     AnomalyGrade, EmaStats, ThresholdedConfig, ThresholdedForest, ThresholdedForestBuilder,
 };
-pub use tree::{Node, NodeRef, NodeStore, PointAccessor, RandomCutTree};
+pub use tree::{
+    InternalData, LeafData, NodeRef, NodeStore, NodeView, NodeViewMut, PointAccessor, RandomCutTree,
+};
 pub use visitor::{AttributionVisitor, ScalarScoreVisitor, Visitor};

@@ -39,19 +39,20 @@ use crate::forest::RandomCutForest;
 use crate::thresholded::ThresholdedForest;
 
 /// Persistence format version for [`RandomCutForest`]. Bump on any
-/// breaking layout change. Version `3` adds the per-point
+/// breaking layout change. Version `4` splits the `NodeStore` arenas
+/// into typed `InternalData` / `LeafData` records (saves ~90 % on
+/// leaf-arena memory at `D = 16`); version `3` added the per-point
 /// timestamp side-map used by [`RandomCutForest::update_at`] /
 /// [`RandomCutForest::delete_before`]; version `2` was the first
 /// `postcard` payload after `RustSec` flagged `bincode` as
 /// unmaintained; version `1` was the original `bincode 2` payload.
-pub const PERSISTENCE_VERSION: u32 = 3;
+pub const PERSISTENCE_VERSION: u32 = 4;
 
 /// Persistence format version for [`ThresholdedForest`]. Distinct
 /// from [`PERSISTENCE_VERSION`] because the threshold envelope carries
 /// additional state (EMA stats, threshold config) that evolves on its
-/// own cadence. Version `3` inherits the forest's timestamp side-map
-/// bump.
-pub const THRESHOLDED_PERSISTENCE_VERSION: u32 = 3;
+/// own cadence. Version `4` inherits the forest's typed-arena bump.
+pub const THRESHOLDED_PERSISTENCE_VERSION: u32 = 4;
 
 /// Number of bytes reserved for the version prefix.
 pub const VERSION_PREFIX_BYTES: usize = 4;

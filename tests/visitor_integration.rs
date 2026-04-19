@@ -25,7 +25,7 @@ fn build_tree<const D: usize>(points: &[[f64; D]], seed: u64) -> RandomCutTree<D
 
 fn root_mass<const D: usize>(tree: &RandomCutTree<D>) -> u64 {
     tree.root()
-        .map_or(0, |root| tree.store().node(root).expect("root live").mass())
+        .map_or(0, |root| tree.store().view(root).expect("root live").mass())
 }
 
 fn score<const D: usize>(tree: &RandomCutTree<D>, point: &[f64; D]) -> f64 {

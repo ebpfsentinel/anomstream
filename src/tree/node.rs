@@ -100,71 +100,65 @@ impl NodeRef {
     }
 }
 
-/// A live tree node — either an internal node holding a cut, bounding
-/// box and two children, or a leaf pointing into the forest's point
-/// store.
-///
-/// # Examples
-///
-/// ```
-/// use rcf_rs::Node;
-///
-/// let leaf: Node<2> = Node::Leaf {
-///     point_idx: 0,
-///     parent: None,
-///     mass: 1,
-/// };
-/// assert!(leaf.is_leaf());
-/// assert_eq!(leaf.mass(), 1);
-/// ```
+/// Raw internal-node record. Lives inline in the
+/// [`crate::NodeStore`] internal arena — one entry per live
+/// internal node. The bounding box is embedded inline so tree
+/// traversal stays cache-resident.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-// `Internal` is intentionally larger than `Leaf` — embedding the
-// `[f64; D]`-backed bounding box inline keeps the hot tree-traversal
-// path cache-resident. Boxing the internal variant would put the
-// bbox on the heap and defeat the const-generic optimisation.
-#[allow(clippy::large_enum_variant)]
-pub enum Node<const D: usize> {
-    /// Internal node: a cut hyperplane plus the union bounding box of
-    /// the subtree, two children, an optional parent and the mass
-    /// (number of leaf descendants).
-    Internal {
-        /// The hyperplane partitioning the subtree.
-        cut: Cut,
-        /// Cached union bounding box of the subtree.
-        bbox: BoundingBox<D>,
-        /// Left child (`point[cut.dim] <= cut.value`).
-        left: NodeRef,
-        /// Right child (`point[cut.dim] > cut.value`).
-        right: NodeRef,
-        /// Parent reference (`None` only at the root).
-        parent: Option<NodeRef>,
-        /// Number of leaf descendants.
-        mass: u64,
-    },
-    /// Leaf node: an index into the forest point store, the parent,
-    /// and a mass (always `1` for distinct points; `> 1` only when
-    /// the same point is inserted multiple times — duplicates are
-    /// collapsed at insert time).
-    Leaf {
-        /// Index into the forest point store.
-        point_idx: usize,
-        /// Parent reference (`None` only when the tree contains a
-        /// single leaf at the root).
-        parent: Option<NodeRef>,
-        /// Number of stored copies of this point. Always `>= 1`.
-        mass: u64,
-    },
+pub struct InternalData<const D: usize> {
+    /// The hyperplane partitioning the subtree.
+    pub cut: Cut,
+    /// Cached union bounding box of the subtree.
+    pub bbox: BoundingBox<D>,
+    /// Left child (`point[cut.dim] <= cut.value`).
+    pub left: NodeRef,
+    /// Right child (`point[cut.dim] > cut.value`).
+    pub right: NodeRef,
+    /// Parent reference (`None` only at the root).
+    pub parent: Option<NodeRef>,
+    /// Number of leaf descendants.
+    pub mass: u64,
 }
 
-impl<const D: usize> Node<D> {
+/// Raw leaf-node record. Lives inline in the [`crate::NodeStore`]
+/// leaf arena — one entry per live leaf. Kept small (no bounding
+/// box, no cut) so the leaf arena fits many entries per cache line.
+/// Before the v4 split the leaf arena stored the full `Node<D>`
+/// enum with its internal-variant shape, wasting ~300 bytes per
+/// leaf at `D = 16`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LeafData {
+    /// Index into the forest point store.
+    pub point_idx: usize,
+    /// Parent reference (`None` only when the tree contains a
+    /// single leaf at the root).
+    pub parent: Option<NodeRef>,
+    /// Number of stored copies of this point. Always `>= 1`.
+    pub mass: u64,
+}
+
+/// Zero-copy immutable view of a tree node. Returned by
+/// [`crate::NodeStore::view`] — pattern-match to branch on
+/// internal-vs-leaf without cloning the underlying record.
+#[derive(Debug)]
+pub enum NodeView<'a, const D: usize> {
+    /// Reference to an internal node's record.
+    Internal(&'a InternalData<D>),
+    /// Reference to a leaf node's record.
+    Leaf(&'a LeafData),
+}
+
+impl<const D: usize> NodeView<'_, D> {
     /// Mass of the node (leaf count for internals, copy count for
     /// leaves).
     #[must_use]
     #[inline]
     pub fn mass(&self) -> u64 {
         match self {
-            Self::Internal { mass, .. } | Self::Leaf { mass, .. } => *mass,
+            Self::Internal(i) => i.mass,
+            Self::Leaf(l) => l.mass,
         }
     }
 
@@ -173,7 +167,8 @@ impl<const D: usize> Node<D> {
     #[inline]
     pub fn parent(&self) -> Option<NodeRef> {
         match self {
-            Self::Internal { parent, .. } | Self::Leaf { parent, .. } => *parent,
+            Self::Internal(i) => i.parent,
+            Self::Leaf(l) => l.parent,
         }
     }
 
@@ -181,15 +176,25 @@ impl<const D: usize> Node<D> {
     #[must_use]
     #[inline]
     pub fn is_internal(&self) -> bool {
-        matches!(self, Self::Internal { .. })
+        matches!(self, Self::Internal(_))
     }
 
     /// Whether this is a leaf.
     #[must_use]
     #[inline]
     pub fn is_leaf(&self) -> bool {
-        matches!(self, Self::Leaf { .. })
+        matches!(self, Self::Leaf(_))
     }
+}
+
+/// Zero-copy mutable view of a tree node. Mirrors [`NodeView`] but
+/// hands out `&mut` references for in-place field updates.
+#[derive(Debug)]
+pub enum NodeViewMut<'a, const D: usize> {
+    /// Mutable reference to an internal node's record.
+    Internal(&'a mut InternalData<D>),
+    /// Mutable reference to a leaf node's record.
+    Leaf(&'a mut LeafData),
 }
 
 #[cfg(test)]
@@ -228,24 +233,16 @@ mod tests {
     }
 
     #[test]
-    fn node_mass_returns_inner_mass() {
-        let leaf: Node<2> = Node::Leaf {
-            point_idx: 0,
-            parent: None,
-            mass: 3,
-        };
-        assert_eq!(leaf.mass(), 3);
-        assert!(leaf.is_leaf());
-        assert!(!leaf.is_internal());
-    }
-
-    #[test]
-    fn node_parent_returns_inner_parent() {
-        let leaf: Node<2> = Node::Leaf {
+    fn leaf_view_mass_and_parent() {
+        let data = LeafData {
             point_idx: 0,
             parent: Some(NodeRef::internal(5)),
-            mass: 1,
+            mass: 3,
         };
-        assert_eq!(leaf.parent(), Some(NodeRef::internal(5)));
+        let view: NodeView<'_, 2> = NodeView::Leaf(&data);
+        assert_eq!(view.mass(), 3);
+        assert!(view.is_leaf());
+        assert!(!view.is_internal());
+        assert_eq!(view.parent(), Some(NodeRef::internal(5)));
     }
 }

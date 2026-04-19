@@ -185,7 +185,7 @@ fn aws_score_equals_average_across_trees() {
         let Some(root) = tree.root() else {
             continue;
         };
-        let mass = tree.store().node(root).unwrap().mass();
+        let mass = tree.store().view(root).unwrap().mass();
         let visitor = ScalarScoreVisitor::new(mass);
         let s: f64 = tree.traverse(&probe, visitor).unwrap().into();
         total += s;
