@@ -8,7 +8,7 @@ Criterion (`cargo bench`) — wall-clock mean point estimate,
 - `benches/extended.rs` — bulk, early-term, forensic, tenant.
 
 ```bash
-cargo bench                                         # full
+cargo bench                                            # full
 cargo bench -- --sample-size 10 --measurement-time 2   # quick
 ```
 
