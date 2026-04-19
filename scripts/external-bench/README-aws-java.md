@@ -6,7 +6,7 @@ Sketch for someone willing to wire it up manually.
 ## Environment
 
 ```bash
-sudo apt install -y openjdk-21-jdk maven
+sudo apt install -y openjdk-26-jdk maven
 git clone https://github.com/aws/random-cut-forest-by-aws.git
 cd random-cut-forest-by-aws
 mvn -pl core install -DskipTests

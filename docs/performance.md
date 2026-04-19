@@ -150,11 +150,14 @@ Observations:
   driver via the `external_bench_driver` example, AWS Java
   outline). Run manually on the dev box, paste results back into
   this file. Python + JVM toolchains are out-of-CI on purpose.
-- **Detection-quality benchmarks on public corpora** — `NAB` /
-  Yahoo S5 / Wikipedia pageviews not yet integrated.
-  `tests/detection_quality.rs` covers synthetic ground-truth
-  streams; public-corpus AUC pinning is the next step but needs
-  dataset-fetch infra that is heavier than the crate scope.
+- **Detection-quality benchmarks on public corpora** —
+  `tests/nab.rs` covers the Numenta Anomaly Benchmark
+  `realKnownCause` subset (`#[ignore]` gated behind
+  `RCF_NAB_PATH`; see `scripts/nab/fetch.sh`). On the 7 files,
+  rcf-rs sits at **weighted aggregate AUC ≈ 0.615** with 8-lag
+  temporal embedding + frozen-baseline eval protocol. Yahoo S5
+  (licence-gated) and Wikipedia pageviews (no ground-truth
+  labels) remain out of scope.
 - **Arena-layout hot-path work** — per-tree node arenas are
   currently `Vec<Node>` dispatched via `NodeRef` indices. A
   DFS-packed layout (parent-before-children, `u16` deltas when
