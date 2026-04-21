@@ -119,6 +119,8 @@ pub mod forensic;
 pub mod forest;
 pub mod group_score;
 pub mod histogram;
+#[cfg(feature = "std")]
+pub mod hot_path;
 pub mod meta_drift;
 pub mod metrics;
 #[cfg(feature = "serde")]
@@ -149,6 +151,8 @@ pub use forensic::ForensicBaseline;
 pub use forest::{PointStore, RandomCutForest};
 pub use group_score::{FeatureGroup, FeatureGroups, FeatureGroupsBuilder, GroupScores};
 pub use histogram::{HistogramConfig, ScoreHistogram};
+#[cfg(feature = "std")]
+pub use hot_path::{UpdateConsumer, UpdateProducer, UpdateSampler};
 pub use meta_drift::{CusumConfig, DriftKind, DriftVerdict, MetaDriftDetector};
 pub use metrics::{MetricsSink, NoopSink};
 #[cfg(feature = "std")]

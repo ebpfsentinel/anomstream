@@ -1,0 +1,420 @@
+//! Hot-path integration primitives for `rcf-rs` callers that run on
+//! latency-critical ingress paths (eBPF TC action, XDP, per-packet
+//! anomaly classifier).
+//!
+//! The bare [`crate::RandomCutForest::update`] takes ~23 µs at the
+//! AWS-default `(100 trees, 256 samples, D = 16)` config — an order
+//! of magnitude above the few-µs budget a TC action has per packet
+//! at 10 Gbps+. Making `update` faster hits diminishing returns; the
+//! architectural answer is to **decouple** the score-on-path from
+//! the update-off-path and shed low-value updates before they queue.
+//!
+//! This module ships two orthogonal building blocks:
+//!
+//! - [`UpdateSampler`] — stride or per-flow-hash decision
+//!   "does this packet contribute to the reservoir?" — discards the
+//!   rest before any RCF work. Per-flow sampling keeps the baseline
+//!   shape (every flow has *some* representation) while cutting the
+//!   update rate by the sampling ratio.
+//! - [`channel`] — bounded MPSC channel carrying `[f64; D]` points
+//!   from classifier threads to a **single dedicated updater
+//!   thread**. The classifier thread `try_enqueue`s non-blockingly
+//!   and scores against the *previous* forest snapshot; the updater
+//!   thread drains the queue into `RandomCutForest::update` at its
+//!   own cadence. Dropped points (queue full) are tallied for ops.
+//!
+//! Coarser `time_decay` is the third dial, but that's configured
+//! directly on [`crate::ForestBuilder::time_decay`]; see
+//! `docs/performance.md` for the trade-off.
+//!
+//! # Example: classifier + updater split
+//!
+//! ```ignore
+//! use rcf_rs::{ForestBuilder, hot_path};
+//! use std::thread;
+//!
+//! let mut forest = ForestBuilder::<16>::new()
+//!     .num_trees(100)
+//!     .sample_size(256)
+//!     .seed(42)
+//!     .build()?;
+//!
+//! let (producer, mut consumer) = hot_path::channel::<16>(4096);
+//! let sampler = hot_path::UpdateSampler::new(8); // 1/8 per-flow
+//!
+//! // Updater thread.
+//! thread::spawn(move || loop {
+//!     let (ingested, errors) = consumer.try_drain(|p| forest.update(p));
+//!     if ingested == 0 && errors == 0 {
+//!         std::thread::sleep(std::time::Duration::from_millis(1));
+//!     }
+//! });
+//!
+//! // Classifier thread (hot path — runs per packet).
+//! fn on_packet(
+//!     features: [f64; 16],
+//!     flow_hash: u64,
+//!     sampler: &hot_path::UpdateSampler,
+//!     producer: &hot_path::UpdateProducer<16>,
+//! ) {
+//!     if sampler.accept_hash(flow_hash) {
+//!         let _ = producer.try_enqueue(features);
+//!     }
+//! }
+//! ```
+
+#![cfg(feature = "std")]
+
+use core::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+
+/// Stride-based or per-flow-hash update sampler.
+///
+/// Accepts `1 / keep_every_n` of the offered updates. The sampler
+/// itself never touches the forest — callers invoke `accept_*`
+/// before calling [`crate::RandomCutForest::update`].
+///
+/// `keep_every_n = 0` and `keep_every_n = 1` both disable sampling
+/// (every offer is accepted). Values `>= 2` gate proportionally.
+#[derive(Debug)]
+pub struct UpdateSampler {
+    /// Divisor: keep `1 / keep_every_n` offered updates.
+    keep_every_n: u32,
+    /// Monotonic stride counter for [`Self::accept_stride`].
+    counter: AtomicU64,
+    /// Running total of accepted offers — observability signal.
+    accepted: AtomicU64,
+    /// Running total of rejected offers.
+    rejected: AtomicU64,
+}
+
+impl UpdateSampler {
+    /// Build a sampler keeping 1 offer out of every `keep_every_n`.
+    /// `0` and `1` disable sampling (every offer accepted).
+    #[must_use]
+    pub fn new(keep_every_n: u32) -> Self {
+        Self {
+            keep_every_n,
+            counter: AtomicU64::new(0),
+            accepted: AtomicU64::new(0),
+            rejected: AtomicU64::new(0),
+        }
+    }
+
+    /// Configured ratio denominator.
+    #[must_use]
+    pub fn keep_every_n(&self) -> u32 {
+        self.keep_every_n
+    }
+
+    /// Stride-based decision — every `keep_every_n`-th offer lands.
+    /// Call order-dependent: counter increments on every invocation.
+    /// Cheap (one atomic fetch-add) but not flow-aware.
+    pub fn accept_stride(&self) -> bool {
+        if self.keep_every_n <= 1 {
+            self.accepted.fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
+        let n = self.counter.fetch_add(1, Ordering::Relaxed);
+        let keep = u64::from(self.keep_every_n);
+        let ok = n.is_multiple_of(keep);
+        if ok {
+            self.accepted.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.rejected.fetch_add(1, Ordering::Relaxed);
+        }
+        ok
+    }
+
+    /// Per-flow decision — flows with `flow_hash % keep_every_n == 0`
+    /// are admitted, every other flow rejected in full. Deterministic
+    /// across the sampler's lifetime: the *same* flow always samples
+    /// the same way, so the baseline keeps representative coverage
+    /// of every sampled flow rather than slicing any single flow.
+    ///
+    /// The caller supplies `flow_hash` — typically a 64-bit mix of
+    /// 5-tuple bytes (`SipHash` / `FxHash` / custom). Quality of
+    /// sampling only matters modulo `keep_every_n`.
+    pub fn accept_hash(&self, flow_hash: u64) -> bool {
+        if self.keep_every_n <= 1 {
+            self.accepted.fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
+        let ok = flow_hash.is_multiple_of(u64::from(self.keep_every_n));
+        if ok {
+            self.accepted.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.rejected.fetch_add(1, Ordering::Relaxed);
+        }
+        ok
+    }
+
+    /// Running total of accepted offers since construction.
+    #[must_use]
+    pub fn accepted_total(&self) -> u64 {
+        self.accepted.load(Ordering::Relaxed)
+    }
+
+    /// Running total of rejected offers since construction.
+    #[must_use]
+    pub fn rejected_total(&self) -> u64 {
+        self.rejected.load(Ordering::Relaxed)
+    }
+}
+
+/// Producer end of the hot-path update queue. Multi-producer: clone
+/// this handle per classifier thread. `try_enqueue` is non-blocking
+/// — on queue full it returns `false` and increments `dropped_total`.
+#[derive(Debug)]
+pub struct UpdateProducer<const D: usize> {
+    /// Underlying bounded MPSC sender.
+    tx: SyncSender<[f64; D]>,
+    /// Capacity the channel was built with — surfaced for gauges.
+    capacity: usize,
+    /// Lifetime enqueued count.
+    enqueued: Arc<AtomicU64>,
+    /// Lifetime dropped-on-full count.
+    dropped: Arc<AtomicU64>,
+}
+
+impl<const D: usize> Clone for UpdateProducer<D> {
+    fn clone(&self) -> Self {
+        Self {
+            tx: self.tx.clone(),
+            capacity: self.capacity,
+            enqueued: Arc::clone(&self.enqueued),
+            dropped: Arc::clone(&self.dropped),
+        }
+    }
+}
+
+impl<const D: usize> UpdateProducer<D> {
+    /// Non-blocking enqueue. Returns `true` when the point landed in
+    /// the queue, `false` when the queue was full (point dropped,
+    /// `dropped_total` incremented).
+    #[must_use]
+    pub fn try_enqueue(&self, point: [f64; D]) -> bool {
+        if self.tx.try_send(point).is_ok() {
+            self.enqueued.fetch_add(1, Ordering::Relaxed);
+            true
+        } else {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            false
+        }
+    }
+
+    /// Channel capacity as configured at [`channel`].
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Lifetime count of successfully enqueued points.
+    #[must_use]
+    pub fn enqueued_total(&self) -> u64 {
+        self.enqueued.load(Ordering::Relaxed)
+    }
+
+    /// Lifetime count of points dropped because the queue was full.
+    /// Non-zero indicates classifier thread is producing faster than
+    /// the updater thread is draining — raise alert / widen the
+    /// channel / raise the sampler ratio.
+    #[must_use]
+    pub fn dropped_total(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
+    }
+}
+
+/// Consumer end of the hot-path update queue. Single-consumer: hand
+/// this handle to the dedicated updater thread.
+#[derive(Debug)]
+pub struct UpdateConsumer<const D: usize> {
+    /// Underlying MPSC receiver.
+    rx: Receiver<[f64; D]>,
+}
+
+impl<const D: usize> UpdateConsumer<D> {
+    /// Drain every point currently queued into `sink`. Returns
+    /// `(ingested, errors)` — number of successful sink calls and
+    /// number of errored sink calls (typically forest reservoir
+    /// errors). The method returns as soon as the queue is empty so
+    /// the updater thread can back off or gauge throughput.
+    pub fn try_drain<F, E>(&self, mut sink: F) -> (usize, usize)
+    where
+        F: FnMut([f64; D]) -> Result<(), E>,
+    {
+        let mut ingested = 0;
+        let mut errors = 0;
+        while let Ok(p) = self.rx.try_recv() {
+            if sink(p).is_ok() {
+                ingested += 1;
+            } else {
+                errors += 1;
+            }
+        }
+        (ingested, errors)
+    }
+
+    /// Blocking-take of the next point. Returns `None` when every
+    /// [`UpdateProducer`] has been dropped (clean shutdown).
+    #[must_use]
+    pub fn recv(&self) -> Option<[f64; D]> {
+        self.rx.recv().ok()
+    }
+}
+
+/// Build a bounded MPSC hot-path update channel with the requested
+/// capacity. Returns `(producer, consumer)` — clone the producer per
+/// classifier thread; hand the consumer to the dedicated updater
+/// thread.
+///
+/// `capacity` is the in-flight queue depth; sizing it ~1 second's
+/// worth of expected update rate keeps the updater thread busy
+/// without unbounded backpressure under micro-bursts. Drop events
+/// (observable via [`UpdateProducer::dropped_total`]) are the ops
+/// signal the channel needs widening.
+#[must_use]
+pub fn channel<const D: usize>(capacity: usize) -> (UpdateProducer<D>, UpdateConsumer<D>) {
+    let (tx, rx) = sync_channel::<[f64; D]>(capacity);
+    let enqueued = Arc::new(AtomicU64::new(0));
+    let dropped = Arc::new(AtomicU64::new(0));
+    (
+        UpdateProducer {
+            tx,
+            capacity,
+            enqueued,
+            dropped,
+        },
+        UpdateConsumer { rx },
+    )
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sampler_disabled_accepts_every_offer() {
+        let s = UpdateSampler::new(0);
+        for _ in 0..10 {
+            assert!(s.accept_stride());
+        }
+        assert_eq!(s.accepted_total(), 10);
+        assert_eq!(s.rejected_total(), 0);
+    }
+
+    #[test]
+    fn sampler_one_accepts_every_offer() {
+        let s = UpdateSampler::new(1);
+        for _ in 0..10 {
+            assert!(s.accept_stride());
+            assert!(s.accept_hash(0xdead_beef_cafe_babe));
+        }
+    }
+
+    #[test]
+    fn sampler_stride_keeps_one_in_n() {
+        let s = UpdateSampler::new(4);
+        let mut accepted = 0_usize;
+        for _ in 0..100 {
+            if s.accept_stride() {
+                accepted += 1;
+            }
+        }
+        assert_eq!(accepted, 25);
+        assert_eq!(s.accepted_total(), 25);
+        assert_eq!(s.rejected_total(), 75);
+    }
+
+    #[test]
+    fn sampler_hash_deterministic_per_flow() {
+        let s = UpdateSampler::new(4);
+        // Same hash always decides the same way.
+        let h = 0xdead_beef_cafe_babe_u64;
+        let d1 = s.accept_hash(h);
+        let d2 = s.accept_hash(h);
+        assert_eq!(d1, d2);
+    }
+
+    #[test]
+    fn channel_try_enqueue_drops_on_full() {
+        let (p, _c) = channel::<2>(2);
+        assert!(p.try_enqueue([1.0, 2.0]));
+        assert!(p.try_enqueue([3.0, 4.0]));
+        assert!(!p.try_enqueue([5.0, 6.0]));
+        assert_eq!(p.enqueued_total(), 2);
+        assert_eq!(p.dropped_total(), 1);
+    }
+
+    #[test]
+    fn channel_try_drain_empties_queue() {
+        let (p, c) = channel::<2>(8);
+        let _ = p.try_enqueue([1.0, 2.0]);
+        let _ = p.try_enqueue([3.0, 4.0]);
+        let mut sink: Vec<[f64; 2]> = Vec::new();
+        let (ing, err) = c.try_drain::<_, ()>(|pt| {
+            sink.push(pt);
+            Ok(())
+        });
+        assert_eq!(ing, 2);
+        assert_eq!(err, 0);
+        assert_eq!(sink.len(), 2);
+    }
+
+    #[test]
+    fn channel_producer_is_clone_multi_producer() {
+        let (p1, c) = channel::<2>(8);
+        let p2 = p1.clone();
+        let _ = p1.try_enqueue([1.0, 2.0]);
+        let _ = p2.try_enqueue([3.0, 4.0]);
+        // Counters are shared across clones.
+        assert_eq!(p1.enqueued_total(), 2);
+        assert_eq!(p2.enqueued_total(), 2);
+        let (ing, _) = c.try_drain::<_, ()>(|_| Ok(()));
+        assert_eq!(ing, 2);
+    }
+
+    #[test]
+    fn channel_try_drain_counts_errors() {
+        let (p, c) = channel::<2>(8);
+        let _ = p.try_enqueue([1.0, 2.0]);
+        let _ = p.try_enqueue([3.0, 4.0]);
+        let (ing, err) = c.try_drain::<_, &'static str>(|pt| {
+            if pt[0] > 2.0 { Err("nope") } else { Ok(()) }
+        });
+        assert_eq!(ing, 1);
+        assert_eq!(err, 1);
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn end_to_end_hot_path_wires_sampler_producer_consumer() {
+        use crate::ForestBuilder;
+
+        let mut forest = ForestBuilder::<2>::new()
+            .num_trees(50)
+            .sample_size(64)
+            .seed(2026)
+            .build()
+            .unwrap();
+
+        let sampler = UpdateSampler::new(3);
+        let (producer, consumer) = channel::<2>(16);
+
+        // Simulated classifier hot-path.
+        for i in 0..9_u64 {
+            if sampler.accept_hash(i) {
+                let _ = producer.try_enqueue([i as f64, (i * 2) as f64]);
+            }
+        }
+        drop(producer);
+
+        // Updater thread.
+        let (ing, err) = consumer.try_drain(|p| forest.update(p));
+        assert!(err == 0);
+        // 0, 3, 6 accepted by accept_hash(keep_every_n=3): 3 points.
+        assert_eq!(ing, 3);
+    }
+}
