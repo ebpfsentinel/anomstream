@@ -71,6 +71,12 @@ Extensions beyond the AWS signature:
   cache-aware batch scoring (sort by quantised leading-dim key,
   score, un-permute). Wins only on strongly-correlated batches;
   do not swap blindly — bench your workload.
+- `AdwinDetector` + `DriftAwareForest` (`adwin` + `drift_aware`
+  modules) — ADWIN adaptive-window change-point detector (Bifet
+  SDM 2007) + shadow-forest swap policy for drift recovery.
+  Closes the "PSI fires Alert but baseline stays stale" gap: on
+  trigger, spawn a shadow forest; swap atomically after
+  `shadow_warmup` observations. `min_primary_age` anti-flap guard.
 - `PotDetector` + `fisher_combine` (`univariate_spot` +
   `ensemble` modules) — streaming Peaks-Over-Threshold univariate
   bank (Siffer KDD 2017) + Fisher's p-value combination for joint

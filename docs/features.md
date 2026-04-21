@@ -157,6 +157,36 @@ for long eval streams.
 
 Source: `src/forest/random_cut_forest.rs`, `src/tree/random_cut_tree.rs`.
 
+### Drift recovery — shadow forest + ADWIN
+
+`AdwinDetector` (in `rcf_rs::adwin`) — streaming change-point
+detector (Bifet & Gavaldà, SIAM SDM 2007). Bounded ring buffer of
+the last `N` observations, per-update O(N) scan over every split
+point with a Hoeffding bound `ε_cut`; flags drift and drops the
+older sub-window on fire. Confidence `δ`, window cap `N`, and
+observed stream amplitude `range` are caller-configured. Use on
+the score stream (or any per-step scalar) for an adaptive drift
+trigger with automatic window sizing — strictly more sensitive
+than a fixed-window mean test.
+
+`DriftAwareForest<D>` (in `rcf_rs::drift_aware`) — facade around
+a live `RandomCutForest<D>` with an optional shadow. Swap policy
+via `DriftRecoveryConfig`: `min_primary_age` guards against
+flap-loops, `shadow_warmup` controls when the shadow becomes the
+new primary. Call `on_drift()` to spawn a shadow (trigger lives
+outside — route from `AdwinDetector`, `FeatureDriftDetector`, or
+`MetaDriftDetector`). `update` feeds both primary and shadow;
+once the shadow hits `shadow_warmup` the swap is atomic on the
+next `update` tick. `score` always reads from the primary
+(stable baseline until the swap lands).
+
+Types: `AdwinDetector`, `DriftAwareForest<D>`, `DriftRecoveryConfig`.
+
+Source: `src/adwin.rs`, `src/drift_aware.rs`.
+
+Example: `examples/drift_recovery.rs` (2-regime synthetic stream
+with ADWIN-triggered shadow spawn + atomic swap after warmup).
+
 ### Univariate SPOT detector bank + Fisher combiner
 
 `PotDetector` (in `rcf_rs::univariate_spot`) — streaming

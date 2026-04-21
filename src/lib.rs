@@ -105,6 +105,8 @@
 // fail-fast idioms and opt out here.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::panic))]
 
+#[cfg(feature = "std")]
+pub mod adwin;
 pub mod alert_cluster;
 pub mod attribution_stability;
 pub mod audit;
@@ -112,6 +114,8 @@ pub mod bootstrap;
 pub mod calibrator;
 pub mod config;
 pub mod domain;
+#[cfg(feature = "std")]
+pub mod drift_aware;
 pub mod early_term;
 #[cfg(feature = "std")]
 pub mod ensemble;
@@ -151,6 +155,12 @@ pub use calibrator::{PlattCalibrator, PlattFitConfig};
 pub use config::{ForestBuilder, RcfConfig};
 pub use domain::{AnomalyScore, BoundingBox, Cut, DiVector, Point};
 pub use early_term::{EarlyTermConfig, EarlyTermScore};
+#[cfg(feature = "std")]
+pub use adwin::{
+    AdwinDetector, DEFAULT_DELTA as ADWIN_DEFAULT_DELTA, DEFAULT_WINDOW_CAP as ADWIN_DEFAULT_WINDOW,
+};
+#[cfg(feature = "std")]
+pub use drift_aware::{DriftAwareForest, DriftRecoveryConfig};
 #[cfg(feature = "std")]
 pub use ensemble::{chi_squared_survival_even, fisher_combine};
 pub use error::{RcfError, RcfResult};
