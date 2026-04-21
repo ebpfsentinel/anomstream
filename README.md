@@ -21,6 +21,7 @@ absent; the imputation concept is repurposed as a SOC-triage
 
 See [docs/features.md](docs/features.md) for the catalogue of
 optional modules on top of the bare forest (TRCF, tenant pool,
+`ShingledForest` for scalar-stream temporal anomaly detection,
 bootstrap, warm reload, group scores, attribution stability,
 forensic baseline, Platt calibrator, severity bands, alert
 clustering, audit trail, CUSUM meta-drift, feature drift PSI/KL,

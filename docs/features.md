@@ -143,6 +143,37 @@ for long eval streams.
 
 Source: `src/forest/random_cut_forest.rs`, `src/tree/random_cut_tree.rs`.
 
+### Internal shingling (`ShingledForest<D>`)
+
+`ShingledForest<D>` wraps a bare `RandomCutForest<D>` with a ring
+buffer of the last `D` scalars. Each `update_scalar(x)` shifts the
+window and emits a fresh `[f64; D]` to the forest, turning a
+scalar stream into a `D`-dim feature vector that captures
+temporal autocorrelation. This is the fix for the NAB
+`rogue_agent_key_hold` = 0.145 / SWaT = 0.282 failures caused by
+isolation depth blind-spotting contextual temporal anomalies
+(dwell / drop / frequency shift): the scalar value stays in
+baseline range but the shingled subsequence sits far from every
+baseline subsequence in the `D`-dim shingle space.
+
+API: `update_scalar` (mutates ring + forest once ring is full),
+`score_scalar` (non-mutating query with `value` as newest slot),
+`attribution_scalar` (per-lag-index DiVector),
+`score_codisp_stateless_scalar` (drift-free codisp over the
+shingle). `current_shingle`, `is_warmed`, `reset_ring` for
+diagnostics + lifecycle.
+
+Built via `ShingledForestBuilder<D>` — same knobs as
+`ForestBuilder` (`num_trees`, `sample_size`, `seed`, `time_decay`);
+the const-generic `D` **is** the shingle size.
+
+Types: `ShingledForest<D>`, `ShingledForestBuilder<D>`.
+
+Source: `src/shingled.rs`.
+
+Example: `examples/shingled.rs` (periodic sine baseline + three
+injected contextual anomalies — dwell / drop / frequency shift).
+
 ### Fused score + attribution
 
 `RandomCutForest::score_and_attribution(&point)` returns

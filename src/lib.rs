@@ -129,6 +129,8 @@ pub mod persistence;
 pub mod pool;
 pub mod sampler;
 pub mod score_ci;
+#[cfg(feature = "std")]
+pub mod shingled;
 #[cfg(feature = "serde")]
 pub(crate) mod serde_util;
 pub mod severity;
@@ -160,6 +162,8 @@ pub use pool::{ReadinessSummary, TenantForestPool};
 pub use sampler::{ReservoirSampler, SamplerOp};
 pub use score_ci::{DEFAULT_Z_FACTOR as DEFAULT_CI_Z_FACTOR, ScoreWithConfidence};
 pub use severity::{Severity, SeverityBands};
+#[cfg(feature = "std")]
+pub use shingled::{ShingledForest, ShingledForestBuilder};
 pub use tdigest::{Centroid, DEFAULT_COMPRESSION as TDIGEST_DEFAULT_COMPRESSION, TDigest};
 pub use thresholded::{
     AnomalyGrade, EmaStats, ThresholdedConfig, ThresholdedForest, ThresholdedForestBuilder,

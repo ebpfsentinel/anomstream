@@ -66,6 +66,11 @@ Extensions beyond the AWS signature:
   cache-aware batch scoring (sort by quantised leading-dim key,
   score, un-permute). Wins only on strongly-correlated batches;
   do not swap blindly — bench your workload.
+- `ShingledForest<D>` — scalar-stream wrapper with internal
+  ring-buffer shingling. Captures temporal autocorrelation that
+  bare isolation depth misses on periodic / dwell / beaconing
+  signals. Matches the shape of AWS Java `RotateShingle`; fixes
+  NAB `rogue_agent_key_hold` / SWaT contextual-anomaly floors.
 - `hot_path` module — eBPF-ingress building blocks:
   `UpdateSampler` (stride / per-flow-hash 1-in-N admission),
   bounded MPSC `channel::<D>(cap)` returning
