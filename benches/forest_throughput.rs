@@ -194,11 +194,84 @@ fn bench_combined(c: &mut Criterion) {
     split.finish();
 }
 
+fn bench_codisp_many_for<const D: usize>(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    num_trees: usize,
+    sample_size: usize,
+    batch: usize,
+) {
+    let id = format!("{num_trees}t_{sample_size}s_{D}d_k{batch}");
+    group.bench_function(&id, |b| {
+        let mut rng = ChaCha8Rng::seed_from_u64(19);
+        let probes: Vec<[f64; D]> = (0..batch)
+            .map(|_| {
+                let mut p = [0.0_f64; D];
+                for slot in &mut p {
+                    *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+                }
+                p
+            })
+            .collect();
+        let mut forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
+        b.iter(|| {
+            let out = forest
+                .score_codisp_many(black_box(&probes))
+                .expect("score_codisp_many succeeds");
+            black_box(out);
+        });
+    });
+}
+
+fn bench_codisp_loop_for<const D: usize>(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    num_trees: usize,
+    sample_size: usize,
+    batch: usize,
+) {
+    let id = format!("{num_trees}t_{sample_size}s_{D}d_k{batch}");
+    group.bench_function(&id, |b| {
+        let mut rng = ChaCha8Rng::seed_from_u64(19);
+        let probes: Vec<[f64; D]> = (0..batch)
+            .map(|_| {
+                let mut p = [0.0_f64; D];
+                for slot in &mut p {
+                    *slot = <ChaCha8Rng as rand::Rng>::random::<f64>(&mut rng);
+                }
+                p
+            })
+            .collect();
+        let mut forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
+        b.iter(|| {
+            let mut out = Vec::with_capacity(probes.len());
+            for p in &probes {
+                out.push(
+                    forest
+                        .score_codisp(black_box(p))
+                        .expect("score_codisp succeeds"),
+                );
+            }
+            black_box(out);
+        });
+    });
+}
+
+fn bench_codisp(c: &mut Criterion) {
+    let mut batch = c.benchmark_group("forest_codisp_many");
+    bench_codisp_many_for::<16>(&mut batch, 100, 256, 16);
+    bench_codisp_many_for::<16>(&mut batch, 100, 256, 64);
+    batch.finish();
+    let mut loopg = c.benchmark_group("forest_codisp_loop");
+    bench_codisp_loop_for::<16>(&mut loopg, 100, 256, 16);
+    bench_codisp_loop_for::<16>(&mut loopg, 100, 256, 64);
+    loopg.finish();
+}
+
 criterion_group!(
     benches,
     bench_insert,
     bench_score,
     bench_attribution,
-    bench_combined
+    bench_combined,
+    bench_codisp
 );
 criterion_main!(benches);

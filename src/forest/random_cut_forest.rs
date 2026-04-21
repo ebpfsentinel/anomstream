@@ -797,6 +797,134 @@ impl<const D: usize> RandomCutForest<D> {
         Ok(score)
     }
 
+    /// Batched probe-based codisp — amortises the per-probe
+    /// insert / delete overhead by pre-inserting all `points` into
+    /// every tree, walking leaf → root with a **shared-walk cache**
+    /// keyed on leaf [`crate::NodeRef`], then bulk-deleting.
+    ///
+    /// Expected speedup over a naive loop of [`Self::score_codisp`]:
+    ///
+    /// - Constant factor from one tree-state mutation per batch per
+    ///   tree instead of per probe (cuts reservoir housekeeping
+    ///   overhead for SOC forensic replay).
+    /// - When probes converge on the same leaf (correlated traffic,
+    ///   repeated near-duplicate flows), the leaf-cache collapses
+    ///   the leaf → root walk to one `walk_codisp` call per unique
+    ///   leaf — the rest are O(1) cache hits.
+    ///
+    /// # Semantic trade-off
+    ///
+    /// Probes inserted in the same batch can **see each other** in
+    /// the codisp walk (another probe landing as a sibling inflates
+    /// that probe's displacement). [`Self::score_codisp`] avoids
+    /// this by inserting one probe at a time. When the batch holds
+    /// unrelated, uncorrelated probes this is negligible; for
+    /// correlated probes the bias can be material. Caller picks the
+    /// trade-off: throughput vs purity.
+    ///
+    /// Secondary effect: batched inserts are more likely to evict
+    /// reservoir points than one-at-a-time inserts would (a larger
+    /// reservoir churn per call). Bulk-delete removes every probe
+    /// from storage but cannot restore evicted baseline points —
+    /// same eviction semantic as the single-probe path, only more
+    /// probes per call.
+    ///
+    /// Mutates the forest; serial by design (per-tree walk order
+    /// cannot run concurrently on the same forest).
+    ///
+    /// # Errors
+    ///
+    /// - [`RcfError::NaNValue`] on any non-finite input in `points`.
+    /// - [`RcfError::EmptyForest`] when no tree accepted any probe.
+    /// - Propagates [`Self::update_indexed`] / [`Self::delete`] failures.
+    #[cfg(feature = "std")]
+    pub fn score_codisp_many(
+        &mut self,
+        points: &[[f64; D]],
+    ) -> RcfResult<Vec<AnomalyScore>> {
+        use std::collections::HashMap;
+        if points.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Validate input before any tree mutation so an invalid
+        // probe does not leave partial state behind.
+        for p in points {
+            self.ensure_finite_metered(p)?;
+        }
+
+        // Pre-insert every probe; record the freshly-assigned idx
+        // per (tree-agnostic) point. Aborts mid-batch are possible
+        // if `update_indexed` fails — rewind by deleting whatever we
+        // already inserted.
+        let mut probe_indices: Vec<usize> = Vec::with_capacity(points.len());
+        for p in points {
+            match self.update_indexed(*p) {
+                Ok(idx) => probe_indices.push(idx),
+                Err(e) => {
+                    for idx in &probe_indices {
+                        let _ = self.delete(*idx);
+                    }
+                    return Err(e);
+                }
+            }
+        }
+
+        let n = points.len();
+        let mut totals = vec![0.0_f64; n];
+        let mut counts = vec![0_usize; n];
+        let mut walk_err: Option<RcfError> = None;
+
+        'trees: for (tree, _, _) in &self.trees {
+            let mut leaf_cache: HashMap<crate::tree::NodeRef, f64> = HashMap::new();
+            for (i, &idx) in probe_indices.iter().enumerate() {
+                let Some(leaf) = tree.leaf_of(idx) else {
+                    continue;
+                };
+                let codisp = if let Some(hit) = leaf_cache.get(&leaf) {
+                    *hit
+                } else {
+                    match walk_codisp(tree.store(), leaf) {
+                        Ok(c) => {
+                            leaf_cache.insert(leaf, c);
+                            c
+                        }
+                        Err(e) => {
+                            walk_err = Some(e);
+                            break 'trees;
+                        }
+                    }
+                };
+                totals[i] += codisp;
+                counts[i] = counts[i].saturating_add(1);
+            }
+        }
+
+        // Always bulk-delete probes — even on walk error — so the
+        // forest returns to a clean state before the error surfaces.
+        for idx in &probe_indices {
+            let _ = self.delete(*idx);
+        }
+
+        if let Some(e) = walk_err {
+            return Err(e);
+        }
+
+        let mut out = Vec::with_capacity(n);
+        for (total, count) in totals.into_iter().zip(counts) {
+            if count == 0 {
+                return Err(RcfError::EmptyForest);
+            }
+            #[allow(clippy::cast_precision_loss)]
+            let mean = total / count as f64;
+            let score = AnomalyScore::new(mean.max(0.0))?;
+            #[cfg(feature = "std")]
+            self.metrics
+                .observe_histogram(crate::metrics::names::SCORE_OBSERVATION, f64::from(score));
+            out.push(score);
+        }
+        Ok(out)
+    }
+
     /// Score `point` with per-tree dispersion statistics. Returns
     /// a [`crate::ScoreWithConfidence`] packing the ensemble mean,
     /// sample stddev, stderr, and tree count — use `ci95` /
@@ -1643,6 +1771,45 @@ mod tests {
             assert!((di_merged.high()[d] - di_split.high()[d]).abs() < 1e-9);
             assert!((di_merged.low()[d] - di_split.low()[d]).abs() < 1e-9);
         }
+    }
+
+    #[test]
+    fn score_codisp_many_empty_input() {
+        let mut f = small_forest();
+        for _ in 0..50 {
+            f.update([0.1, 0.2]).unwrap();
+        }
+        let out = f.score_codisp_many(&[]).unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn score_codisp_many_returns_one_score_per_probe() {
+        let mut f = small_forest();
+        for i in 0..200 {
+            #[allow(clippy::cast_precision_loss)]
+            let v = i as f64 * 0.01;
+            f.update([v, v + 0.5]).unwrap();
+        }
+        let probes = [[0.5, 1.0], [5.0, -3.0], [0.2, 0.7]];
+        let scores = f.score_codisp_many(&probes).unwrap();
+        assert_eq!(scores.len(), 3);
+        for s in &scores {
+            let v: f64 = (*s).into();
+            assert!(v.is_finite() && v >= 0.0);
+        }
+    }
+
+    #[test]
+    fn score_codisp_many_rejects_nan() {
+        let mut f = small_forest();
+        for _ in 0..50 {
+            f.update([0.1, 0.2]).unwrap();
+        }
+        let err = f
+            .score_codisp_many(&[[0.0, 0.0], [f64::NAN, 0.0]])
+            .unwrap_err();
+        assert!(matches!(err, RcfError::NaNValue));
     }
 
     #[test]
