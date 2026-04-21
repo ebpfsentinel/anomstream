@@ -63,6 +63,35 @@ Other `(trees, samples, D)` tuples: criterion HTML report
 | 512 | 3.17 ms | 19.5 ms | 6.1× |
 | 4096 | 24.1 ms | 146 ms | 6.0× |
 
+### Memory-bandwidth plateau @ ~6× / 14 C
+
+`score_many` tops out at ~6× rayon speedup on the 14-core / 20-thread
+reference host — once the tree arena for 100 trees × 256 samples (~6 MB
+at `D = 16`) fits in L3 but the per-probe working set thrashes L1/L2,
+all workers compete for the same LLC → DRAM channel and further
+threads contend rather than scale. Two avenues have been explored:
+
+- **Cache-aware probe reordering** via [`locality_bucket`] +
+  [`score_many_locality_sorted`] — shipped, opt-in, bench-driven.
+  Sorting probes by leading-dim quantised key groups similar tree
+  descents so each rayon worker re-uses warm arena cache lines.
+  At `k = 1024`, `D = 16`, correlated cluster: plain `score_many`
+  4.62 ms, sorted variant 5.27 ms — the `O(N log N)` sort + double
+  gather outweighs the cache gain on uniformly-random batches.
+  Callers with strongly-correlated batches (SOC alert replay of a
+  single flow, periodic tenant-scan) can bench their own workload
+  and swap in; do not swap blindly.
+- **Packed Cut (`dim: u8` + `value: f32`, 8 B vs 16 B)** — **not
+  shipped**. Halves the per-internal-node cut footprint, which
+  would improve L1 fit at `D = 16`, but `value: f32` changes the
+  isolation-depth boundary on points near a cut — bit-level
+  divergence from the f64-cut scorer. Correctness audit + full
+  NAB/TSB-AD AUC regression required before wiring. Documented
+  here so the decision is explicit, not lost to future archaeology.
+
+[`locality_bucket`]: ../src/forest/random_cut_forest.rs
+[`score_many_locality_sorted`]: ../src/forest/random_cut_forest.rs
+
 ## Early-termination
 
 `D=16`, forest `(100, 256)`, single probe:
