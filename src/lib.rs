@@ -148,7 +148,7 @@ pub use early_term::{EarlyTermConfig, EarlyTermScore};
 pub use error::{RcfError, RcfResult};
 pub use feature_drift::{DriftLevel, FeatureDriftDetector};
 pub use forensic::ForensicBaseline;
-pub use forest::{PointStore, RandomCutForest};
+pub use forest::{PointStore, RandomCutForest, locality_bucket};
 pub use group_score::{FeatureGroup, FeatureGroups, FeatureGroupsBuilder, GroupScores};
 pub use histogram::{HistogramConfig, ScoreHistogram};
 #[cfg(feature = "std")]
