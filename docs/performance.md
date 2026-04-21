@@ -32,25 +32,32 @@ portable signal.
   forest and criterion chooses batch sizes per-op, so reservoir
   state + per-iter overhead drift across bench groups. Trust
   ratios within a group, not absolute numbers across groups.
-- **Parallel ceiling**: `score_many` plateaus at ~6× speedup on
+- **Cross-session variance**: numbers in this doc were captured on
+  a warm CPU (governor `performance`, ambient IDE running). The
+  same benches on a cool-CPU / powersave session landed 25-30 %
+  faster on the single-probe `forest_update` / `forest_score`
+  hot path. Ratios (fusion savings, parallel speedup, early-term
+  ratio, tenant-scaling slopes) are stable across sessions and
+  the portable signal.
+- **Parallel ceiling**: `score_many` plateaus at ~5-6× speedup on
   a 14-core host — memory-bandwidth-bound past L3 working set.
 
 ## Core ops
 
-`(trees=100, sample=256, D=16)` on a cool-CPU single-seed run
-(powersave governor, no competing load):
+`(trees=100, sample=256, D=16)`, single-seed warm run, `mimalloc`
+pinned, `--sample-size 50 --warm-up-time 3 --measurement-time 8`:
 
 | Workload                              | Time   | Throughput |
 | ------------------------------------- | ------ | ---------- |
-| `forest_update`                       | ~25 µs | ~40 k/s    |
-| `forest_score`                        | ~24 µs | ~42 k/s    |
-| `forest_attribution`                  | ~45 µs | ~22 k/s    |
+| `forest_update`                       | ~33 µs | ~30 k/s    |
+| `forest_score`                        | ~33 µs | ~30 k/s    |
+| `forest_attribution`                  | ~44 µs | ~23 k/s    |
 | `forest_score_and_attribution`        | ~46 µs | ~22 k/s    |
 | `forest_split_score_then_attribution` | ~76 µs | ~13 k/s    |
 
 The fused `score_and_attribution` walk is **~40 % faster** than
 calling `score` + `attribution` back-to-back (single traversal
-instead of two). The fused bbox SIMD kernel
+instead of two, `46 / 76 ≈ 0.61`). The fused bbox SIMD kernel
 (`total_probability_of_cut`) saves one pass over `min`/`max` loads
 per internal node. Post split-typed-arena refactor (persistence
 v4) leaf arena memory is −90 % (~320 B → ~40 B per slot).
@@ -59,11 +66,11 @@ Other `(trees, samples, D)` tuples below:
 
 | Config           | `forest_update` | `forest_score` | `forest_attribution` |
 | ---------------- | --------------- | -------------- | -------------------- |
-| `(50, 128, 16)`  | ~20 µs          | ~18 µs         | —                    |
-| `(100, 256, 4)`  | ~20 µs          | ~21 µs         | ~36 µs               |
-| `(100, 256, 16)` | ~25 µs          | ~24 µs         | ~45 µs               |
-| `(100, 256, 64)` | ~66 µs          | ~28 µs         | ~91 µs               |
-| `(200, 512, 16)` | ~34 µs          | ~51 µs         | —                    |
+| `(50, 128, 16)`  | ~26 µs          | ~25 µs         | —                    |
+| `(100, 256, 4)`  | ~28 µs          | ~30 µs         | ~34 µs               |
+| `(100, 256, 16)` | ~33 µs          | ~33 µs         | ~44 µs               |
+| `(100, 256, 64)` | ~92 µs          | ~41 µs         | ~88 µs               |
+| `(200, 512, 16)` | ~48 µs          | ~51 µs         | —                    |
 
 Criterion HTML report lives at `target/criterion/`.
 
@@ -73,9 +80,9 @@ Criterion HTML report lives at `target/criterion/`.
 
 | Batch size | `score_many` (parallel) | Serial loop | Speedup |
 | ---------- | ----------------------- | ----------- | ------- |
-| 64         | 511 µs                  | 2.16 ms     | 4.2×    |
-| 512        | 3.74 ms                 | 16.9 ms     | 4.5×    |
-| 4096       | 27.8 ms                 | 135 ms      | 4.9×    |
+| 64         | 537 µs                  | 2.10 ms     | 3.9×    |
+| 512        | 3.68 ms                 | 16.7 ms     | 4.5×    |
+| 4096       | 28.0 ms                 | 149 ms      | 5.3×    |
 
 ### Codisp batched scoring
 
@@ -85,8 +92,8 @@ root descent, rayon across trees:
 
 | Batch K | `score_codisp_many` | `score_codisp` loop | Speedup |
 | ------- | ------------------- | ------------------- | ------- |
-| 16      | 1.78 ms             | 2.36 ms             | 1.3×    |
-| 64      | 6.65 ms             | 9.48 ms             | 1.4×    |
+| 16      | 1.76 ms             | 2.36 ms             | 1.3×    |
+| 64      | 6.66 ms             | 9.39 ms             | 1.4×    |
 
 Gain caps at ~1.5× because insert/delete mutation phases still
 scale with `K × num_trees`; only the walk phase benefits from
@@ -124,13 +131,13 @@ threads contend rather than scale. Two avenues have been explored:
 
 `D=16`, forest `(100, 256)`, single probe:
 
-| Path                                                       | Time   |
-| ---------------------------------------------------------- | ------ |
-| `score` (parallel ensemble)                                | 32 µs  |
-| `score_early_term` threshold=0.02 (tight)                  | 32 µs  |
-| `score_early_term` threshold=0.20 (loose, stops ~20 trees) | 4.7 µs |
+| Path                                                       | Time    |
+| ---------------------------------------------------------- | ------- |
+| `score` (parallel ensemble)                                | 32 µs   |
+| `score_early_term` threshold=0.02 (tight)                  | 34 µs   |
+| `score_early_term` threshold=0.20 (loose, stops ~20 trees) | 4.82 µs |
 
-Loose threshold → 6.9× speedup on baseline-dominated traffic;
+Loose threshold → 6.7× speedup on baseline-dominated traffic;
 tight threshold matches parallel `score` (sequential walk
 rarely short-circuits).
 
@@ -141,8 +148,8 @@ rarely short-circuits).
 | `(trees, samples, D)` | Time  |
 | --------------------- | ----- |
 | `(100, 256, 4)`       | 13 µs |
-| `(100, 256, 16)`      | 16 µs |
-| `(100, 1024, 16)`     | 64 µs |
+| `(100, 256, 16)`      | 17 µs |
+| `(100, 1024, 16)`     | 65 µs |
 
 Cost ≈ `O(live_points × D)` Welford sweep — `sample_size` ×4
 → ×4 time (close to linear on the current run), dim cost
@@ -155,16 +162,16 @@ pressure sets in).
 
 | N   | `similarity_matrix` | `score_across_tenants` | `most_similar_top5` |
 | --- | ------------------- | ---------------------- | ------------------- |
-| 32  | 28 µs               | 85 µs                  | 0.33 µs             |
-| 128 | 72 µs               | 311 µs                 | 1.10 µs             |
-| 512 | 550 µs              | 2.67 ms                | 4.59 µs             |
+| 32  | 33 µs               | 88 µs                  | 0.35 µs             |
+| 128 | 71 µs               | 314 µs                 | 1.09 µs             |
+| 512 | 604 µs              | 2.64 ms                | 4.58 µs             |
 
 Scaling `N=32→512` (16× tenants):
 
-- `similarity_matrix` O(N²) parallelised: 20× (rayon fan-out
+- `similarity_matrix` O(N²) parallelised: ~18× (rayon fan-out
   hides quadratic until core saturation).
-- `score_across_tenants` O(N) parallelised: 31×.
-- `most_similar_top5` O(N·log k) bounded heap: 14×.
+- `score_across_tenants` O(N) parallelised: 30×.
+- `most_similar_top5` O(N·log k) bounded heap: 13×.
 
 ## External baselines (synthetic)
 
