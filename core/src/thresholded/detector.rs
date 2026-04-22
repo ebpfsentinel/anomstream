@@ -595,6 +595,27 @@ impl<const D: usize> ThresholdedForest<D> {
     }
 }
 
+impl<const D: usize> crate::forest::ForestSnapshot for ThresholdedForest<D> {
+    fn snapshot_num_trees(&self) -> usize {
+        self.forest.num_trees()
+    }
+    fn snapshot_sample_size(&self) -> usize {
+        self.forest.sample_size()
+    }
+    fn snapshot_dimension(&self) -> usize {
+        self.forest.dimension()
+    }
+    fn snapshot_live_points(&self) -> usize {
+        self.forest.point_store().live_count()
+    }
+    fn snapshot_updates_seen(&self) -> u64 {
+        self.forest.updates_seen()
+    }
+    fn snapshot_memory_estimate(&self) -> usize {
+        self.forest.memory_estimate()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::float_cmp)] // Tests assert bounds on closed-form quantities.
 mod tests {

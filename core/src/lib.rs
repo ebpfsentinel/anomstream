@@ -1,7 +1,9 @@
-//! Streaming anomaly detection toolkit — Random Cut Forest plus companion primitives.
+//! `anomstream-core` — core detectors + streaming primitives + cross-cut contracts.
 //!
-//! `anomstream-core` implements the Random Cut Forest (RCF) algorithm from Guha et al.
-//! (ICML 2016) and is conformant with the
+//! This crate is the math-first floor of the
+//! [`anomstream`](https://crates.io/crates/anomstream) workspace.
+//! It implements the Random Cut Forest (RCF) algorithm from Guha et al.
+//! (ICML 2016) conformant with the
 //! [AWS SageMaker RCF specification][aws-rcf]: reservoir sampling without
 //! replacement (Park et al. 2004), random cuts weighted by per-dimension
 //! range, anomaly score averaged across trees, and hyperparameter bounds
@@ -13,9 +15,30 @@
 //! stats, frequency sketches — reused across detection pipelines so
 //! callers can compose `RandomCutForest` + `PerFeatureEwma` +
 //! `PerFeatureCusum` + `FeatureDriftDetector` + `Normalizer` + …
-//! without reimplementing the underlying math. The charter is
-//! strict: streaming multivariate anomaly primitives only; no
-//! protocol parsers, no ONNX runtimes, no IP-centric trackers.
+//! without reimplementing the underlying math.
+//!
+//! # Workspace charter
+//!
+//! `anomstream-core` = *detectors + streaming primitives + cross-cut
+//! contracts*. Three categories of cross-cutting contracts live here
+//! (not in a sibling crate) because every downstream layer depends
+//! on them:
+//!
+//! - [`metrics::MetricsSink`] — telemetry trait consumed by every
+//!   detector, the hot-path sampler, and the triage pipeline.
+//! - [`severity::Severity`] + [`severity::SeverityBands`] —
+//!   classification vocabulary used by both the bare forest
+//!   ([`domain::AnomalyScore::severity`]) and the triage layer's
+//!   `AlertRecord` / `AlertClusterer`.
+//! - [`forest::ForestSnapshot`] — read-only health view that lets
+//!   downstream triage consume forest state without reaching into
+//!   reservoir internals.
+//!
+//! The scope is kept deliberately tight: streaming multivariate
+//! anomaly primitives only; no protocol parsers, no ONNX runtimes,
+//! no IP-centric trackers, no SOC-specific triage opinion. Those
+//! belong in [`anomstream-triage`](https://crates.io/crates/anomstream-triage)
+//! and [`anomstream-hotpath`](https://crates.io/crates/anomstream-hotpath).
 //!
 //! # Architecture
 //!
@@ -221,7 +244,7 @@ pub use feedback::{
     DEFAULT_STRENGTH as FEEDBACK_DEFAULT_STRENGTH, FeedbackLabel, FeedbackStore,
 };
 pub use forensic::ForensicBaseline;
-pub use forest::{PointStore, RandomCutForest};
+pub use forest::{ForestSnapshot, PointStore, RandomCutForest};
 pub use group_score::{FeatureGroup, FeatureGroups, FeatureGroupsBuilder, GroupScores};
 pub use histogram::{HistogramConfig, ScoreHistogram};
 #[cfg(feature = "std")]
