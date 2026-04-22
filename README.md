@@ -79,7 +79,37 @@ The Random Cut Forest implementation inside the toolkit is a focused port of the
 - `hot_path::UpdateSampler` / `PrefixRateCap` / `channel` — stride - hash + keyed sampler, 256-bucket atomic counter sketch, bounded MPSC channel for classifier/updater thread split
 - `MetricsSink` — pluggable telemetry (`NoopSink` + your own impl)
 
-See [docs/features.md](docs/features.md) for the full module catalogue with per-feature rationale.
+See [core/docs/features.md](core/docs/features.md) for the full module catalogue with per-feature rationale.
+
+## Crate layout
+
+The toolkit ships as a Cargo workspace with four members. Consumers can depend on the `anomstream` meta-crate for the simple case or pick individual members when minimising dep graph matters.
+
+| Crate | Role | Publish |
+|---|---|---|
+| [`anomstream`](meta/) | Facade — feature-gated re-exports of the three members. **Primary public-facing crate.** | `anomstream` |
+| [`anomstream-core`](core/) | Detectors + streaming primitives + cross-cut contracts (`MetricsSink`, `SeverityBands`, `ForestSnapshot`). Targets SemVer 1.0 first. | `anomstream-core` |
+| [`anomstream-triage`](triage/) | SOC-opinionated higher-level layer — Platt, SAGE, alert clustering, feedback store, audit record. Depends on core. | `anomstream-triage` |
+| [`anomstream-hotpath`](hotpath/) | Opinionated eBPF-style ingress primitives — `UpdateSampler`, `PrefixRateCap`, bounded MPSC `channel`. Depends on core. | `anomstream-hotpath` |
+
+Three consumption patterns:
+
+```toml
+# Most consumers — single dep, all layers, default features.
+[dependencies]
+anomstream = "0.2"
+
+# Core-only — detectors + primitives, minimal dep graph.
+[dependencies]
+anomstream = { version = "0.2", default-features = false, features = ["core", "std", "parallel", "serde"] }
+
+# Fine-grained — pick members directly when you want per-member SemVer tracking.
+[dependencies]
+anomstream-core   = { version = "0.2", features = ["parallel", "serde"] }
+anomstream-triage = { version = "0.2" }
+```
+
+See [`_bmad-output/implementation-artifacts/sprint-status.yaml`](../_bmad-output/implementation-artifacts/sprint-status.yaml) under `epic-rcf-ws` for the workspace-split delivery log.
 
 ## Quickstart
 
@@ -88,7 +118,7 @@ Two examples — one per detector family — to show the toolkit is more than it
 ### Multivariate: Random Cut Forest
 
 ```rust,ignore
-use anomstream_rs::ForestBuilder;
+use anomstream::ForestBuilder;
 
 let mut forest = ForestBuilder::<4>::new()
     .num_trees(100)
@@ -103,13 +133,13 @@ for point in stream_of_points {
         eprintln!("anomaly: {score}");
     }
 }
-# Ok::<(), anomstream_rs::RcfError>(())
+# Ok::<(), anomstream::RcfError>(())
 ```
 
 ### Per-feature: two-sided CUSUM change-point
 
 ```rust,ignore
-use anomstream_rs::{PerFeatureCusum, PerFeatureCusumConfig};
+use anomstream::{PerFeatureCusum, PerFeatureCusumConfig};
 
 let mut det = PerFeatureCusum::<4>::new(PerFeatureCusumConfig {
     slack: 0.5,
@@ -175,7 +205,7 @@ The `no_std` configuration is gated in CI (`cargo check --no-default-features` +
 
 ## Performance
 
-See [docs/performance.md](docs/performance.md) for the full criterion bench matrix.
+See [core/docs/performance.md](core/docs/performance.md) for the full criterion bench matrix. Benches are split across the three member crates: `cargo bench -p anomstream-core --bench modules` (detectors + primitives), `cargo bench -p anomstream-triage --bench modules` (Platt, SAGE, LSH), `cargo bench -p anomstream-hotpath --bench modules` (sampler, rate cap, channel).
 
 ## License
 

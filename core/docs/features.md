@@ -7,6 +7,37 @@ hot-path primitives — Random Cut Forest is one detector family
 among several, drawn in wherever isolation-depth scoring makes
 sense.
 
+## Crate layout
+
+Most entries in this catalogue live in `anomstream-core`; a handful
+moved to sibling crates during the workspace split (RCF-WS.3 / .4)
+so their SemVer can evolve at their own cadence:
+
+| Section | Owning crate |
+|---|---|
+| Multivariate anomaly detectors | `anomstream-core` |
+| Per-feature univariate detectors | `anomstream-core` |
+| Score-level drift & regime change | `anomstream-core` |
+| Streaming stats & sketches | `anomstream-core` |
+| Forest scoring operations | `anomstream-core` |
+| Explanation & triage → `SeverityBands`, `DiVector`, `AttributionStability`, `ForensicBaseline`, `FeatureGroups` | `anomstream-core` |
+| Explanation & triage → `SageEstimator`, `PlattCalibrator` | **`anomstream-triage`** |
+| SOC & ops → `AlertClusterer`, `LshAlertClusterer`, `FeedbackStore`, `AuditRecord` | **`anomstream-triage`** |
+| Training & retention | `anomstream-core` |
+| Persistence | `anomstream-core` |
+| Observability → `MetricsSink` + metric names table | `anomstream-core` |
+| Hot-path integration (eBPF ingress) → `UpdateSampler`, `PrefixRateCap`, `channel` | **`anomstream-hotpath`** |
+| Security & threat model | `anomstream-core` |
+| Multi-tenancy | `anomstream-core` |
+| Quality | `anomstream-core` |
+
+Consumers using the [`anomstream`](../../meta/) meta-crate see every
+type re-exported under a single import path regardless of the owning
+member crate. Direct-dependency consumers import from the owning
+crate explicitly.
+
+## Catalogue
+
 This doc catalogues every public module grouped by the same
 taxonomy as the README:
 
@@ -25,9 +56,8 @@ taxonomy as the README:
 13. [Multi-tenancy](#multi-tenancy)
 14. [Quality](#quality)
 
-All modules live under `src/` and are re-exported at crate root
-(`src/lib.rs`). Driven by eBPFsentinel Enterprise needs but kept
-detector-agnostic — none are required to use any other.
+Driven by eBPFsentinel Enterprise needs but kept detector-agnostic —
+none of the modules are required to use any other.
 
 ## Multivariate anomaly detectors
 

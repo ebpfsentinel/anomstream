@@ -45,8 +45,8 @@ impl DiVector {
 
     /// Build a `DiVector` from explicit `high` / `low` vectors.
     /// Useful for tests and downstream code that wants to pipe a
-    /// ready-made attribution back into the crate's helpers (e.g.
-    /// [`crate::AlertClusterer`]).
+    /// ready-made attribution back into a triage helper (e.g.
+    /// `anomstream_triage::AlertClusterer`).
     ///
     /// # Errors
     ///

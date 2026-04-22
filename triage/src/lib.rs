@@ -1,5 +1,5 @@
 //! `anomstream-triage` — SOC-opinionated triage layer on top of
-//! [`anomstream-core`].
+//! `anomstream-core`.
 //!
 //! Six higher-level components that turn a raw anomaly-score
 //! stream into something analysts can act on:
@@ -18,7 +18,7 @@
 //!
 //! All six consume core output types (`DiVector`, `AnomalyScore`,
 //! `AnomalyGrade`, `Severity`, `MetricsSink`, `RandomCutForest`,
-//! `ForensicBaseline`) via [`anomstream-core`]; none depend on
+//! `ForensicBaseline`) via `anomstream-core`; none depend on
 //! each other except within-crate (`alert_cluster` and
 //! `lsh_cluster` consume [`audit::AlertRecord`]).
 //!
@@ -27,7 +27,7 @@
 //! Policy-opinionated layer — not every consumer wants SOC
 //! vocabulary (cluster dedup, audit records, feedback-weighted
 //! scores). Consumers who only need detectors + primitives
-//! should depend on [`anomstream-core`] alone.
+//! should depend on `anomstream-core` alone.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]

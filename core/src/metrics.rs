@@ -283,22 +283,22 @@ pub mod names {
 
     // --- hot_path ------------------------------------------------
 
-    /// Counter: [`crate::UpdateSampler`] `accept_*` calls that
+    /// Counter: `anomstream_hotpath::UpdateSampler` `accept_*` calls that
     /// admitted the offer.
     pub const HOT_PATH_SAMPLER_ACCEPTED_TOTAL: &str = "rcf_hot_path_sampler_accepted_total";
-    /// Counter: [`crate::UpdateSampler`] `accept_*` calls that
+    /// Counter: `anomstream_hotpath::UpdateSampler` `accept_*` calls that
     /// rejected the offer (stride / per-flow-hash residue mismatch).
     pub const HOT_PATH_SAMPLER_REJECTED_TOTAL: &str = "rcf_hot_path_sampler_rejected_total";
     /// Counter: points successfully enqueued through a
-    /// [`crate::UpdateProducer::try_enqueue`] call.
+    /// `anomstream_hotpath::UpdateProducer::try_enqueue` call.
     pub const HOT_PATH_QUEUE_ENQUEUED_TOTAL: &str = "rcf_hot_path_queue_enqueued_total";
     /// Counter: points dropped because the hot-path MPSC queue was
     /// full. Non-zero indicates classifier > updater throughput.
     pub const HOT_PATH_QUEUE_DROPPED_TOTAL: &str = "rcf_hot_path_queue_dropped_total";
-    /// Counter: [`crate::PrefixRateCap::check_and_record`] calls that
+    /// Counter: `anomstream_hotpath::PrefixRateCap::check_and_record` calls that
     /// admitted the offer.
     pub const HOT_PATH_PREFIX_ADMITTED_TOTAL: &str = "rcf_hot_path_prefix_admitted_total";
-    /// Counter: [`crate::PrefixRateCap::check_and_record`] calls that
+    /// Counter: `anomstream_hotpath::PrefixRateCap::check_and_record` calls that
     /// capped the offer (bucket at limit).
     pub const HOT_PATH_PREFIX_CAPPED_TOTAL: &str = "rcf_hot_path_prefix_capped_total";
 
@@ -324,7 +324,7 @@ pub mod names {
 
     // --- lsh_cluster ---------------------------------------------
 
-    /// Counter: every [`crate::LshAlertClusterer::observe`] call.
+    /// Counter: every `anomstream_triage::LshAlertClusterer::observe` call.
     pub const LSH_ALERTS_OBSERVED_TOTAL: &str = "rcf_lsh_alerts_observed_total";
     /// Counter: LSH alerts that opened a brand-new bucket.
     pub const LSH_CLUSTERS_NEW_TOTAL: &str = "rcf_lsh_clusters_new_total";
@@ -335,14 +335,14 @@ pub mod names {
 
     // --- feedback ------------------------------------------------
 
-    /// Counter: every [`crate::FeedbackStore::label`] call that
+    /// Counter: every `anomstream_triage::FeedbackStore::label` call that
     /// accepted the point.
     pub const FEEDBACK_LABELS_OBSERVED_TOTAL: &str = "rcf_feedback_labels_observed_total";
     /// Counter: feedback labels of kind
-    /// [`crate::FeedbackLabel::Benign`].
+    /// `anomstream_triage::FeedbackLabel::Benign`.
     pub const FEEDBACK_LABELS_BENIGN_TOTAL: &str = "rcf_feedback_labels_benign_total";
     /// Counter: feedback labels of kind
-    /// [`crate::FeedbackLabel::Confirmed`].
+    /// `anomstream_triage::FeedbackLabel::Confirmed`.
     pub const FEEDBACK_LABELS_CONFIRMED_TOTAL: &str = "rcf_feedback_labels_confirmed_total";
 
     // --- univariate_spot -----------------------------------------

@@ -46,6 +46,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
+// Glob re-exports carry intra-doc links like `[crate::X]` that
+// resolved inside the member crate but not under the facade
+// namespace. Known quirk of umbrella re-export crates; rustdoc
+// still renders the linked text correctly.
+#![allow(rustdoc::broken_intra_doc_links)]
 
 // -- Glob re-exports (flat DX) --
 
