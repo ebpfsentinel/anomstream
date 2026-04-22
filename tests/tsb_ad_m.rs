@@ -43,8 +43,8 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use anomstream_rs::{AnomalyScore, ForestBuilder};
 use rayon::prelude::*;
-use rcf_rs::{AnomalyScore, ForestBuilder};
 
 /// Fraction of the `tr_<N>` warm split reserved to compute the
 /// per-dim mean / stddev used for z-score normalisation. The full

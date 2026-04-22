@@ -15,13 +15,13 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
+use anomstream_rs::{
     EarlyTermConfig, ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder,
 };
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
-fn trained() -> rcf_rs::RandomCutForest<4> {
+fn trained() -> anomstream_rs::RandomCutForest<4> {
     let mut f = ForestBuilder::<4>::new()
         .num_trees(50)
         .sample_size(64)

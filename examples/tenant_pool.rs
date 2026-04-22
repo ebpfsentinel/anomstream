@@ -5,9 +5,9 @@
 //!
 //! Run with `cargo run --example tenant_pool`.
 
+use anomstream_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     let mut pool = TenantForestPool::<String, 4>::new(8, || {

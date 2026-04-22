@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! Severity bands end-to-end — pipe a trained thresholded forest's
-//! verdicts through [`rcf_rs::SeverityBands`] and check classification.
+//! verdicts through [`anomstream_rs::SeverityBands`] and check classification.
 //!
 //! Asserts:
 //!
@@ -11,9 +11,11 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
+use anomstream_rs::{
+    AnomalyScore, ForestBuilder, Severity, SeverityBands, ThresholdedForestBuilder,
+};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{AnomalyScore, ForestBuilder, Severity, SeverityBands, ThresholdedForestBuilder};
 
 #[test]
 fn default_bands_equal_ml_detection_thresholds() {
@@ -42,7 +44,7 @@ fn bare_forest_score_classifies() {
         ])
         .unwrap();
     }
-    // Raw rcf-rs scores follow the Guha-2016 convention, not the
+    // Raw anomstream-rs scores follow the Guha-2016 convention, not the
     // eBPFsentinel Z-score scale — relax the default bands for
     // this bench so the relative ordering (outlier > baseline)
     // still crosses a band boundary.

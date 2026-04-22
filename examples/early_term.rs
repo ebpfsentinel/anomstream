@@ -16,9 +16,9 @@
 
 use std::time::Instant;
 
+use anomstream_rs::{EarlyTermConfig, ForestBuilder, RcfError};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{EarlyTermConfig, ForestBuilder, RcfError};
 
 fn main() -> Result<(), RcfError> {
     let mut f = ForestBuilder::<4>::new()

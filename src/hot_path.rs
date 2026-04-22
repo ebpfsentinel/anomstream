@@ -1,4 +1,4 @@
-//! Hot-path integration primitives for `rcf-rs` callers that run on
+//! Hot-path integration primitives for `anomstream-rs` callers that run on
 //! latency-critical ingress paths (eBPF TC action, XDP, per-packet
 //! anomaly classifier).
 //!
@@ -30,7 +30,7 @@
 //! # Example: classifier + updater split
 //!
 //! ```ignore
-//! use rcf_rs::{ForestBuilder, hot_path};
+//! use anomstream_rs::{ForestBuilder, hot_path};
 //! use std::thread;
 //!
 //! let mut forest = ForestBuilder::<16>::new()
@@ -461,7 +461,7 @@ pub fn channel_with_sink<const D: usize>(
 /// # Example
 ///
 /// ```ignore
-/// use rcf_rs::hot_path::PrefixRateCap;
+/// use anomstream_rs::hot_path::PrefixRateCap;
 ///
 /// let cap = PrefixRateCap::new(100, 1_000); // 100 admits / 1 s window
 /// let now_ms = /* wall-clock */;

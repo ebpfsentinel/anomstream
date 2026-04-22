@@ -4,9 +4,9 @@
 //!
 //! Run with `cargo run --example forensic`.
 
+use anomstream_rs::{RcfError, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     let mut detector = ThresholdedForestBuilder::<4>::new()

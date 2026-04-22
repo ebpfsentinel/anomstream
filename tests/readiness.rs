@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! Integration checks on `TenantForestPool::readiness_summary`.
 
-use rcf_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
+use anomstream_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
 
-fn factory_2d() -> impl Fn() -> Result<rcf_rs::ThresholdedForest<2>, RcfError> {
+fn factory_2d() -> impl Fn() -> Result<anomstream_rs::ThresholdedForest<2>, RcfError> {
     || {
         ThresholdedForestBuilder::<2>::new()
             .num_trees(50)

@@ -16,7 +16,7 @@
 use std::env;
 use std::io::{self, BufRead, Write};
 
-use rcf_rs::{ForestBuilder, RcfError};
+use anomstream_rs::{ForestBuilder, RcfError};
 
 const WARMUP: usize = 200;
 const DEFAULT_THRESHOLD: f64 = 1.5;

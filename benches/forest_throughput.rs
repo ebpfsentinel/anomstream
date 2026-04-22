@@ -1,4 +1,4 @@
-//! Criterion benchmarks for [`rcf_rs::RandomCutForest`] insert and
+//! Criterion benchmarks for [`anomstream_rs::RandomCutForest`] insert and
 //! score throughput across a representative `(num_trees, sample_size,
 //! dim)` matrix. Targets ≥ 100k inserts/sec and ≥ 50k scores/sec at
 //! the AWS-default `(100, 256, 16)` configuration on a typical
@@ -17,13 +17,13 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use anomstream_rs::{ForestBuilder, RandomCutForest};
 use criterion::{
     BenchmarkGroup, Criterion, criterion_group, criterion_main, measurement::WallTime,
 };
 use mimalloc::MiMalloc;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{ForestBuilder, RandomCutForest};
 use std::hint::black_box;
 
 #[global_allocator]

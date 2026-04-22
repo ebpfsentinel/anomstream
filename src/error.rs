@@ -1,7 +1,7 @@
 //! Error types used across the crate.
 //!
 //! [`RcfError`] is the canonical error returned by every fallible
-//! operation in `rcf-rs`. Each variant carries enough context for the
+//! operation in `anomstream-rs`. Each variant carries enough context for the
 //! caller to act without re-fetching state. [`RcfResult`] is the
 //! convenient `Result` alias used in public signatures.
 
@@ -9,7 +9,7 @@ use alloc::string::String;
 
 use thiserror::Error;
 
-/// Errors produced by `rcf-rs`.
+/// Errors produced by `anomstream-rs`.
 ///
 /// Variants are stable across `0.x` patch releases — adding a new
 /// variant is a minor-version change.
@@ -17,7 +17,7 @@ use thiserror::Error;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{ForestBuilder, RcfError};
+/// use anomstream_rs::{ForestBuilder, RcfError};
 ///
 /// let err = ForestBuilder::<4>::new().num_trees(10).build().unwrap_err();
 /// assert!(matches!(err, RcfError::InvalidConfig(_)));
@@ -87,7 +87,7 @@ pub enum RcfError {
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{RcfError, RcfResult};
+/// use anomstream_rs::{RcfError, RcfResult};
 ///
 /// fn check(n: u64) -> RcfResult<u64> {
 ///     if n == 0 { Err(RcfError::EmptyForest) } else { Ok(n) }

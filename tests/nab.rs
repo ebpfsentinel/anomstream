@@ -27,8 +27,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use anomstream_rs::{AnomalyScore, ForestBuilder};
 use rayon::prelude::*;
-use rcf_rs::{AnomalyScore, ForestBuilder};
 use serde_json::Value;
 
 // Pipeline tuned via `examples/nab_ablation.rs`:

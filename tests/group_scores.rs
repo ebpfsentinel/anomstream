@@ -12,9 +12,11 @@
 
 #![allow(clippy::cast_precision_loss)] // Bounded-counter casts in test setup.
 
+use anomstream_rs::{
+    FeatureGroups, ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder,
+};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{FeatureGroups, ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn noisy(rng: &mut ChaCha8Rng) -> [f64; 4] {
     [

@@ -15,9 +15,9 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
+use anomstream_rs::{ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{ForestBuilder, RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn noisy(rng: &mut ChaCha8Rng, offset: f64) -> [f64; 4] {
     [

@@ -5,9 +5,9 @@
 //!
 //! Run with `cargo run --example severity`.
 
+use anomstream_rs::{RcfError, Severity, SeverityBands, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, Severity, SeverityBands, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     let mut detector = ThresholdedForestBuilder::<4>::new()
@@ -28,7 +28,7 @@ fn main() -> Result<(), RcfError> {
         detector.process(p)?;
     }
 
-    // Raw rcf-rs scores use a different scale than eBPFsentinel
+    // Raw anomstream-rs scores use a different scale than eBPFsentinel
     // Z-scores — tune the bands for this forest.
     let bands = SeverityBands::new(0.5, 1.0, 1.5, 2.5)?;
 

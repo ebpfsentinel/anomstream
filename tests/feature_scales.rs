@@ -17,7 +17,7 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
-use rcf_rs::{ForestBuilder, RcfError};
+use anomstream_rs::{ForestBuilder, RcfError};
 
 #[test]
 fn identity_scales_preserve_scoring() {
@@ -86,7 +86,7 @@ fn build_rejects_wrong_length_scales() {
     let b = ForestBuilder::<2>::new().seed(1);
     let mut cfg = b.config().clone();
     cfg.feature_scales = Some(vec![1.0, 1.0, 1.0]); // length 3 != D=2
-    let err = rcf_rs::RandomCutForest::<2>::from_config(cfg).unwrap_err();
+    let err = anomstream_rs::RandomCutForest::<2>::from_config(cfg).unwrap_err();
     assert!(matches!(err, RcfError::DimensionMismatch { .. }));
 }
 

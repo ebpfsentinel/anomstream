@@ -21,7 +21,7 @@
 //! # Example
 //!
 //! ```
-//! use rcf_rs::{FeatureGroups, ForestBuilder};
+//! use anomstream_rs::{FeatureGroups, ForestBuilder};
 //!
 //! let mut forest = ForestBuilder::<4>::new().seed(7).build().unwrap();
 //! let groups = FeatureGroups::builder()

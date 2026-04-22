@@ -13,7 +13,7 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use rcf_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
+use anomstream_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     let mut pool: TenantForestPool<&'static str, 2> = TenantForestPool::new(16, || {

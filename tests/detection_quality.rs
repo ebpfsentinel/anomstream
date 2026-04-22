@@ -28,9 +28,9 @@
 //! and regression-guard it so future refactors cannot silently
 //! break detection accuracy.
 
+use anomstream_rs::ForestBuilder;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::ForestBuilder;
 
 /// Compute the area under the ROC curve via trapezoidal rule on
 /// the (fpr, tpr) pairs induced by every possible threshold.

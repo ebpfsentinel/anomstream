@@ -6,7 +6,7 @@
 //!
 //! Run: `cargo run --release --example shingled`
 
-use rcf_rs::{RcfError, ShingledForestBuilder};
+use anomstream_rs::{RcfError, ShingledForestBuilder};
 
 const SHINGLE: usize = 32;
 const WARM: usize = 1_024;

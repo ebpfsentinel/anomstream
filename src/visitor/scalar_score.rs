@@ -30,7 +30,7 @@ use crate::visitor::scoring::{damp, normalizer, score_seen, score_unseen};
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::ScalarScoreVisitor;
+/// use anomstream_rs::ScalarScoreVisitor;
 ///
 /// let v = ScalarScoreVisitor::new(64);
 /// assert_eq!(v.accumulated(), 0.0);

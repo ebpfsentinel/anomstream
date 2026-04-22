@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! End-to-end behaviour of the retraction API on
-//! [`rcf_rs::RandomCutForest`], [`rcf_rs::ThresholdedForest`] and
-//! [`rcf_rs::TenantForestPool`].
+//! [`anomstream_rs::RandomCutForest`], [`anomstream_rs::ThresholdedForest`] and
+//! [`anomstream_rs::TenantForestPool`].
 //!
 //! Asserts:
 //!
@@ -18,7 +18,7 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
-use rcf_rs::{ForestBuilder, TenantForestPool, ThresholdedForestBuilder};
+use anomstream_rs::{ForestBuilder, TenantForestPool, ThresholdedForestBuilder};
 
 #[test]
 fn update_indexed_returns_fresh_indices() {

@@ -1,4 +1,4 @@
-# rcf-rs
+# anomstream-rs
 
 Streaming anomaly detection toolkit for Rust — Random Cut Forest
 (Guha et al. ICML 2016) plus a suite of companion primitives
@@ -78,7 +78,7 @@ catalogue with per-feature rationale.
 ## Quickstart
 
 ```rust,ignore
-use rcf_rs::ForestBuilder;
+use anomstream_rs::ForestBuilder;
 
 let mut forest = ForestBuilder::<4>::new()
     .num_trees(100)
@@ -93,7 +93,7 @@ for point in stream_of_points {
         eprintln!("anomaly: {score}");
     }
 }
-# Ok::<(), rcf_rs::RcfError>(())
+# Ok::<(), anomstream_rs::RcfError>(())
 ```
 
 ## Algorithm
@@ -135,9 +135,9 @@ Transcendentals (`ln`, `sqrt`, `exp`, …) route through `num-traits`
 
 ```toml
 [dependencies]
-rcf-rs = { version = "…", default-features = false }
+anomstream-rs = { version = "…", default-features = false }
 # Optional: serde persistence under no_std
-rcf-rs = { version = "…", default-features = false, features = ["serde"] }
+anomstream-rs = { version = "…", default-features = false, features = ["serde"] }
 ```
 
 The `no_std` configuration is gated in CI (`cargo check

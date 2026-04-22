@@ -78,7 +78,7 @@ impl Cut {
     /// ```
     /// use rand::SeedableRng;
     /// use rand_chacha::ChaCha8Rng;
-    /// use rcf_rs::domain::{BoundingBox, Cut};
+    /// use anomstream_rs::domain::{BoundingBox, Cut};
     ///
     /// let mut rng = ChaCha8Rng::seed_from_u64(42);
     /// let mut bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();

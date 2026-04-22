@@ -7,8 +7,8 @@
 //!
 //! Run with `cargo run --example alert_clustering --features postcard,serde_json`.
 
-use rcf_rs::audit::{AlertContext, AlertRecord};
-use rcf_rs::{AlertClusterer, ClusterDecision, ForestBuilder, RcfError};
+use anomstream_rs::audit::{AlertContext, AlertRecord};
+use anomstream_rs::{AlertClusterer, ClusterDecision, ForestBuilder, RcfError};
 
 fn main() -> Result<(), RcfError> {
     let mut forest = ForestBuilder::<4>::new()

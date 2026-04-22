@@ -24,7 +24,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-use rcf_rs::{AnomalyScore, ForestBuilder, ThresholdedForestBuilder};
+use anomstream_rs::{AnomalyScore, ForestBuilder, ThresholdedForestBuilder};
 use serde_json::Value;
 
 #[derive(Clone, Copy)]

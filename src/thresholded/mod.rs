@@ -16,7 +16,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use rcf_rs::ThresholdedForestBuilder;
+//! use anomstream_rs::ThresholdedForestBuilder;
 //!
 //! let mut detector = ThresholdedForestBuilder::<4>::new()
 //!     .num_trees(100)
@@ -37,7 +37,7 @@
 //!         );
 //!     }
 //! }
-//! # Ok::<(), rcf_rs::RcfError>(())
+//! # Ok::<(), anomstream_rs::RcfError>(())
 //! ```
 
 pub mod config;

@@ -33,7 +33,7 @@ use std::hash::DefaultHasher;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::CountMinSketch;
+/// use anomstream_rs::CountMinSketch;
 ///
 /// let mut cms = CountMinSketch::new(2048, 4);
 /// cms.increment(b"10.0.0.1", 100);

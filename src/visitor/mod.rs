@@ -44,7 +44,7 @@ pub use scalar_score::ScalarScoreVisitor;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{ScalarScoreVisitor, Visitor};
+/// use anomstream_rs::{ScalarScoreVisitor, Visitor};
 /// // `ScalarScoreVisitor` implements `Visitor<D>` for any `D`.
 /// let v: ScalarScoreVisitor = ScalarScoreVisitor::new(8);
 /// assert_eq!(v.total_mass(), 8);

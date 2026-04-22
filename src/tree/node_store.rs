@@ -27,7 +27,7 @@ use crate::tree::node::{InternalData, LeafData, NodeRef, NodeView, NodeViewMut};
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::NodeStore;
+/// use anomstream_rs::NodeStore;
 ///
 /// let mut store = NodeStore::<2>::new(4).unwrap();
 /// let leaf = store.add_leaf(0, None, 1).unwrap();

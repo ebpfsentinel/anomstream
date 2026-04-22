@@ -49,7 +49,7 @@ use crate::thresholded::stats::EmaStats;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::ThresholdedForestBuilder;
+/// use anomstream_rs::ThresholdedForestBuilder;
 ///
 /// let mut detector = ThresholdedForestBuilder::<2>::new()
 ///     .num_trees(50)

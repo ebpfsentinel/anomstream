@@ -30,7 +30,7 @@ impl DiVector {
     /// # Examples
     ///
     /// ```
-    /// use rcf_rs::domain::DiVector;
+    /// use anomstream_rs::domain::DiVector;
     /// let v = DiVector::zeros(4);
     /// assert_eq!(v.dim(), 4);
     /// assert_eq!(v.total(), 0.0);

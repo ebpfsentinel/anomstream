@@ -62,7 +62,7 @@ java -cp "scripts/nab:$JAR" RcfBenchNab /opt/nab
   process-startup cost for a shell-invoked job, which is the
   fair comparison against a native Rust binary.
 - AWS Java's `getAnomalyScore` uses a probability-of-separation
-  visitor (codisp-like), directly comparable to rcf-rs's
+  visitor (codisp-like), directly comparable to anomstream-rs's
   `RandomCutForest::score_codisp()` — not to the isolation-depth
   `score()` fast path. See `docs/performance.md` for the
   apples-to-apples split.

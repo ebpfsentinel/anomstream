@@ -7,7 +7,7 @@
 //!
 //! Run: `cargo run --release --example feedback_adjust`
 
-use rcf_rs::{FeedbackLabel, FeedbackStore, ForestBuilder};
+use anomstream_rs::{FeedbackLabel, FeedbackStore, ForestBuilder};
 
 const D: usize = 4;
 

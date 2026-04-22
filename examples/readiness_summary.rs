@@ -6,7 +6,7 @@
 //!
 //! Run with `cargo run --example readiness_summary`.
 
-use rcf_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
+use anomstream_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     let mut pool: TenantForestPool<String, 2> = TenantForestPool::new(4, || {

@@ -9,18 +9,18 @@
 //!    touched tenant is the one that gets dropped when capacity is
 //!    hit.
 //! 3. Warm reload round-trips every tenant via the existing
-//!    [`rcf_rs::ThresholdedForest::to_path`] / `from_path` helpers:
+//!    [`anomstream_rs::ThresholdedForest::to_path`] / `from_path` helpers:
 //!    save each, reload into a fresh pool, resume scoring.
 //! 4. Factory errors surface to the caller without corrupting the
 //!    pool state.
 
 #![allow(clippy::cast_precision_loss)] // Bounded-counter casts in test setup.
 
+use anomstream_rs::{RcfError, TenantForestPool, ThresholdedForest, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, TenantForestPool, ThresholdedForest, ThresholdedForestBuilder};
 
-fn build_factory() -> impl Fn() -> rcf_rs::RcfResult<ThresholdedForest<4>> {
+fn build_factory() -> impl Fn() -> anomstream_rs::RcfResult<ThresholdedForest<4>> {
     || {
         ThresholdedForestBuilder::<4>::new()
             .num_trees(50)
@@ -106,7 +106,7 @@ fn capacity_enforces_lru_eviction() {
 #[test]
 fn warm_reload_roundtrips_every_tenant() {
     let dir = std::env::temp_dir().join(format!(
-        "rcf-rs-pool-warm-{}",
+        "anomstream-rs-pool-warm-{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos()),

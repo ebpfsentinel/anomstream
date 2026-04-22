@@ -1,6 +1,6 @@
-# External bench — rcf-rs vs Python / Java baselines
+# External bench — anomstream-rs vs Python / Java baselines
 
-Reproducible speed + AUC comparison between `rcf-rs` and three
+Reproducible speed + AUC comparison between `anomstream-rs` and three
 published reference implementations:
 
 - [`rrcf`](https://github.com/kLabUM/rrcf) 0.4.4 — Python + NumPy,
@@ -26,12 +26,12 @@ that are only meaningful on the dev box they run on.
 - `RcfBenchSynthetic.java` — AWS Java driver; see
   `../README.md` for the Maven Central jar path.
 
-The rcf-rs side is an ordinary crate example:
+The anomstream-rs side is an ordinary crate example:
 `examples/external_bench_driver.rs` — invoked via `cargo run`.
 
 ## Running
 
-From the `rcf-rs` crate root, JDK 26 + Python 3.13 on a machine
+From the `anomstream-rs` crate root, JDK 26 + Python 3.13 on a machine
 with `rrcf` and `scikit-learn` installed:
 
 ```bash
@@ -46,7 +46,7 @@ python3 scripts/synthetic/bench_rrcf_synthetic.py \
 python3 scripts/synthetic/bench_sklearn_synthetic.py \
     --input data.csv --trees 100 --train-frac 0.3
 
-# rcf-rs.
+# anomstream-rs.
 cargo run --release --example external_bench_driver -- \
     data.csv 100 256
 
@@ -65,19 +65,19 @@ coefficient of variation in parens. Driven by
 
 | Impl | Backend | Updates / s | Scores / s | AUC |
 |---|---|---|---|---|
-| `rcf-rs` 0.0.0-dev | Rust, rayon-parallel | **17 500 ± 1 240** (7 %) | 125 900 ± 1 840 (1.5 %) | 1.000 ± 0 |
+| `anomstream-rs` 0.0.0-dev | Rust, rayon-parallel | **17 500 ± 1 240** (7 %) | 125 900 ± 1 840 (1.5 %) | 1.000 ± 0 |
 | `randomcutforest-java` 4.4.0 | JVM 26, cold | 2 090 ± 134 (6 %) | 8 870 ± 415 (5 %) | 1.000 ± 0 |
 | `rrcf` 0.4.4 | Python + NumPy | 73 ± 3 (4 %) | 94 150 ± 4 840 (5 %) | 0.992 ± 0 |
 | `sklearn.IsolationForest` | NumPy + Cython | batch-only | **136 300 ± 2 450** (2 %) | 1.000 ± 0 |
 
 Ratios (mean / mean):
 
-- **Updates**: `rcf-rs` is ~8.4× faster than AWS Java, ~240×
+- **Updates**: `anomstream-rs` is ~8.4× faster than AWS Java, ~240×
   faster than `rrcf`. CVs around 5-7 %; ratios sit well outside
   the noise floor.
-- **Scores**: sklearn edges `rcf-rs` by 8 % (136 k vs 126 k) —
+- **Scores**: sklearn edges `anomstream-rs` by 8 % (136 k vs 126 k) —
   real but small (stddevs combined ≈ 3 k, so the 10 k delta is
-  ~3σ significant). `rrcf` trails `rcf-rs` by ~25 %; AWS Java
+  ~3σ significant). `rrcf` trails `anomstream-rs` by ~25 %; AWS Java
   trails by ~14×.
 - **AUC**: identical within measurement precision across every
   seed (0.992 for `rrcf`, 1.000 for the other three).
@@ -85,7 +85,7 @@ Ratios (mean / mean):
 ## Caveats
 
 Machine thermal state varies across runs — earlier single-seed
-cool-CPU measurements landed at ~32 k / 203 k for `rcf-rs`,
+cool-CPU measurements landed at ~32 k / 203 k for `anomstream-rs`,
 dropping to the ~17 k / 126 k above on the 5-seed run. The
 **ratios are portable, the absolute numbers aren't**.
 
@@ -109,6 +109,6 @@ order-of-magnitude" only.
   overhead exceeds the split-tree win). The default
   single-threaded BLAS SIMD path is the faster one for this
   batch size.
-- **rcf-rs** uses rayon-parallel `score_many`; the table above
+- **anomstream-rs** uses rayon-parallel `score_many`; the table above
   compares each impl on its respective maximum-throughput
   entry point.

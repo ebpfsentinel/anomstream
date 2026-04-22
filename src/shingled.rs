@@ -18,7 +18,7 @@
 //! # Build
 //!
 //! ```ignore
-//! use rcf_rs::ShingledForestBuilder;
+//! use anomstream_rs::ShingledForestBuilder;
 //!
 //! let mut forest = ShingledForestBuilder::<32>::new()
 //!     .num_trees(100)

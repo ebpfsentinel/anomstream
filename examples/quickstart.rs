@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Minimal `rcf-rs` quickstart — build a forest, stream a few
+//! Minimal `anomstream-rs` quickstart — build a forest, stream a few
 //! points, and score one. Run with `cargo run --example quickstart`.
 
-use rcf_rs::{AnomalyScore, ForestBuilder, RcfError};
+use anomstream_rs::{AnomalyScore, ForestBuilder, RcfError};
 
 fn main() -> Result<(), RcfError> {
     // AWS-default forest pinned to a deterministic seed.

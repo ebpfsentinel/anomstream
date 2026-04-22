@@ -168,7 +168,7 @@ Source: `src/dynamic_forest.rs`.
 
 ### Shapley attribution via SAGE estimator
 
-`SageEstimator<D>` (in `rcf_rs::sage`) — Monte-Carlo
+`SageEstimator<D>` (in `anomstream_rs::sage`) — Monte-Carlo
 permutation-sampling Shapley estimator (Covert et al. NeurIPS
 2020). Accounts for feature interactions the marginal per-dim
 `DiVector` ignores: when two dims jointly signal anomaly but
@@ -185,7 +185,7 @@ Source: `src/sage.rs`.
 
 ### LSH-based alert clustering
 
-`LshAlertClusterer` (in `rcf_rs::lsh_cluster`) — quantises every
+`LshAlertClusterer` (in `anomstream_rs::lsh_cluster`) — quantises every
 per-dim attribution value into a 4-bit symbol and uses the
 concatenated hex string as the bucket key. O(1) lookup via
 `HashMap<String, u64>`. Complement to the cosine-similarity
@@ -199,7 +199,7 @@ Source: `src/lsh_cluster.rs`.
 
 ### SOC feedback ingestion
 
-`FeedbackStore<D>` (in `rcf_rs::feedback`) — bounded ledger of
+`FeedbackStore<D>` (in `anomstream_rs::feedback`) — bounded ledger of
 analyst-labelled points. Das et al., *Incorporating Feedback
 into Tree-based Anomaly Detection*, `arXiv:1708.09441`. API:
 `label(point, FeedbackLabel::Benign | Confirmed)`,
@@ -224,7 +224,7 @@ on the exact probe and from 2.35 → 1.36 on a nearby one).
 
 ### Drift recovery — shadow forest + ADWIN
 
-`AdwinDetector` (in `rcf_rs::adwin`) — streaming change-point
+`AdwinDetector` (in `anomstream_rs::adwin`) — streaming change-point
 detector (Bifet & Gavaldà, SIAM SDM 2007). Bounded ring buffer of
 the last `N` observations, per-update O(N) scan over every split
 point with a Hoeffding bound `ε_cut`; flags drift and drops the
@@ -234,7 +234,7 @@ the score stream (or any per-step scalar) for an adaptive drift
 trigger with automatic window sizing — strictly more sensitive
 than a fixed-window mean test.
 
-`DriftAwareForest<D>` (in `rcf_rs::drift_aware`) — facade around
+`DriftAwareForest<D>` (in `anomstream_rs::drift_aware`) — facade around
 a live `RandomCutForest<D>` with an optional shadow. Swap policy
 via `DriftRecoveryConfig`: `min_primary_age` guards against
 flap-loops, `shadow_warmup` controls when the shadow becomes the
@@ -254,7 +254,7 @@ with ADWIN-triggered shadow spawn + atomic swap after warmup).
 
 ### Univariate SPOT detector bank + Fisher combiner
 
-`PotDetector` (in `rcf_rs::univariate_spot`) — streaming
+`PotDetector` (in `anomstream_rs::univariate_spot`) — streaming
 Peaks-Over-Threshold per-dimension anomaly detector (Siffer et
 al., KDD 2017). For each feature dim it tracks a running quantile
 `u` via the shipped `TDigest`, fits a Generalised Pareto
@@ -264,7 +264,7 @@ a p-value in `(0, 1]`. SPOT mode freezes the quantile after warm
 via `freeze_baseline`; DSPOT mode keeps the digest drifting for
 non-stationary streams.
 
-`fisher_combine(&[p_values]) -> f64` (in `rcf_rs::ensemble`) —
+`fisher_combine(&[p_values]) -> f64` (in `anomstream_rs::ensemble`) —
 combines K independent p-values into a joint anomaly score via
 Fisher 1932: `T = −2 Σ ln(p_i) ~ χ²(2K)` → survival returned.
 Uses the closed-form `χ²` survival for even dof.
@@ -702,7 +702,7 @@ Example: `examples/observability.rs`.
 
 ### `UpdateSampler` + `channel` MPSC split
 
-`rcf_rs::hot_path::UpdateSampler` drops low-value updates before
+`anomstream_rs::hot_path::UpdateSampler` drops low-value updates before
 any RCF work. Two decision modes:
 
 - `accept_stride()` — monotonic counter, keeps `1 / keep_every_n`
@@ -732,7 +732,7 @@ Source: `src/hot_path.rs`.
 
 ### `PrefixRateCap` — per-prefix admission rate cap
 
-`rcf_rs::hot_path::PrefixRateCap::new(cap_per_window, window_ms)`
+`anomstream_rs::hot_path::PrefixRateCap::new(cap_per_window, window_ms)`
 bounds how many admissions a single source-prefix hash bucket
 can push into the reservoir within a rolling window. Fixed
 256-bucket counter sketch, lock-free `check_and_record`.

@@ -8,8 +8,8 @@
 //! Add `mimalloc = "0.1"` to your `Cargo.toml` to use it in your
 //! own binary.
 
+use anomstream_rs::{ForestBuilder, RcfError};
 use mimalloc::MiMalloc;
-use rcf_rs::{ForestBuilder, RcfError};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

@@ -29,7 +29,7 @@ impl AnomalyScore {
     /// # Examples
     ///
     /// ```
-    /// use rcf_rs::AnomalyScore;
+    /// use anomstream_rs::AnomalyScore;
     /// assert!(AnomalyScore::new(0.0).is_ok());
     /// assert!(AnomalyScore::new(2.5).is_ok());
     /// assert!(AnomalyScore::new(-0.1).is_err());

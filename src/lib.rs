@@ -1,6 +1,6 @@
 //! Streaming anomaly detection toolkit — Random Cut Forest plus companion primitives.
 //!
-//! `rcf-rs` implements the Random Cut Forest (RCF) algorithm from Guha et al.
+//! `anomstream-rs` implements the Random Cut Forest (RCF) algorithm from Guha et al.
 //! (ICML 2016) and is conformant with the
 //! [AWS SageMaker RCF specification][aws-rcf]: reservoir sampling without
 //! replacement (Park et al. 2004), random cuts weighted by per-dimension
@@ -81,7 +81,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use rcf_rs::ForestBuilder;
+//! use anomstream_rs::ForestBuilder;
 //!
 //! let mut forest = ForestBuilder::<4>::new()
 //!     .num_trees(100)
@@ -96,12 +96,12 @@
 //!         eprintln!("anomaly: {score}");
 //!     }
 //! }
-//! # Ok::<(), rcf_rs::RcfError>(())
+//! # Ok::<(), anomstream_rs::RcfError>(())
 //! ```
 //!
 //! # Conformance
 //!
-//! `rcf-rs` enforces the AWS `SageMaker` hyperparameter bounds at build time:
+//! `anomstream-rs` enforces the AWS `SageMaker` hyperparameter bounds at build time:
 //!
 //! | Parameter | Range | Default |
 //! |---|---|---|

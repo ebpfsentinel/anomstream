@@ -354,29 +354,29 @@ triage / forensic replay territory, **not** per-alert real-time.
 
 Input: 10k points, `D=16`, 1 % outliers, 30 % warm / 70 % eval,
 frozen baseline. Each impl on its idiomatic fast path
-(rcf-rs rayon / rrcf single-process / sklearn NumPy-Cython SIMD
+(anomstream-rs rayon / rrcf single-process / sklearn NumPy-Cython SIMD
 / AWS Java cold JVM). **5-seed variance** (seeds 2026–2030),
 mean ± stddev, coefficient of variation in parens.
 
 | Impl                                   | Backend              | Updates/s                   | Scores/s                  | AUC       |
 | -------------------------------------- | -------------------- | --------------------------- | ------------------------- | --------- |
-| `rcf-rs` 0.0.0-dev, `score()`          | Rust, rayon-parallel | **31 500** (single seed)    | **197 900** (single seed) | 1.000     |
-| `rcf-rs` 0.0.0-dev, `score_codisp()`   | Rust, parallel walk  | — (per-probe insert/delete) | 8 150 (single seed)       | 1.000     |
-| `rcf-rs` 0.0.0-dev, `score()` (5-seed) | Rust, rayon-parallel | 17 500 ± 1 240 (7 %)        | 125 900 ± 1 840 (1.5 %)   | 1.000 ± 0 |
+| `anomstream-rs` 0.0.0-dev, `score()`          | Rust, rayon-parallel | **31 500** (single seed)    | **197 900** (single seed) | 1.000     |
+| `anomstream-rs` 0.0.0-dev, `score_codisp()`   | Rust, parallel walk  | — (per-probe insert/delete) | 8 150 (single seed)       | 1.000     |
+| `anomstream-rs` 0.0.0-dev, `score()` (5-seed) | Rust, rayon-parallel | 17 500 ± 1 240 (7 %)        | 125 900 ± 1 840 (1.5 %)   | 1.000 ± 0 |
 | `randomcutforest-java` 4.4.0           | JVM 26, cold         | 2 090 ± 134 (6 %)           | 8 870 ± 415 (5 %)         | 1.000 ± 0 |
 | `rrcf` 0.4.4                           | Python + NumPy       | 73 ± 3 (4 %)                | 94 150 ± 4 840 (5 %)      | 0.992 ± 0 |
 | `sklearn.IsolationForest`              | NumPy + Cython       | batch-only                  | 136 300 ± 2 450 (2 %)     | 1.000 ± 0 |
 
 Ratios (mean/mean):
 
-- **Updates**: rcf-rs is ~8.4× faster than AWS Java, ~240× faster
+- **Updates**: anomstream-rs is ~8.4× faster than AWS Java, ~240× faster
   than rrcf. CVs around 5-7 % on all impls; the ratios sit well
   outside the noise floor.
-- **Scores (fast path)**: sklearn edges rcf-rs `score()` by 8 %
+- **Scores (fast path)**: sklearn edges anomstream-rs `score()` by 8 %
   (136k vs 126k) — real but small (stddevs combined ≈ 3k, so the
-  10k delta is ~3σ significant). rrcf trails rcf-rs by ~25 %;
+  10k delta is ~3σ significant). rrcf trails anomstream-rs by ~25 %;
   AWS Java trails by ~14×.
-- **Scores (codisp path)**: rcf-rs `score_codisp()` mutates the
+- **Scores (codisp path)**: anomstream-rs `score_codisp()` mutates the
   forest per probe (insert → walk leaf→root → delete). Post the
   rayon-per-tree parallel refactor (walk + delete now fan out
   across trees) it hits ~8 k probes/s at `(100, 256, D=16)` —
@@ -389,7 +389,7 @@ Ratios (mean/mean):
 
 Noise sources documented: machine thermal state varies across
 runs — single-seed numbers from an earlier cool-CPU session
-landed at ~32k/203k for rcf-rs, dropping to ~17k/126k on this
+landed at ~32k/203k for anomstream-rs, dropping to ~17k/126k on this
 run. The **ratios are portable, the absolute numbers aren't**.
 
 Reproduce the sweep:
@@ -545,19 +545,19 @@ to reproduce; the script is provided for reproducibility.
 | TAO                    | 13                | 0.451     | 0.453            | **0.487**                  | 0.471     |
 | **aggregate weighted** | **192 / 200**     | 0.583     | **0.768**        | 0.751                      | 0.753     |
 
-- **rcf-rs `score()`** — isolation depth, rayon-parallel, full
+- **anomstream-rs `score()`** — isolation depth, rayon-parallel, full
   eval scan. Same fast API eBPFsentinel ships on the hot path.
   `tests/tsb_ad_m.rs::tsb_ad_m_aggregate_auc_above_floor` pins
   the aggregate floor at 0.55 — regression guard, not a quality
   claim.
-- **rcf-rs `score_codisp()`** — probe-based codisp walk (leaf → root,
+- **anomstream-rs `score_codisp()`** — probe-based codisp walk (leaf → root,
   `max(sibling.mass / subtree.mass)`), sequential per tree,
   mutates the reservoir per probe. Stride-subsampled to 50 000
   eval rows per file (const `CODISP_MAX_EVAL`). Directly
   comparable to the AWS Java / rrcf semantic; leads aggregate
   **0.768** vs AWS Java 0.753.
   `tests/tsb_ad_m.rs::tsb_ad_m_codisp_aggregate_auc_above_floor`.
-- **rcf-rs `score_codisp_stateless()`** — root → leaf walk along
+- **anomstream-rs `score_codisp_stateless()`** — root → leaf walk along
   stored cuts, max `sibling_mass / subtree_mass` per level, no
   reservoir mutation. Takes `&self` → rayon-parallel across
   trees. Covers the **full** eval stream (no stride) and

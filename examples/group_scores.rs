@@ -10,9 +10,9 @@
 //!
 //! Run with `cargo run --example group_scores`.
 
+use anomstream_rs::{FeatureGroups, RcfError, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{FeatureGroups, RcfError, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     // 6-D feature vector grouped into 3 semantic buckets.

@@ -8,9 +8,9 @@
 //!
 //! Run with `cargo run --example bootstrap`.
 
+use anomstream_rs::{RcfError, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, ThresholdedForestBuilder};
 
 /// Stand-in for a TSDB adapter: produce `rows` historical 4-D
 /// feature vectors drawn from a tight noisy baseline. A real caller

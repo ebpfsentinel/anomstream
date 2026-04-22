@@ -21,8 +21,8 @@
 //! # Example
 //!
 //! ```ignore
-//! use rcf_rs::ensemble::fisher_combine;
-//! use rcf_rs::univariate_spot::PotDetector;
+//! use anomstream_rs::ensemble::fisher_combine;
+//! use anomstream_rs::univariate_spot::PotDetector;
 //!
 //! let mut bank = vec![PotDetector::default_spot(); 4];
 //! for detector in &mut bank { /* record baseline */ }
@@ -35,7 +35,7 @@
 //!     .collect();
 //! let joint_p = fisher_combine(&p_values);
 //! if joint_p < 1.0e-3 { /* anomaly */ }
-//! # Ok::<(), rcf_rs::RcfError>(())
+//! # Ok::<(), anomstream_rs::RcfError>(())
 //! ```
 
 #![cfg(feature = "std")]
@@ -83,7 +83,7 @@ pub fn fisher_combine(p_values: &[f64]) -> f64 {
 ///
 /// `Q(k, y) = e^{−y} · Σ_{i=0..k-1} y^i / i!` for integer `k`.
 /// Numerically stable for `k ≤ ~160` under f64 — beyond that the
-/// `y^i / i!` terms start to lose precision; rcf-rs's detector
+/// `y^i / i!` terms start to lose precision; anomstream-rs's detector
 /// banks top out well below that bound (typical `k ≤ 64` features).
 #[must_use]
 pub fn chi_squared_survival_even(k: usize, t: f64) -> f64 {

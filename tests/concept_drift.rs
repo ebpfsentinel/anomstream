@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Concept-drift integration test for [`rcf_rs::RandomCutForest`].
+//! Concept-drift integration test for [`anomstream_rs::RandomCutForest`].
 //!
 //! A stream that switches from cluster A to cluster B should
 //! initially flag cluster B as anomalous, then settle back to
@@ -7,9 +7,9 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use anomstream_rs::ForestBuilder;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::ForestBuilder;
 
 #[test]
 fn distribution_shift_flagged_then_normalised() {

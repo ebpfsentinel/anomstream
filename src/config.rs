@@ -71,7 +71,7 @@ pub const DEFAULT_INITIAL_ACCEPT_FRACTION: f64 = 1.0;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{ForestBuilder, RcfConfig};
+/// use anomstream_rs::{ForestBuilder, RcfConfig};
 ///
 /// let builder = ForestBuilder::<4>::new()
 ///     .num_trees(50)
@@ -250,7 +250,7 @@ impl RcfConfig {
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::ForestBuilder;
+/// use anomstream_rs::ForestBuilder;
 ///
 /// let mut forest = ForestBuilder::<4>::new()
 ///     .num_trees(50)

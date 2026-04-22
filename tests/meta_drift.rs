@@ -14,11 +14,11 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
+use anomstream_rs::{
     CusumConfig, DriftKind, MetaDriftDetector, ThresholdedForest, ThresholdedForestBuilder,
 };
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 fn build_detector() -> ThresholdedForest<4> {
     ThresholdedForestBuilder::<4>::new()

@@ -6,7 +6,7 @@ public dataset for streaming anomaly detection.
 Three runners use identical protocol so their AUCs sit side by
 side:
 
-- `tests/nab.rs` — `#[ignore]` integration test, rcf-rs side.
+- `tests/nab.rs` — `#[ignore]` integration test, anomstream-rs side.
 - `bench_rrcf_nab.py` — rrcf 0.4.4.
 - `RcfBenchNab.java` — AWS `randomcutforest-java` 4.4.0 (see
   `../README.md` for the Maven Central
@@ -30,7 +30,7 @@ Layout after clone:
 ## Running
 
 ```bash
-# rcf-rs.
+# anomstream-rs.
 RCF_NAB_PATH=/opt/nab \
     cargo test --test nab --all-features -- --ignored --nocapture
 
@@ -72,14 +72,14 @@ Weighted aggregate AUC on the `realKnownCause` subset (7 files):
 
 | Impl | Aggregate AUC |
 |---|---|
-| rcf-rs `score_codisp()` | **0.776** |
+| anomstream-rs `score_codisp()` | **0.776** |
 | AWS Java 4.4.0 | 0.757 |
 | rrcf 0.4.4 | 0.748 |
-| rcf-rs `score()` | 0.719 |
+| anomstream-rs `score()` | 0.719 |
 
 Per-file breakdown:
 
-| File | rcf-rs `score()` | rcf-rs `score_codisp()` | rrcf | AWS Java |
+| File | anomstream-rs `score()` | anomstream-rs `score_codisp()` | rrcf | AWS Java |
 |---|---|---|---|---|
 | `ambient_temperature_system_failure` | 0.813 | **0.813** | 0.734 | 0.786 |
 | `cpu_utilization_asg_misconfiguration` | **0.953** | 0.939 | 0.849 | 0.906 |
@@ -89,12 +89,12 @@ Per-file breakdown:
 | `rogue_agent_key_hold` | 0.145 | **0.692** | 0.535 | 0.633 |
 | `rogue_agent_key_updown` | 0.633 | **0.721** | 0.657 | 0.542 |
 
-rcf-rs ships two scoring APIs: the fast `score()` path
+anomstream-rs ships two scoring APIs: the fast `score()` path
 (isolation depth, rayon-parallel, non-mutating — eBPF-hot-path
 friendly) and the heavier `score_codisp()` path (probe-based,
 mutating, sequential per tree — ~30× slower). rrcf + AWS Java
 use probe-based scoring by default; `score_codisp()` matches
 their semantic and leads the aggregate.
 
-The rcf-rs ignored test pins an aggregate-AUC floor of `0.70`
+The anomstream-rs ignored test pins an aggregate-AUC floor of `0.70`
 as a regression guard.

@@ -2,7 +2,7 @@
 //! Accuracy / behaviour checks on [`TDigest`] against closed-form
 //! reference distributions.
 
-use rcf_rs::TDigest;
+use anomstream_rs::TDigest;
 
 #[test]
 fn uniform_stream_quantiles_within_one_percent() {

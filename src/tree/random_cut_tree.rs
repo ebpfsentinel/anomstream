@@ -45,7 +45,7 @@ use crate::visitor::Visitor;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::tree::PointAccessor;
+/// use anomstream_rs::tree::PointAccessor;
 ///
 /// let v: Vec<[f64; 2]> = vec![[1.0, 2.0]];
 /// let p: &[f64; 2] = <Vec<[f64; 2]> as PointAccessor<2>>::point(&v, 0).unwrap();
@@ -77,7 +77,7 @@ impl<const D: usize> PointAccessor<D> for [[f64; D]] {
 /// ```
 /// use rand::SeedableRng;
 /// use rand_chacha::ChaCha8Rng;
-/// use rcf_rs::RandomCutTree;
+/// use anomstream_rs::RandomCutTree;
 ///
 /// let mut tree = RandomCutTree::<2>::new(8).unwrap();
 /// let p = [1.0_f64, 2.0];

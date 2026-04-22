@@ -70,7 +70,7 @@ pub enum NormStrategy {
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{NormStrategy, Normalizer};
+/// use anomstream_rs::{NormStrategy, Normalizer};
 ///
 /// let samples = [[0.0, 0.0], [100.0, 1000.0]];
 /// let n = Normalizer::<2>::fit(NormStrategy::MinMax, &samples);

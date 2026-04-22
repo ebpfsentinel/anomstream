@@ -24,7 +24,7 @@ use crate::visitor::scoring::{damp, normalizer, score_seen, score_unseen};
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::AttributionVisitor;
+/// use anomstream_rs::AttributionVisitor;
 ///
 /// let query = [0.5_f64, 0.5, 100.0, 0.5];
 /// let v = AttributionVisitor::new(&query, 16).unwrap();

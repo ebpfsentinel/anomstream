@@ -74,7 +74,7 @@ three implementations land in the same AUC table:
 ```bash
 # AWS randomcutforest-java 4.4.0 via Maven Central jar.
 # `getAnomalyScore()` is codisp-like — directly comparable to
-# rcf-rs's `score_codisp()`. Runtime: ~10 min on reference host.
+# anomstream-rs's `score_codisp()`. Runtime: ~10 min on reference host.
 javac -cp /tmp/aws-rcf-central/randomcutforest-core-4.4.0.jar \
     scripts/tsb_ad/RcfBenchTsbAd.java
 java -cp scripts/tsb_ad:/tmp/aws-rcf-central/randomcutforest-core-4.4.0.jar \
@@ -89,7 +89,7 @@ python3 scripts/tsb_ad/bench_rrcf_tsb_ad.py \
     --dir /tmp/tsb-ad/TSB-AD-M --max-eval 1500 --workers "$(nproc)"
 ```
 
-For apples-to-apples codisp-vs-codisp on the rcf-rs side,
+For apples-to-apples codisp-vs-codisp on the anomstream-rs side,
 run the second integration test:
 
 ```bash

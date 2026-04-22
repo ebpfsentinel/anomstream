@@ -6,9 +6,9 @@
 //!
 //! Run with `cargo run --example cross_tenant`.
 
+use anomstream_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, TenantForestPool, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     let mut pool: TenantForestPool<&'static str, 2> = TenantForestPool::new(16, || {

@@ -30,7 +30,7 @@ use num_traits::Float;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::OnlineStats;
+/// use anomstream_rs::OnlineStats;
 ///
 /// let mut s = OnlineStats::default();
 /// for v in [10.0, 20.0, 30.0] {

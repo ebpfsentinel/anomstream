@@ -172,7 +172,7 @@ impl ThresholdedConfig {
 /// forest and the threshold layer in one chain:
 ///
 /// ```
-/// use rcf_rs::ThresholdedForestBuilder;
+/// use anomstream_rs::ThresholdedForestBuilder;
 ///
 /// let detector = ThresholdedForestBuilder::<4>::new()
 ///     .num_trees(50)

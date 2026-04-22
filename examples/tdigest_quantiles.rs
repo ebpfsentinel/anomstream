@@ -5,7 +5,7 @@
 //!
 //! Run with `cargo run --example tdigest_quantiles`.
 
-use rcf_rs::TDigest;
+use anomstream_rs::TDigest;
 
 fn main() {
     let mut digest = TDigest::new(200.0).expect("valid compression");

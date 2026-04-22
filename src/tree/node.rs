@@ -20,7 +20,7 @@ use crate::domain::{BoundingBox, Cut};
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::ForestBuilder;
+/// use anomstream_rs::ForestBuilder;
 ///
 /// let forest = ForestBuilder::<2>::new()
 ///     .num_trees(50)

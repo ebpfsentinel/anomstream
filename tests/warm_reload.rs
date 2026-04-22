@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! Warm-reload end-to-end tests covering
-//! [`rcf_rs::RandomCutForest`] and [`rcf_rs::ThresholdedForest`]
+//! [`anomstream_rs::RandomCutForest`] and [`anomstream_rs::ThresholdedForest`]
 //! persisted to disk and resumed later.
 //!
 //! Asserts:
@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rcf_rs::{ForestBuilder, RandomCutForest, RcfError, ThresholdedForestBuilder};
+use anomstream_rs::{ForestBuilder, RandomCutForest, RcfError, ThresholdedForestBuilder};
 
 /// Build a path inside the OS temp dir that is unique to the running
 /// test. Tests run in parallel so a shared filename would race.
@@ -37,7 +37,7 @@ fn unique_tmp_path(tag: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
     let mut p = std::env::temp_dir();
-    p.push(format!("rcf-rs-{tag}-{nanos}-{seq}.bin"));
+    p.push(format!("anomstream-rs-{tag}-{nanos}-{seq}.bin"));
     p
 }
 
@@ -155,7 +155,7 @@ fn thresholded_path_roundtrip_preserves_grade() {
     }
 
     d.to_path(&path).unwrap();
-    let back = rcf_rs::ThresholdedForest::<4>::from_path(&path).unwrap();
+    let back = anomstream_rs::ThresholdedForest::<4>::from_path(&path).unwrap();
 
     // Stats must survive byte-for-byte.
     assert_eq!(d.stats().mean(), back.stats().mean());
@@ -204,7 +204,7 @@ fn thresholded_resume_training_after_reload() {
     }
 
     // Second lifecycle: reload, resume training, score an outlier.
-    let mut d = rcf_rs::ThresholdedForest::<4>::from_path(&path).unwrap();
+    let mut d = anomstream_rs::ThresholdedForest::<4>::from_path(&path).unwrap();
     assert!(d.stats().observations() > 0, "reloaded detector lost stats");
     let obs_before = d.stats().observations();
     let mut rng = ChaCha8Rng::seed_from_u64(99);
@@ -251,7 +251,7 @@ fn thresholded_from_path_wrong_version_rejected() {
     bytes[0] = bytes[0].wrapping_add(1);
     fs::write(&path, &bytes).unwrap();
 
-    let err = rcf_rs::ThresholdedForest::<4>::from_path(&path).unwrap_err();
+    let err = anomstream_rs::ThresholdedForest::<4>::from_path(&path).unwrap_err();
     assert!(
         matches!(err, RcfError::IncompatibleVersion { .. }),
         "expected IncompatibleVersion, got {err:?}",

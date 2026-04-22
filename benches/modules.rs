@@ -14,17 +14,17 @@
 
 #![allow(clippy::cast_precision_loss)]
 
-use criterion::{Criterion, criterion_group, criterion_main};
-use mimalloc::MiMalloc;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
+use anomstream_rs::{
     AdwinDetector, CountMinSketch, CusumConfig, DiVector, DriftAwareForest, DriftRecoveryConfig,
     DynamicForest, FeatureDriftDetector, ForestBuilder, LshAlertClusterer, MetaDriftDetector,
     NormStrategy, Normalizer, OnlineStats, PerFeatureCusum, PerFeatureCusumConfig, PerFeatureEwma,
     PerFeatureEwmaConfig, PlattCalibrator, PlattFitConfig, PotDetector, SageEstimator,
     ScoreHistogram, ShingledForestBuilder, TDigest, ensemble::fisher_combine, hot_path,
 };
+use criterion::{Criterion, criterion_group, criterion_main};
+use mimalloc::MiMalloc;
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 use std::hint::black_box;
 
 #[global_allocator]
@@ -286,7 +286,7 @@ fn bench_adwin(c: &mut Criterion) {
 /// `LshAlertClusterer::hash_divector` + `observe` — quantise the
 /// `DiVector` into per-dim hex symbols, look up the bucket.
 fn bench_lsh_cluster(c: &mut Criterion) {
-    use rcf_rs::{AlertRecord, AnomalyScore, ForensicBaseline};
+    use anomstream_rs::{AlertRecord, AnomalyScore, ForensicBaseline};
     let mut group = c.benchmark_group("lsh_cluster");
 
     // Build a record template we can reuse — DiVector of dim 16
@@ -295,7 +295,7 @@ fn bench_lsh_cluster(c: &mut Criterion) {
     di.add_high(3, 2.5).expect("add_high");
     di.add_low(7, 1.5).expect("add_low");
     let rec: AlertRecord<u32, 16> = AlertRecord {
-        version: rcf_rs::ALERT_RECORD_VERSION,
+        version: anomstream_rs::ALERT_RECORD_VERSION,
         tenant: Some(1_u32),
         timestamp_ms: 0,
         point: [0.0; 16],
@@ -616,7 +616,10 @@ fn bench_online_stats(c: &mut Criterion) {
 /// stable after reference seeded.
 fn bench_per_feature_cusum(c: &mut Criterion) {
     let mut group = c.benchmark_group("per_feature_cusum");
-    let cfg = PerFeatureCusumConfig { slack: 0.5, threshold: 5.0 };
+    let cfg = PerFeatureCusumConfig {
+        slack: 0.5,
+        threshold: 5.0,
+    };
 
     group.bench_function("observe_below_threshold_d16", |b| {
         let mut det: PerFeatureCusum<16> = PerFeatureCusum::new(cfg);

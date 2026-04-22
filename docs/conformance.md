@@ -1,6 +1,6 @@
 # AWS SageMaker Conformance
 
-`rcf-rs` enforces the documented AWS `SageMaker` hyperparameter
+`anomstream-rs` enforces the documented AWS `SageMaker` hyperparameter
 bounds at build time. Beyond these invariants the library does not
 aim for bit-exact parity with
 [aws/random-cut-forest-by-aws](https://github.com/aws/random-cut-forest-by-aws) —
@@ -8,7 +8,7 @@ feature evolution is driven by eBPFsentinel Enterprise needs.
 
 Regression test: `tests/aws_conformance.rs` pins every row below.
 
-| AWS specification | `rcf-rs` mapping |
+| AWS specification | `anomstream-rs` mapping |
 |---|---|
 | `feature_dim ∈ [1, 10000]` | const-generic `D`, validated by `ForestBuilder::build` |
 | `num_trees ∈ [50, 1000]`, default `100` | enforced by `ForestBuilder` |
@@ -119,7 +119,7 @@ Extensions beyond the AWS signature:
   `RandomCutForest::score_trimmed` robust ensemble aggregator.
   Full adversarial threat model in `docs/threat_model.md`.
 
-Deliberately absent from `rcf-rs` (out of scope for streaming
+Deliberately absent from `anomstream-rs` (out of scope for streaming
 network anomaly detection):
 
 - Density estimation (AWS `density()`)

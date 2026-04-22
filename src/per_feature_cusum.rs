@@ -187,7 +187,7 @@ pub struct PerFeatureCusumResult<const D: usize> {
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{PerFeatureCusum, PerFeatureCusumConfig};
+/// use anomstream_rs::{PerFeatureCusum, PerFeatureCusumConfig};
 ///
 /// let mut det = PerFeatureCusum::<2>::new(PerFeatureCusumConfig {
 ///     slack: 0.5,

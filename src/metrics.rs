@@ -3,7 +3,7 @@
 //! [`MetricsSink`] is a narrow trait exposed by the crate so
 //! long-running agents can drain counters / gauges / histograms
 //! into `Prometheus`, `StatsD`, `OpenTelemetry`, or any other aggregator
-//! without the rcf-rs internals pulling a concrete metrics crate.
+//! without the anomstream-rs internals pulling a concrete metrics crate.
 //! Three event types cover everything the forest / thresholded /
 //! pool / meta-drift layers emit:
 //!
@@ -32,7 +32,7 @@
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-/// Narrow observability interface exposed by rcf-rs detectors.
+/// Narrow observability interface exposed by anomstream-rs detectors.
 pub trait MetricsSink: Send + Sync + core::fmt::Debug {
     /// Increment a named monotonic counter by `value`.
     fn inc_counter(&self, name: &str, value: u64);

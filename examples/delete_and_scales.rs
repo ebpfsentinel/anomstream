@@ -11,9 +11,9 @@
 //!
 //! Run with `cargo run --example delete_and_scales`.
 
+use anomstream_rs::{RcfError, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, ThresholdedForestBuilder};
 
 fn main() -> Result<(), RcfError> {
     let mut detector = ThresholdedForestBuilder::<3>::new()

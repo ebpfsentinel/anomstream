@@ -25,7 +25,7 @@ pub type Point = Vec<f64>;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::domain::ensure_dim;
+/// use anomstream_rs::domain::ensure_dim;
 /// assert!(ensure_dim(&[1.0, 2.0, 3.0], 3).is_ok());
 /// assert!(ensure_dim(&[1.0, 2.0], 3).is_err());
 /// ```
@@ -49,7 +49,7 @@ pub fn ensure_dim(point: &[f64], dimension: usize) -> RcfResult<()> {
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::domain::ensure_finite;
+/// use anomstream_rs::domain::ensure_finite;
 /// assert!(ensure_finite(&[1.0, 2.0, 3.0]).is_ok());
 /// assert!(ensure_finite(&[1.0, f64::NAN]).is_err());
 /// assert!(ensure_finite(&[1.0, f64::INFINITY]).is_err());

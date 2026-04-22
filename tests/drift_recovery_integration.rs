@@ -8,7 +8,7 @@
 
 #![cfg(feature = "std")]
 
-use rcf_rs::{AdwinDetector, DriftAwareForest, DriftRecoveryConfig, ForestBuilder};
+use anomstream_rs::{AdwinDetector, DriftAwareForest, DriftRecoveryConfig, ForestBuilder};
 
 fn small_builder() -> ForestBuilder<2> {
     ForestBuilder::<2>::new()

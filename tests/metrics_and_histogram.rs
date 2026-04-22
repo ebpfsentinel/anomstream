@@ -1,23 +1,23 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! End-to-end tests for the observability surface:
 //!
-//! - [`rcf_rs::MetricsSink`] receives the documented events from
+//! - [`anomstream_rs::MetricsSink`] receives the documented events from
 //!   `RandomCutForest`, `ThresholdedForest`, `TenantForestPool`,
 //!   `MetaDriftDetector`.
-//! - [`rcf_rs::ScoreHistogram`] bins a streamed score distribution
+//! - [`anomstream_rs::ScoreHistogram`] bins a streamed score distribution
 //!   into well-formed buckets.
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
 use std::sync::Arc;
 
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
+use anomstream_rs::{
     CusumConfig, ForestBuilder, MetaDriftDetector, ScoreHistogram, TenantForestPool,
     ThresholdedForestBuilder,
     metrics::{TestSink, names},
 };
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 fn noisy(rng: &mut ChaCha8Rng) -> [f64; 2] {
     [rng.random::<f64>() * 0.1, rng.random::<f64>() * 0.1]
@@ -194,7 +194,7 @@ fn forest_sink_records_attribution_and_nan_rejection() {
 
 #[test]
 fn forest_sink_records_early_term_stops() {
-    use rcf_rs::EarlyTermConfig;
+    use anomstream_rs::EarlyTermConfig;
     let sink = Arc::new(TestSink::new());
     let mut f = ForestBuilder::<2>::new()
         .num_trees(100)
@@ -314,8 +314,8 @@ fn bootstrap_sink_records_points_and_skips() {
 #[test]
 #[cfg(all(feature = "postcard", feature = "serde_json"))]
 fn alert_clusterer_sink_records_observe_new_joined() {
-    use rcf_rs::audit::{AlertContext, AlertRecord};
-    use rcf_rs::{AlertClusterer, ClusterDecision};
+    use anomstream_rs::audit::{AlertContext, AlertRecord};
+    use anomstream_rs::{AlertClusterer, ClusterDecision};
     let sink = Arc::new(TestSink::new());
     let mut forest = ForestBuilder::<4>::new()
         .num_trees(50)

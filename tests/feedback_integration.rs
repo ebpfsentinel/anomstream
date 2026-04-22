@@ -6,9 +6,9 @@
 
 #![cfg(feature = "std")]
 
-use rcf_rs::{FeedbackLabel, FeedbackStore, ForestBuilder};
+use anomstream_rs::{FeedbackLabel, FeedbackStore, ForestBuilder};
 
-fn small_forest() -> rcf_rs::RandomCutForest<2> {
+fn small_forest() -> anomstream_rs::RandomCutForest<2> {
     let mut f = ForestBuilder::<2>::new()
         .num_trees(50)
         .sample_size(64)

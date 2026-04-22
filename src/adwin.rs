@@ -12,7 +12,7 @@
 //! Bifet's ADWIN2 (no exponential histograms): a ring buffer of
 //! the last `N` items + prefix-sum scans on each `update`. O(N)
 //! per update where `N` is the configured window cap. For the
-//! use-case in `rcf-rs` (drift on score streams, `N ≤ 4096`) the
+//! use-case in `anomstream-rs` (drift on score streams, `N ≤ 4096`) the
 //! constant factors dominate over the logarithmic win of
 //! exponential histograms.
 //!
@@ -31,7 +31,7 @@
 //! `range` is the caller-declared amplitude of the stream (for
 //! bounded-range streams the Hoeffding constant collapses to 1).
 //!
-//! # Use with rcf-rs
+//! # Use with anomstream-rs
 //!
 //! `AdwinDetector` is a standalone trigger — feed it the anomaly
 //! score stream (or any scalar per-step signal) and route
@@ -185,7 +185,7 @@ impl AdwinDetector {
         self.metrics.inc_counter(names::ADWIN_OBSERVED_TOTAL, 1);
         // Drop the oldest entry if we're at cap. Keeping this an
         // `O(N)` front-removal is fine at N ≤ 4k — benchmarked
-        // marginal vs `VecDeque` in the typical rcf-rs use case.
+        // marginal vs `VecDeque` in the typical anomstream-rs use case.
         if self.buffer.len() >= self.window_cap {
             self.buffer.remove(0);
         }

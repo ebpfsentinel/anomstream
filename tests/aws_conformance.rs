@@ -18,11 +18,11 @@
 
 use std::collections::HashSet;
 
-use rcf_rs::config::{
+use anomstream_rs::config::{
     DEFAULT_NUM_TREES, DEFAULT_SAMPLE_SIZE, MAX_DIMENSION, MAX_NUM_TREES, MAX_SAMPLE_SIZE,
     MIN_DIMENSION, MIN_NUM_TREES, MIN_SAMPLE_SIZE,
 };
-use rcf_rs::{ForestBuilder, RcfConfig, ScalarScoreVisitor};
+use anomstream_rs::{ForestBuilder, RcfConfig, ScalarScoreVisitor};
 
 #[test]
 fn aws_feature_dim_lower_bound_zero_rejected() {
@@ -57,7 +57,7 @@ fn aws_num_trees_lower_bound_below_min_rejected() {
         .num_trees(MIN_NUM_TREES - 1)
         .build()
         .unwrap_err();
-    assert!(matches!(err, rcf_rs::RcfError::InvalidConfig(_)));
+    assert!(matches!(err, anomstream_rs::RcfError::InvalidConfig(_)));
     assert_eq!(MIN_NUM_TREES, 50);
 }
 
@@ -86,7 +86,7 @@ fn aws_num_trees_upper_bound_above_max_rejected() {
         .num_trees(MAX_NUM_TREES + 1)
         .build()
         .unwrap_err();
-    assert!(matches!(err, rcf_rs::RcfError::InvalidConfig(_)));
+    assert!(matches!(err, anomstream_rs::RcfError::InvalidConfig(_)));
 }
 
 #[test]
@@ -95,7 +95,7 @@ fn aws_num_samples_per_tree_lower_bound_zero_rejected() {
         .sample_size(0)
         .build()
         .unwrap_err();
-    assert!(matches!(err, rcf_rs::RcfError::InvalidConfig(_)));
+    assert!(matches!(err, anomstream_rs::RcfError::InvalidConfig(_)));
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn aws_num_samples_per_tree_upper_bound_above_max_rejected() {
         .sample_size(MAX_SAMPLE_SIZE + 1)
         .build()
         .unwrap_err();
-    assert!(matches!(err, rcf_rs::RcfError::InvalidConfig(_)));
+    assert!(matches!(err, anomstream_rs::RcfError::InvalidConfig(_)));
 }
 
 #[test]

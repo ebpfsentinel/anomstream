@@ -12,12 +12,12 @@
 
 use std::sync::Arc;
 
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
+use anomstream_rs::{
     CusumConfig, MetaDriftDetector, RcfError, ScoreHistogram, ThresholdedForestBuilder,
     metrics::{TestSink, names},
 };
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 fn main() -> Result<(), RcfError> {
     let sink = Arc::new(TestSink::new());

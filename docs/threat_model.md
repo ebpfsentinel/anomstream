@@ -1,9 +1,9 @@
-# rcf-rs threat model
+# anomstream-rs threat model
 
-Scope: adversarial inputs on the ingress path where `rcf-rs`
+Scope: adversarial inputs on the ingress path where `anomstream-rs`
 consumes untrusted feature vectors (eBPF NDR agent, MSSP tenant
 pool, public-facing API). Out of scope: host compromise of the
-process running `rcf-rs`, side-channel attacks on Ed25519 license
+process running `anomstream-rs`, side-channel attacks on Ed25519 license
 verification, upstream supply-chain compromises of rustc /
 dependencies.
 
@@ -142,7 +142,7 @@ the updater thread, starving legitimate updates.
 
 - Kernel-side eBPF verifier compromise (kernel concern).
 - Compromise of the upstream CTI feeds that drive threat
-  intelligence (out of scope — `rcf-rs` does not consume CTI
+  intelligence (out of scope — `anomstream-rs` does not consume CTI
   directly).
 - Attacks on the persistence format (`to_bytes` / `from_bytes`)
   — the crate enforces versioned envelopes with upfront

@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::similar_names)]
-//! rcf-rs side of the synthetic-corpus bench — reads the CSV
+//! anomstream-rs side of the synthetic-corpus bench — reads the CSV
 //! emitted by `scripts/synthetic/gen_points.py`, warms a
 //! forest, then reports inserts/s, scores/s, and `AUC` against
 //! the first-column label. Matches the metric shape of
@@ -17,7 +17,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
-use rcf_rs::{AnomalyScore, ForestBuilder, RcfError};
+use anomstream_rs::{AnomalyScore, ForestBuilder, RcfError};
 
 const D: usize = 16;
 

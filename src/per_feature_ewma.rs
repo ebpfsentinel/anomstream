@@ -133,7 +133,7 @@ pub struct PerFeatureEwmaResult<const D: usize> {
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{PerFeatureEwma, PerFeatureEwmaConfig};
+/// use anomstream_rs::{PerFeatureEwma, PerFeatureEwmaConfig};
 ///
 /// let mut ewma: PerFeatureEwma<3> = PerFeatureEwma::new(PerFeatureEwmaConfig {
 ///     alpha: 0.1,

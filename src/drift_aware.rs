@@ -10,7 +10,7 @@
 //! [`DriftAwareForest::on_drift`] when they want a shadow to spawn.
 //!
 //! ```ignore
-//! use rcf_rs::{AdwinDetector, DriftAwareForest, DriftRecoveryConfig, ForestBuilder};
+//! use anomstream_rs::{AdwinDetector, DriftAwareForest, DriftRecoveryConfig, ForestBuilder};
 //!
 //! let builder = ForestBuilder::<16>::new()
 //!     .num_trees(100)
@@ -29,7 +29,7 @@
 //!         detector.on_drift()?;           // spawn shadow
 //!     }
 //! }
-//! # Ok::<(), rcf_rs::RcfError>(())
+//! # Ok::<(), anomstream_rs::RcfError>(())
 //! ```
 
 #![cfg(feature = "std")]

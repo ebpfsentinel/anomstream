@@ -10,7 +10,7 @@
 
 #![cfg(all(feature = "std", feature = "parallel"))]
 
-use rcf_rs::ShingledForestBuilder;
+use anomstream_rs::ShingledForestBuilder;
 
 #[test]
 fn dwell_anomaly_shingle_scores_materially_above_baseline() {

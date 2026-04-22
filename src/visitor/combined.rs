@@ -31,7 +31,7 @@ use crate::visitor::scoring::{damp, normalizer, score_seen, score_unseen};
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::visitor::combined::ScoreAttributionVisitor;
+/// use anomstream_rs::visitor::combined::ScoreAttributionVisitor;
 ///
 /// let q = [0.5_f64, 0.5];
 /// let v = ScoreAttributionVisitor::new(&q, 16).unwrap();

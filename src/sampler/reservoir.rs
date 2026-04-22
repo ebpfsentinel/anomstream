@@ -66,7 +66,7 @@ use crate::error::{RcfError, RcfResult};
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::SamplerOp;
+/// use anomstream_rs::SamplerOp;
 ///
 /// fn handle(op: SamplerOp) -> Option<usize> {
 ///     match op {
@@ -141,7 +141,7 @@ impl Ord for WeightedEntry {
 /// ```
 /// use rand::SeedableRng;
 /// use rand_chacha::ChaCha8Rng;
-/// use rcf_rs::{ReservoirSampler, SamplerOp};
+/// use anomstream_rs::{ReservoirSampler, SamplerOp};
 ///
 /// let mut sampler = ReservoirSampler::new(2, 0.0).unwrap();
 /// let mut rng = ChaCha8Rng::seed_from_u64(42);

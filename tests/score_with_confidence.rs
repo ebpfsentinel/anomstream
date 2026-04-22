@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! Integration checks on `RandomCutForest::score_with_confidence`.
 
-use rcf_rs::{ForestBuilder, RcfError};
+use anomstream_rs::{ForestBuilder, RcfError};
 
-fn warm_forest() -> rcf_rs::RandomCutForest<4> {
+fn warm_forest() -> anomstream_rs::RandomCutForest<4> {
     let mut f = ForestBuilder::<4>::new()
         .num_trees(100)
         .sample_size(64)

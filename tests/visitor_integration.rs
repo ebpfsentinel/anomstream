@@ -8,9 +8,9 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)] // Tests use small bounded counts and exact-equality probes.
 
+use anomstream_rs::{AttributionVisitor, RandomCutTree, ScalarScoreVisitor, tree::PointAccessor};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{AttributionVisitor, RandomCutTree, ScalarScoreVisitor, tree::PointAccessor};
 
 const SAMPLE_SIZE: u32 = 256;
 
@@ -34,7 +34,7 @@ fn score<const D: usize>(tree: &RandomCutTree<D>, point: &[f64; D]) -> f64 {
     f64::from(s)
 }
 
-fn attribute<const D: usize>(tree: &RandomCutTree<D>, point: &[f64; D]) -> rcf_rs::DiVector {
+fn attribute<const D: usize>(tree: &RandomCutTree<D>, point: &[f64; D]) -> anomstream_rs::DiVector {
     let visitor = AttributionVisitor::new(point, root_mass(tree)).expect("visitor builds");
     tree.traverse(point, visitor).expect("traverse succeeds")
 }

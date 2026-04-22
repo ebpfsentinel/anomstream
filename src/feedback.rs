@@ -25,7 +25,7 @@
 //! simpler nearest-neighbour-kernel variant here captures the
 //! Das paper's core signal ("alerts similar to a known-benign
 //! point should score down") with zero forest-side changes and
-//! fits the rcf-rs API surface cleanly.
+//! fits the anomstream-rs API surface cleanly.
 //!
 //! Swap in AAD later behind the same [`FeedbackStore::adjust`]
 //! signature if / when the AUC gap justifies the complexity.

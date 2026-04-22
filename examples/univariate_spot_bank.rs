@@ -11,7 +11,7 @@
 //!
 //! Run: `cargo run --release --example univariate_spot_bank`
 
-use rcf_rs::{PotDetector, fisher_combine};
+use anomstream_rs::{PotDetector, fisher_combine};
 
 const DIM: usize = 4;
 

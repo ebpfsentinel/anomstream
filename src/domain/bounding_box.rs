@@ -33,7 +33,7 @@ use crate::error::{RcfError, RcfResult};
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::BoundingBox;
+/// use anomstream_rs::BoundingBox;
 ///
 /// let mut bbox = BoundingBox::<2>::from_point(&[0.0, 0.0]).unwrap();
 /// bbox.extend(&[3.0, 4.0]).unwrap();

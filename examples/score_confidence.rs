@@ -6,7 +6,7 @@
 //!
 //! Run with `cargo run --example score_confidence`.
 
-use rcf_rs::{ForestBuilder, RcfError};
+use anomstream_rs::{ForestBuilder, RcfError};
 
 fn main() -> Result<(), RcfError> {
     let mut forest = ForestBuilder::<4>::new()
@@ -29,7 +29,7 @@ fn main() -> Result<(), RcfError> {
     Ok(())
 }
 
-fn print_row(s: &rcf_rs::ScoreWithConfidence) {
+fn print_row(s: &anomstream_rs::ScoreWithConfidence) {
     let (lo, hi) = s.ci95();
     println!(
         "  score = {:.3}  stderr = {:.3}  rel = {:.2}%  95% CI = [{:.3}, {:.3}]",

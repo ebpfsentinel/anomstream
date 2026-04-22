@@ -14,7 +14,7 @@
 
 use std::collections::HashSet;
 
-use rcf_rs::ForestBuilder;
+use anomstream_rs::ForestBuilder;
 
 #[test]
 fn default_forest_has_warmup_gate_disabled() {
@@ -99,11 +99,11 @@ fn forest_builder_validates_initial_accept_fraction() {
         .initial_accept_fraction(1.5)
         .build()
         .unwrap_err();
-    assert!(matches!(err, rcf_rs::RcfError::InvalidConfig(_)));
+    assert!(matches!(err, anomstream_rs::RcfError::InvalidConfig(_)));
 
     let err = ForestBuilder::<4>::new()
         .initial_accept_fraction(0.0)
         .build()
         .unwrap_err();
-    assert!(matches!(err, rcf_rs::RcfError::InvalidConfig(_)));
+    assert!(matches!(err, anomstream_rs::RcfError::InvalidConfig(_)));
 }

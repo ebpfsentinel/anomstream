@@ -1,14 +1,14 @@
 [package]
-name = "rcf-rs"
+name = "anomstream-rs"
 version = "0.0.0-dev"
 edition = "2024"
 rust-version = "1.95"
 license = "Apache-2.0"
-description = "Pure Rust Random Cut Forest for streaming anomaly detection"
-repository = "https://github.com/maximewewer/rcf-rs"
-homepage = "https://github.com/maximewewer/rcf-rs"
+description = "Streaming anomaly detection toolkit — Random Cut Forest plus companion primitives (per-feature EWMA / CUSUM, normalize, sketches)"
+repository = "https://github.com/maximewewer/anomstream-rs"
+homepage = "https://github.com/maximewewer/anomstream-rs"
 readme = "README.md"
-keywords = ["anomaly-detection", "streaming", "random-cut-forest", "outlier", "ml"]
+keywords = ["anomaly-detection", "streaming", "random-cut-forest", "drift-detection", "cusum"]
 categories = ["algorithms", "science", "data-structures"]
 
 [lints.clippy]

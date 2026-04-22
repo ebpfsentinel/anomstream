@@ -7,8 +7,8 @@
 //!
 //! Run with `cargo run --example feature_drift`.
 
-use rcf_rs::RcfError;
-use rcf_rs::feature_drift::{DriftLevel, FeatureDriftDetector};
+use anomstream_rs::RcfError;
+use anomstream_rs::feature_drift::{DriftLevel, FeatureDriftDetector};
 
 fn main() -> Result<(), RcfError> {
     let mut detector: FeatureDriftDetector<3> = FeatureDriftDetector::new(10)?;

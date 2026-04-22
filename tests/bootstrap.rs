@@ -15,9 +15,9 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)] // Bit-exact postcard roundtrip asserts + bounded casts.
 
+use anomstream_rs::{ForestBuilder, TenantForestPool, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{ForestBuilder, TenantForestPool, ThresholdedForestBuilder};
 
 fn noisy(rng: &mut ChaCha8Rng) -> [f64; 4] {
     [
@@ -156,7 +156,7 @@ fn bootstrap_roundtrips_through_persistence() {
         .unwrap();
     d.bootstrap(history(7, 256)).unwrap();
     let bytes = d.to_bytes().unwrap();
-    let back = rcf_rs::ThresholdedForest::<4>::from_bytes(&bytes).unwrap();
+    let back = anomstream_rs::ThresholdedForest::<4>::from_bytes(&bytes).unwrap();
 
     // Observation count and threshold survive byte-for-byte.
     assert_eq!(d.stats().observations(), back.stats().observations());

@@ -6,7 +6,7 @@
 //!
 //! Run: `cargo run --release --example drift_recovery`
 
-use rcf_rs::{AdwinDetector, DriftAwareForest, DriftRecoveryConfig, ForestBuilder};
+use anomstream_rs::{AdwinDetector, DriftAwareForest, DriftRecoveryConfig, ForestBuilder};
 
 const D: usize = 4;
 

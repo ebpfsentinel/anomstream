@@ -2,7 +2,7 @@
 //! Integration-level checks on [`FeatureDriftDetector`] — empirical
 //! PSI / KL behaviour against known distributions.
 
-use rcf_rs::feature_drift::{
+use anomstream_rs::feature_drift::{
     DriftLevel, FeatureDriftDetector, PSI_ALERT_THRESHOLD, PSI_WATCH_THRESHOLD,
 };
 

@@ -11,9 +11,9 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
+use anomstream_rs::{TenantForestPool, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{TenantForestPool, ThresholdedForestBuilder};
 
 fn make_pool() -> TenantForestPool<&'static str, 2> {
     TenantForestPool::new(8, || {

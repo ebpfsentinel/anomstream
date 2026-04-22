@@ -5,9 +5,9 @@
 //!
 //! Run with `cargo run --example calibrator`.
 
+use anomstream_rs::{ForestBuilder, PlattCalibrator, PlattFitConfig, RcfError};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{ForestBuilder, PlattCalibrator, PlattFitConfig, RcfError};
 
 fn main() -> Result<(), RcfError> {
     let mut f = ForestBuilder::<4>::new()

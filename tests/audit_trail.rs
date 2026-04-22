@@ -4,10 +4,10 @@
 
 #![cfg(all(feature = "serde", feature = "postcard", feature = "serde_json"))]
 
-use rcf_rs::audit::{ALERT_RECORD_VERSION, AlertContext, AlertRecord};
-use rcf_rs::{ForestBuilder, SeverityBands, ThresholdedForestBuilder};
+use anomstream_rs::audit::{ALERT_RECORD_VERSION, AlertContext, AlertRecord};
+use anomstream_rs::{ForestBuilder, SeverityBands, ThresholdedForestBuilder};
 
-fn warm_forest() -> rcf_rs::RandomCutForest<4> {
+fn warm_forest() -> anomstream_rs::RandomCutForest<4> {
     let mut f = ForestBuilder::<4>::new()
         .num_trees(50)
         .sample_size(16)

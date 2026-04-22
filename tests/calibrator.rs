@@ -11,9 +11,9 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
+use anomstream_rs::{ForestBuilder, PlattCalibrator, PlattFitConfig, RcfError};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{ForestBuilder, PlattCalibrator, PlattFitConfig, RcfError};
 
 #[test]
 fn fit_then_calibrate_separates_classes() {

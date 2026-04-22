@@ -27,6 +27,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
+name = "anomstream-rs"
+version = "0.0.0-dev"
+dependencies = [
+ "criterion",
+ "getrandom 0.3.4",
+ "mimalloc",
+ "num-traits",
+ "postcard",
+ "proptest",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "wide",
+]
+
+[[package]]
 name = "anstyle"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -641,25 +660,6 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
-]
-
-[[package]]
-name = "rcf-rs"
-version = "0.0.0-dev"
-dependencies = [
- "criterion",
- "getrandom 0.3.4",
- "mimalloc",
- "num-traits",
- "postcard",
- "proptest",
- "rand",
- "rand_chacha",
- "rayon",
- "serde",
- "serde_json",
- "thiserror",
- "wide",
 ]
 
 [[package]]

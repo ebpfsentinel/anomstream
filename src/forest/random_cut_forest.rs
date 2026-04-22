@@ -43,7 +43,7 @@ type TreeSlot<const D: usize> = (RandomCutTree<D>, ReservoirSampler, ChaCha8Rng)
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::ForestBuilder;
+/// use anomstream_rs::ForestBuilder;
 ///
 /// let mut forest = ForestBuilder::<2>::new()
 ///     .num_trees(50)

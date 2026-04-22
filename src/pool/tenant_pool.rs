@@ -176,7 +176,7 @@ impl<K: Clone> Ord for MostSimilarHeapEntry<K> {
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::{TenantForestPool, ThresholdedForestBuilder};
+/// use anomstream_rs::{TenantForestPool, ThresholdedForestBuilder};
 ///
 /// let mut pool: TenantForestPool<String, 2> = TenantForestPool::new(
 ///     4,

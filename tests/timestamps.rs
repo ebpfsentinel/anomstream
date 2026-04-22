@@ -17,9 +17,9 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
+use anomstream_rs::{ForestBuilder, TenantForestPool, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{ForestBuilder, TenantForestPool, ThresholdedForestBuilder};
 
 #[test]
 fn update_at_records_timestamp() {

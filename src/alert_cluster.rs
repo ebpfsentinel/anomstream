@@ -28,7 +28,7 @@
 //!
 //! ```
 //! # #[cfg(feature = "serde")] {
-//! use rcf_rs::{ForestBuilder, AlertClusterer, audit::{AlertRecord, AlertContext}};
+//! use anomstream_rs::{ForestBuilder, AlertClusterer, audit::{AlertRecord, AlertContext}};
 //!
 //! let mut forest = ForestBuilder::<4>::new()
 //!     .num_trees(50).sample_size(16).seed(42).build().unwrap();

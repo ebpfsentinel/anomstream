@@ -3,7 +3,7 @@
 //! restarts without paying the cold-start warmup twice.
 //!
 //! First invocation trains on a burst of noisy points and saves the
-//! thresholded detector to `/tmp/rcf-rs-warm-reload.bin`. Later
+//! thresholded detector to `/tmp/anomstream-rs-warm-reload.bin`. Later
 //! invocations reload that file and continue training, preserving
 //! the EMA stats and reservoir built up on prior runs. An outlier at
 //! the end of every run confirms the adaptive threshold is hot.
@@ -15,13 +15,13 @@
 
 use std::path::PathBuf;
 
+use anomstream_rs::{RcfError, ThresholdedForest, ThresholdedForestBuilder};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{RcfError, ThresholdedForest, ThresholdedForestBuilder};
 
 fn snapshot_path() -> PathBuf {
     let mut p = std::env::temp_dir();
-    p.push("rcf-rs-warm-reload.bin");
+    p.push("anomstream-rs-warm-reload.bin");
     p
 }
 

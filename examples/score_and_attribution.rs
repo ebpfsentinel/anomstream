@@ -11,7 +11,7 @@
 
 use std::time::Instant;
 
-use rcf_rs::{ForestBuilder, RcfError};
+use anomstream_rs::{ForestBuilder, RcfError};
 
 const DIM: usize = 16;
 const ANOM_DIM: usize = 5;
@@ -103,7 +103,7 @@ fn main() -> Result<(), RcfError> {
     Ok(())
 }
 
-/// Tiny linear-congruential RNG so the example has zero non-rcf-rs
+/// Tiny linear-congruential RNG so the example has zero non-anomstream-rs
 /// dependencies — produces uniform `f64` in `[0, 1)`.
 fn simple_lcg(seed: u64) -> impl FnMut() -> f64 {
     let mut state = seed;

@@ -13,9 +13,11 @@
 //!
 //! Run with `cargo run --example meta_drift`.
 
+use anomstream_rs::{
+    CusumConfig, DriftKind, MetaDriftDetector, RcfError, ThresholdedForestBuilder,
+};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{CusumConfig, DriftKind, MetaDriftDetector, RcfError, ThresholdedForestBuilder};
 
 fn tight(rng: &mut ChaCha8Rng) -> [f64; 4] {
     [

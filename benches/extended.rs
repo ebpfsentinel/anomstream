@@ -8,14 +8,14 @@
 
 #![allow(clippy::cast_precision_loss)]
 
+use anomstream_rs::{
+    EarlyTermConfig, ForestBuilder, RandomCutForest, TenantForestPool, ThresholdedForest,
+    ThresholdedForestBuilder,
+};
 use criterion::{Criterion, criterion_group, criterion_main};
 use mimalloc::MiMalloc;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rcf_rs::{
-    EarlyTermConfig, ForestBuilder, RandomCutForest, TenantForestPool, ThresholdedForest,
-    ThresholdedForestBuilder,
-};
 use std::hint::black_box;
 
 #[global_allocator]

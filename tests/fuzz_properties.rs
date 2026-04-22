@@ -18,11 +18,11 @@
 #![cfg(all(feature = "postcard", feature = "serde_json"))]
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
-use proptest::prelude::*;
-use rcf_rs::{
+use anomstream_rs::{
     AnomalyScore, ForestBuilder, RandomCutForest, RcfError, TenantForestPool,
     ThresholdedForestBuilder,
 };
+use proptest::prelude::*;
 
 const D: usize = 4;
 

@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! End-to-end persistence roundtrip tests for [`rcf_rs::RandomCutForest`].
+//! End-to-end persistence roundtrip tests for [`anomstream_rs::RandomCutForest`].
 //!
 //! Bit-exact score roundtrip for binary + JSON, version-mismatch
 //! rejection, malformed-payload rejection, and the four matrix
@@ -10,7 +10,7 @@
 #![cfg(all(feature = "postcard", feature = "serde_json"))]
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)] // Roundtrip asserts bit-exact f64 equality.
 
-use rcf_rs::{ForestBuilder, RandomCutForest, RcfError};
+use anomstream_rs::{ForestBuilder, RandomCutForest, RcfError};
 
 fn trained_2(seed: u64, sample_size: usize, updates: usize, decay: f64) -> RandomCutForest<2> {
     let mut f = ForestBuilder::<2>::new()

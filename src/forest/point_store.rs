@@ -37,7 +37,7 @@ use crate::tree::PointAccessor;
 /// # Examples
 ///
 /// ```
-/// use rcf_rs::PointStore;
+/// use anomstream_rs::PointStore;
 ///
 /// let mut store = PointStore::<2>::new().unwrap();
 /// let idx = store.add([1.0, 2.0]).unwrap();
