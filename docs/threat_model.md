@@ -1,10 +1,12 @@
-# anomstream-core threat model
+# anomstream threat model
 
-Scope: adversarial inputs on the ingress path where `anomstream-core`
-consumes untrusted feature vectors (eBPF NDR agent, MSSP tenant
-pool, public-facing API). Out of scope: host compromise of the
-process running `anomstream-core`, side-channel attacks on Ed25519 license
-verification, upstream supply-chain compromises of rustc /
+Scope: adversarial inputs on the ingress path where the
+`anomstream` workspace (`anomstream-core` detectors +
+`anomstream-hotpath` ingress primitives + `anomstream-triage` SOC
+layer) consumes untrusted feature vectors (eBPF NDR agent, MSSP
+tenant pool, public-facing API). Out of scope: host compromise of
+the process running the workspace, side-channel attacks on Ed25519
+license verification, upstream supply-chain compromises of rustc /
 dependencies.
 
 Referenced: MITRE ATLAS (Adversarial Threat Landscape for AI

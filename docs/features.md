@@ -31,7 +31,7 @@ so their SemVer can evolve at their own cadence:
 | Multi-tenancy | `anomstream-core` |
 | Quality | `anomstream-core` |
 
-Consumers using the [`anomstream`](../../meta/) meta-crate see every
+Consumers using the [`anomstream`](../meta/) meta-crate see every
 type re-exported under a single import path regardless of the owning
 member crate. Direct-dependency consumers import from the owning
 crate explicitly.
@@ -1089,12 +1089,25 @@ pins the offending input.
 
 ### Benchmark suites
 
-`benches/forest_throughput.rs` (core insert/score/attribution
-sweep over the `(trees, samples, D)` matrix), `benches/extended.rs`
-(bulk, early-term, forensic, tenant similarity/cross-tenant), and
-`benches/modules.rs` (post-core modules: hot-path ingress,
-shingled, quantiles, drift detectors, per-feature EWMA/CUSUM,
-sketches, SAGE, Platt, drift-aware, dynamic forest) pin `mimalloc`
-globally and measure wall-clock with criterion. See
-`docs/performance.md` for the current reference numbers on
-`x86_64`.
+Five bench harnesses across the workspace — all pin `mimalloc`
+globally and measure wall-clock with criterion:
+
+- `core/benches/forest_throughput.rs` — core ops (insert, score,
+  attribution, codisp batched + loop) over the
+  `(trees, samples, D)` matrix.
+- `core/benches/extended.rs` — bulk scoring, early-term, forensic,
+  tenant similarity / cross-tenant, stateless codisp, TRCF
+  process, delete.
+- `core/benches/modules.rs` — 20 groups: shingled, quantiles,
+  drift detectors, per-feature EWMA/CUSUM, sketches, normalize,
+  dynamic + drift-aware, plus closing-pass adds (group_scores,
+  attribution_stability, score_ci, bootstrap, persistence).
+- `triage/benches/modules.rs` — LSH clustering, Platt calibration,
+  SAGE explanations, cosine alert clustering, feedback store.
+- `hotpath/benches/modules.rs` — UpdateSampler, PrefixRateCap,
+  bounded MPSC channel.
+
+Run the whole matrix with `cargo bench --workspace`, or target a
+single crate with `cargo bench -p anomstream-core --bench modules`.
+See [`performance.md`](performance.md) for the current reference
+numbers on `x86_64`.

@@ -2,7 +2,7 @@
 
 A composable Rust toolkit for **streaming anomaly detection**. Multiple detector families (multivariate, per-feature, score-level) plus the primitives needed to turn them into production pipelines — streaming stats, normalisation, probability calibration, alert clustering, feedback loops, SOC triage, hot-path ingress.
 
-Among the detectors: an AWS-conformant Random Cut Forest implementation (Guha et al. ICML 2016) — one of several detector.
+Among the detectors: an AWS-conformant Random Cut Forest implementation (Guha et al. ICML 2016) — one of several detectors.
 
 Powers the ML detection pipeline of the **eBPFsentinel Enterprise** NDR agent; designed to be reused anywhere a stream of high-dim observations needs online scoring.
 
@@ -79,7 +79,7 @@ The Random Cut Forest implementation inside the toolkit is a focused port of the
 - `hot_path::UpdateSampler` / `PrefixRateCap` / `channel` — stride - hash + keyed sampler, 256-bucket atomic counter sketch, bounded MPSC channel for classifier/updater thread split
 - `MetricsSink` — pluggable telemetry (`NoopSink` + your own impl)
 
-See [core/docs/features.md](core/docs/features.md) for the full module catalogue with per-feature rationale.
+See [docs/features.md](docs/features.md) for the full module catalogue with per-feature rationale.
 
 ## Crate layout
 
@@ -97,19 +97,17 @@ Three consumption patterns:
 ```toml
 # Most consumers — single dep, all layers, default features.
 [dependencies]
-anomstream = "0.2"
+anomstream = "0.0.0-dev"
 
 # Core-only — detectors + primitives, minimal dep graph.
 [dependencies]
-anomstream = { version = "0.2", default-features = false, features = ["core", "std", "parallel", "serde"] }
+anomstream = { version = "0.0.0-dev", default-features = false, features = ["core", "std", "parallel", "serde"] }
 
 # Fine-grained — pick members directly when you want per-member SemVer tracking.
 [dependencies]
-anomstream-core   = { version = "0.2", features = ["parallel", "serde"] }
-anomstream-triage = { version = "0.2" }
+anomstream-core   = { version = "0.0.0-dev", features = ["parallel", "serde"] }
+anomstream-triage = { version = "0.0.0-dev" }
 ```
-
-See [`_bmad-output/implementation-artifacts/sprint-status.yaml`](../_bmad-output/implementation-artifacts/sprint-status.yaml) under `epic-rcf-ws` for the workspace-split delivery log.
 
 ## Quickstart
 
@@ -205,7 +203,7 @@ The `no_std` configuration is gated in CI (`cargo check --no-default-features` +
 
 ## Performance
 
-See [core/docs/performance.md](core/docs/performance.md) for the full criterion bench matrix. Benches are split across the three member crates: `cargo bench -p anomstream-core --bench modules` (detectors + primitives), `cargo bench -p anomstream-triage --bench modules` (Platt, SAGE, LSH), `cargo bench -p anomstream-hotpath --bench modules` (sampler, rate cap, channel).
+See [docs/performance.md](docs/performance.md) for the full criterion bench matrix. Benches are split across the three member crates: `cargo bench -p anomstream-core --bench modules` (detectors + primitives), `cargo bench -p anomstream-triage --bench modules` (Platt, SAGE, LSH), `cargo bench -p anomstream-hotpath --bench modules` (sampler, rate cap, channel).
 
 ## License
 
