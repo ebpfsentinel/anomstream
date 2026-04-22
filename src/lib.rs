@@ -115,6 +115,8 @@ pub mod audit;
 pub mod bootstrap;
 pub mod calibrator;
 pub mod config;
+#[cfg(feature = "std")]
+pub mod count_min_sketch;
 pub mod domain;
 #[cfg(feature = "std")]
 pub mod drift_aware;
@@ -168,6 +170,8 @@ pub use audit::{ALERT_RECORD_VERSION, AlertContext, AlertRecord};
 pub use bootstrap::BootstrapReport;
 pub use calibrator::{PlattCalibrator, PlattFitConfig};
 pub use config::{ForestBuilder, RcfConfig};
+#[cfg(feature = "std")]
+pub use count_min_sketch::CountMinSketch;
 pub use domain::{AnomalyScore, BoundingBox, Cut, DiVector, Point};
 #[cfg(feature = "std")]
 pub use drift_aware::{DriftAwareForest, DriftRecoveryConfig};

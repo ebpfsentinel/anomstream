@@ -19,9 +19,9 @@ use mimalloc::MiMalloc;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use rcf_rs::{
-    AdwinDetector, CusumConfig, DiVector, DriftAwareForest, DriftRecoveryConfig, DynamicForest,
-    FeatureDriftDetector, ForestBuilder, LshAlertClusterer, MetaDriftDetector, OnlineStats,
-    PlattCalibrator, PlattFitConfig, PotDetector, SageEstimator, ScoreHistogram,
+    AdwinDetector, CountMinSketch, CusumConfig, DiVector, DriftAwareForest, DriftRecoveryConfig,
+    DynamicForest, FeatureDriftDetector, ForestBuilder, LshAlertClusterer, MetaDriftDetector,
+    OnlineStats, PlattCalibrator, PlattFitConfig, PotDetector, SageEstimator, ScoreHistogram,
     ShingledForestBuilder, TDigest, ensemble::fisher_combine, hot_path,
 };
 use std::hint::black_box;
@@ -609,6 +609,51 @@ fn bench_online_stats(c: &mut Criterion) {
     group.finish();
 }
 
+/// `CountMinSketch` — probabilistic frequency sketch. Target:
+/// per-call `increment` + `estimate` cost at AWS-typical size
+/// (`w=2048`, `d=4`), plus a saturation check so the hash-free
+/// accounting path stays in profile.
+fn bench_count_min_sketch(c: &mut Criterion) {
+    let mut group = c.benchmark_group("count_min_sketch");
+
+    group.bench_function("increment_2048x4", |b| {
+        let mut cms = CountMinSketch::new(2048, 4);
+        let mut rng = ChaCha8Rng::seed_from_u64(2026);
+        b.iter(|| {
+            let key: u64 = rng.random();
+            cms.increment(black_box(&key.to_le_bytes()), 1);
+        });
+    });
+
+    group.bench_function("estimate_2048x4", |b| {
+        let mut cms = CountMinSketch::new(2048, 4);
+        let mut rng = ChaCha8Rng::seed_from_u64(2026);
+        for _ in 0..10_000_u64 {
+            let key: u64 = rng.random();
+            cms.increment(&key.to_le_bytes(), 1);
+        }
+        let probe: u64 = rng.random();
+        let probe_bytes = probe.to_le_bytes();
+        b.iter(|| {
+            let v = cms.estimate(black_box(&probe_bytes));
+            black_box(v);
+        });
+    });
+
+    group.bench_function("reset_2048x4", |b| {
+        let mut cms = CountMinSketch::new(2048, 4);
+        for i in 0..1_000_u64 {
+            cms.increment(&i.to_le_bytes(), 1);
+        }
+        b.iter(|| {
+            cms.reset();
+            black_box(&cms);
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_hot_path_sampler,
@@ -627,6 +672,7 @@ criterion_group!(
     bench_dynamic_forest,
     bench_drift_aware,
     bench_sage,
-    bench_online_stats
+    bench_online_stats,
+    bench_count_min_sketch
 );
 criterion_main!(benches);
