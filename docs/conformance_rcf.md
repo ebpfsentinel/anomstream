@@ -8,17 +8,17 @@ feature evolution is driven by eBPFsentinel Enterprise needs.
 
 Regression test: `tests/aws_conformance.rs` pins every row below.
 
-| AWS specification | `anomstream-core` mapping |
-|---|---|
-| `feature_dim ∈ [1, 10000]` | const-generic `D`, validated by `ForestBuilder::build` |
-| `num_trees ∈ [50, 1000]`, default `100` | enforced by `ForestBuilder` |
-| `num_samples_per_tree ∈ [1, 2048]`, default `256` | enforced by `ForestBuilder` |
-| `time_decay = 0.1 / sample_size` | resolved by `ForestBuilder`; pass `.time_decay(0.0)` to disable |
-| `initial_accept_fraction ∈ [0, 1]`, default `1.0` (disabled) | `ForestBuilder::initial_accept_fraction` — pass `0.125` to match AWS `CompactSampler` |
-| Reservoir sampling without replacement | `sampler::ReservoirSampler` |
-| Score = average across trees (isolation depth) | `forest::RandomCutForest::score` (fast, non-mutating, parallel) |
-| Collusive-displacement score (AWS Java / rrcf default) | `forest::RandomCutForest::score_codisp` (probe-based, mutating) or `score_codisp_stateless` (non-mutating, drift-free) |
-| Anomaly threshold `≥ 3σ` from mean | `ThresholdedForest` (default `z_factor = 3.0`), else caller responsibility |
+| AWS specification                                            | `anomstream-core` mapping                                                                                              |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `feature_dim ∈ [1, 10000]`                                   | const-generic `D`, validated by `ForestBuilder::build`                                                                 |
+| `num_trees ∈ [50, 1000]`, default `100`                      | enforced by `ForestBuilder`                                                                                            |
+| `num_samples_per_tree ∈ [1, 2048]`, default `256`            | enforced by `ForestBuilder`                                                                                            |
+| `time_decay = 0.1 / sample_size`                             | resolved by `ForestBuilder`; pass `.time_decay(0.0)` to disable                                                        |
+| `initial_accept_fraction ∈ [0, 1]`, default `1.0` (disabled) | `ForestBuilder::initial_accept_fraction` — pass `0.125` to match AWS `CompactSampler`                                  |
+| Reservoir sampling without replacement                       | `sampler::ReservoirSampler`                                                                                            |
+| Score = average across trees (isolation depth)               | `forest::RandomCutForest::score` (fast, non-mutating, parallel)                                                        |
+| Collusive-displacement score (AWS Java / rrcf default)       | `forest::RandomCutForest::score_codisp` (probe-based, mutating) or `score_codisp_stateless` (non-mutating, drift-free) |
+| Anomaly threshold `≥ 3σ` from mean                           | `ThresholdedForest` (default `z_factor = 3.0`), else caller responsibility                                             |
 
 Extensions beyond the AWS signature:
 
@@ -36,8 +36,8 @@ Extensions beyond the AWS signature:
   right-skewed, not Gaussian. Opt in via
   `ThresholdedForestBuilder::quantile_threshold(p)`.
 - `forensic_baseline(&point)` — repurposes the AWS `ImputeVisitor`
-  concept as a per-dim *"what would this have looked like under
-  the live baseline?"* SOC triage helper. Returns raw-space
+  concept as a per-dim _"what would this have looked like under
+  the live baseline?"_ SOC triage helper. Returns raw-space
   `expected / stddev / delta / zscore`.
 - `score_early_term` — sequential early-termination scoring on
   converged per-tree means, cuts latency on easy points.
@@ -51,7 +51,7 @@ Extensions beyond the AWS signature:
   `score_codisp_stateless`.
 - `score_codisp_stateless` — non-mutating codisp estimate via
   root → leaf descent along stored cuts, `max(sibling_mass /
-  subtree_mass)` per depth. Takes `&self`, rayon-parallel across
+subtree_mass)` per depth. Takes `&self`, rayon-parallel across
   trees, preserves the frozen-baseline promise exactly (zero
   reservoir churn). Aggregate AUC 0.763 on NAB, 0.751 on
   TSB-AD-M — ~0.01-0.02 below the mutating variant, ~12×

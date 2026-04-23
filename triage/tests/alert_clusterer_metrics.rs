@@ -1,9 +1,6 @@
 //! Cross-crate integration — verify `AlertClusterer` (triage)
 //! drives the `MetricsSink` contract (core) through the
-//! `observe` / `prune` lifecycle. Moved from
-//! `core/tests/metrics_and_histogram.rs` during the workspace
-//! split (RCF-WS.3) so triage-specific tests live alongside
-//! their crate.
+//! `observe` / `prune` lifecycle.
 
 #![cfg(all(feature = "postcard", feature = "serde_json"))]
 #![allow(clippy::unwrap_used, clippy::panic)]

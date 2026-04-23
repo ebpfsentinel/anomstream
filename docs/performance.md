@@ -369,9 +369,9 @@ triage / forensic replay territory, **not** per-alert real-time.
 
 ## Per-feature streaming detectors
 
-`D=16`, per-dim accumulators, no forest involvement. All four
-primitives come from the RCF-FW framework expansion (originally
-in enterprise ML, promoted to `anomstream-core` for OSS reuse).
+`D=16`, per-dim accumulators, no forest involvement. These
+primitives were promoted from the downstream enterprise ML layer
+into `anomstream-core` for OSS reuse.
 
 | Workload                                          | Time     | Throughput  |
 | ------------------------------------------------- | -------- | ----------- |
@@ -415,8 +415,8 @@ Insights:
 
 ## Explain + triage additions
 
-Five post-RCF-FW bench groups added in RCF-WS.7 to close the
-coverage gap on the core surface:
+Five bench groups covering explain / triage primitives on the
+core surface:
 
 | Workload                                           | Time    |
 | -------------------------------------------------- | ------- |

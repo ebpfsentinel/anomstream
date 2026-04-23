@@ -1,16 +1,15 @@
 # Features
 
-`anomstream-core` is a **streaming anomaly detection toolkit**, not
-a Random Cut Forest library. Three detector families compose with a
-shared substrate of streaming stats, explanation, triage, and
-hot-path primitives — Random Cut Forest is one detector family
-among several, drawn in wherever isolation-depth scoring makes
-sense.
+`anomstream-core` is a **streaming anomaly detection toolkit**.
+Three detector families compose with a shared substrate of streaming
+stats, explanation, triage, and hot-path primitives — Random Cut Forest
+is one detector family among several, drawn in wherever isolation-depth
+scoring makes sense.
 
 ## Crate layout
 
 Most entries in this catalogue live in `anomstream-core`; a handful
-moved to sibling crates during the workspace split (RCF-WS.3 / .4)
+live in sibling crates (`anomstream-triage`, `anomstream-hotpath`)
 so their SemVer can evolve at their own cadence:
 
 | Section | Owning crate |
