@@ -478,6 +478,43 @@ Algorithms 55(1), 2005.
 
 Source: `src/count_min_sketch.rs`.
 
+### `HyperLogLog` — probabilistic distinct-count sketch
+
+`m = 2^p` register bank. Each `add(x)` hashes `x` to 64 bits,
+uses the top `p` bits as a register index and counts the leading
+zeros of the remaining `64 − p` bits. Per-register state is
+`max(zeros + 1)` across every element routed there. Cardinality
+is recovered by a harmonic mean of `2^(-register)` with an `α_m`
+bias correction, plus small-range linear counting when many
+registers are still empty.
+
+Memory is `m` bytes (one `u8` per register); typical `p=12`
+gives 4 KiB + ≈1.625 % standard error, `p=14` → 16 KiB + 0.81 %,
+`p=16` → 64 KiB + 0.40 %.
+
+Gated behind `std` (uses `std::hash::DefaultHasher` — SipHash).
+
+API: `new(p)` + `with_default_precision()` (`p=12`) +
+`add<T: Hash>(&mut self, v: &T)` + `add_bytes(&mut self, &[u8])`
++ `add_hash(&mut self, u64)` (escape hatch for keyed hashers) +
+`estimate(&self) -> u64` + `merge(&mut self, &Self)` (cross-shard
+aggregation — per-register max) + `reset()` + accessors
+(`register_count`, `precision`, `memory_bytes`, `total_added`).
+
+Types: `HyperLogLog`, `HLL_DEFAULT_PRECISION`,
+`HLL_MIN_PRECISION`, `HLL_MAX_PRECISION`.
+
+References:
+
+1. P. Flajolet, É. Fusy, O. Gandouet, F. Meunier, *HyperLogLog:
+   the analysis of a near-optimal cardinality estimation
+   algorithm*, AofA 2007.
+2. S. Heule, M. Nunkesser, A. Hall, *HyperLogLog in Practice:
+   Algorithmic Engineering of a State of the Art Cardinality
+   Estimation Algorithm*, EDBT 2013.
+
+Source: `src/hyperloglog.rs`.
+
 ### `Normalizer<D>` — per-feature min-max / z-score
 
 Rescales a `D`-dimensional point into `[0, 1]` (MinMax) or

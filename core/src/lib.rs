@@ -181,6 +181,8 @@ pub mod forensic;
 pub mod forest;
 pub mod group_score;
 pub mod histogram;
+#[cfg(feature = "std")]
+pub mod hyperloglog;
 pub mod meta_drift;
 pub mod metrics;
 pub mod normalize;
@@ -228,6 +230,11 @@ pub use forensic::ForensicBaseline;
 pub use forest::{ForestSnapshot, PointStore, RandomCutForest};
 pub use group_score::{FeatureGroup, FeatureGroups, FeatureGroupsBuilder, GroupScores};
 pub use histogram::{HistogramConfig, ScoreHistogram};
+#[cfg(feature = "std")]
+pub use hyperloglog::{
+    DEFAULT_PRECISION as HLL_DEFAULT_PRECISION, HyperLogLog, MAX_PRECISION as HLL_MAX_PRECISION,
+    MIN_PRECISION as HLL_MIN_PRECISION,
+};
 pub use meta_drift::{CusumConfig, DriftKind, DriftVerdict, MetaDriftDetector};
 pub use metrics::{MetricsSink, NoopSink};
 pub use normalize::{NormParams, NormStrategy, Normalizer};

@@ -16,10 +16,10 @@
 
 use anomstream_core::{
     AdwinDetector, CountMinSketch, CusumConfig, DriftAwareForest, DriftRecoveryConfig,
-    DynamicForest, FeatureDriftDetector, FeatureGroups, ForestBuilder, MetaDriftDetector,
-    NormStrategy, Normalizer, OnlineStats, PerFeatureCusum, PerFeatureCusumConfig, PerFeatureEwma,
-    PerFeatureEwmaConfig, PotDetector, RandomCutForest, ScoreHistogram, ShingledForestBuilder,
-    TDigest, ensemble::fisher_combine,
+    DynamicForest, FeatureDriftDetector, FeatureGroups, ForestBuilder, HyperLogLog,
+    MetaDriftDetector, NormStrategy, Normalizer, OnlineStats, PerFeatureCusum,
+    PerFeatureCusumConfig, PerFeatureEwma, PerFeatureEwmaConfig, PotDetector, RandomCutForest,
+    ScoreHistogram, ShingledForestBuilder, TDigest, ensemble::fisher_combine,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 use mimalloc::MiMalloc;
@@ -797,6 +797,61 @@ fn bench_persistence(c: &mut Criterion) {
 #[cfg(not(all(feature = "postcard", feature = "serde")))]
 fn bench_persistence(_: &mut Criterion) {}
 
+/// `HyperLogLog` — cardinality sketch. Target: per-sample `add`
+/// cost at `p=12` (4 096 registers, ~1.6 % std error), plus
+/// `estimate` read cost after warming and a shard-merge pass.
+fn bench_hyperloglog(c: &mut Criterion) {
+    let mut group = c.benchmark_group("hyperloglog");
+
+    group.bench_function("add_bytes_p12", |b| {
+        let mut hll = HyperLogLog::with_default_precision();
+        let mut rng = ChaCha8Rng::seed_from_u64(2026);
+        b.iter(|| {
+            let v: u64 = rng.random();
+            hll.add_bytes(black_box(&v.to_le_bytes()));
+        });
+    });
+
+    group.bench_function("add_hash_p12", |b| {
+        let mut hll = HyperLogLog::with_default_precision();
+        let mut rng = ChaCha8Rng::seed_from_u64(2026);
+        b.iter(|| {
+            let h: u64 = rng.random();
+            hll.add_hash(black_box(h));
+        });
+    });
+
+    group.bench_function("estimate_after_100k_p12", |b| {
+        let mut hll = HyperLogLog::with_default_precision();
+        let mut rng = ChaCha8Rng::seed_from_u64(2026);
+        for _ in 0..100_000 {
+            let v: u64 = rng.random();
+            hll.add_bytes(&v.to_le_bytes());
+        }
+        b.iter(|| {
+            let n = hll.estimate();
+            black_box(n);
+        });
+    });
+
+    group.bench_function("merge_p12", |b| {
+        let mut a = HyperLogLog::with_default_precision();
+        let mut b_hll = HyperLogLog::with_default_precision();
+        let mut rng = ChaCha8Rng::seed_from_u64(2026);
+        for _ in 0..50_000 {
+            a.add_bytes(&rng.random::<u64>().to_le_bytes());
+            b_hll.add_bytes(&rng.random::<u64>().to_le_bytes());
+        }
+        b.iter(|| {
+            let mut scratch = a.clone();
+            scratch.merge(black_box(&b_hll)).expect("merge");
+            black_box(scratch);
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_shingled,
@@ -818,6 +873,7 @@ criterion_group!(
     bench_attribution_stability,
     bench_score_with_confidence,
     bench_bootstrap,
-    bench_persistence
+    bench_persistence,
+    bench_hyperloglog
 );
 criterion_main!(benches);

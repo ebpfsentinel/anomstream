@@ -11,7 +11,7 @@ the workspace:
 - `core/benches/modules.rs` — 20 groups: shingled forest, t-digest
   / histogram, feature / meta drift, ADWIN, SPOT/DSPOT, Fisher,
   dynamic-dim forest, drift-aware shadow swap, companion
-  primitives (OnlineStats / CountMinSketch / Normalizer /
+  primitives (OnlineStats / CountMinSketch / HyperLogLog / Normalizer /
   PerFeatureEwma / PerFeatureCusum), and five explain / triage
   extras (group_scores / attribution_stability / score_ci /
   bootstrap / persistence).
@@ -386,6 +386,10 @@ into `anomstream-core` for OSS reuse.
 | `CountMinSketch::increment` w=2048 d=4            | 65 ns    | ~15 M/s     |
 | `CountMinSketch::estimate` w=2048 d=4             | 61 ns    | ~16 M/s     |
 | `CountMinSketch::reset` w=2048 d=4                | 808 ns   | per-reset   |
+| `HyperLogLog::add_bytes` p=12                     | 11.5 ns  | ~87 M/s     |
+| `HyperLogLog::add_hash` p=12                      | 2.7 ns   | ~370 M/s    |
+| `HyperLogLog::estimate` after 100k adds, p=12     | 18.6 µs  | query-only  |
+| `HyperLogLog::merge` two p=12 sketches            | 1.64 µs  | per-merge   |
 | `PerFeatureEwma<16>::observe` (warmed)            | 129 ns   | ~7.8 M/s    |
 | `PerFeatureEwma<16>::observe` (spike path)        | 96 ns    | ~10 M/s     |
 | `PerFeatureEwma<16>::observe` (cold/warmup)       | 1.50 µs  | batch-only  |
