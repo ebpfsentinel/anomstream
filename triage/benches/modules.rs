@@ -28,16 +28,15 @@ fn bench_lsh_cluster(c: &mut Criterion) {
     let mut di = DiVector::zeros(16);
     di.add_high(3, 2.5).expect("add_high");
     di.add_low(7, 1.5).expect("add_low");
-    let rec: AlertRecord<u32, 16> = AlertRecord {
-        version: anomstream_triage::ALERT_RECORD_VERSION,
-        tenant: Some(1_u32),
-        timestamp_ms: 0,
-        point: [0.0; 16],
-        score: AnomalyScore::new(1.0).expect("score"),
-        grade: None,
-        severity: None,
-        attribution: di.clone(),
-        baseline: ForensicBaseline::<16> {
+    let rec: AlertRecord<u32, 16> = AlertRecord::new(
+        Some(1_u32),
+        0,
+        [0.0; 16],
+        AnomalyScore::new(1.0).expect("score"),
+        None,
+        None,
+        di.clone(),
+        ForensicBaseline::<16> {
             observed: [0.0; 16],
             expected: [0.0; 16],
             stddev: [0.0; 16],
@@ -45,7 +44,7 @@ fn bench_lsh_cluster(c: &mut Criterion) {
             zscore: [0.0; 16],
             live_points: 0,
         },
-    };
+    );
 
     group.bench_function("hash_divector_d16", |b| {
         let clusterer = LshAlertClusterer::default_lsh();

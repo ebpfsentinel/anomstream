@@ -24,6 +24,7 @@ use crate::thresholded::AnomalyGrade;
 /// policies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Severity {
     /// Score below the `low` threshold — no alert.
     Normal,

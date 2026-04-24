@@ -35,6 +35,7 @@ use alloc::vec::Vec;
 /// Direction of a detected change-point drift.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum DriftDirection {
     /// Sustained increase above the reference mean.
     Increase,
@@ -349,6 +350,7 @@ impl<const D: usize> PerFeatureCusum<D> {
 
     /// Ingest `input`, returning per-feature magnitudes and any
     /// alerts that fired. Always updates the accumulators.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, input: &[f64; D]) -> PerFeatureCusumResult<D> {
         let mut per_feature_magnitude = [0.0_f64; D];
         let mut alerts: Vec<PerFeatureCusumAlert> = Vec::new();
@@ -457,7 +459,7 @@ mod tests {
             slack: 0.5,
             threshold: 5.0,
         });
-        det.observe(&[100.0]);
+        let _ = det.observe(&[100.0]);
         let mut alerted = false;
         for _ in 0..20 {
             let out = det.observe(&[105.0]);
@@ -477,7 +479,7 @@ mod tests {
             slack: 0.5,
             threshold: 5.0,
         });
-        det.observe(&[100.0]);
+        let _ = det.observe(&[100.0]);
         let mut alerted = false;
         for _ in 0..20 {
             let out = det.observe(&[95.0]);
@@ -496,16 +498,16 @@ mod tests {
             slack: 0.5,
             threshold: 5.0,
         });
-        det.observe(&[100.0]);
+        let _ = det.observe(&[100.0]);
         for _ in 0..20 {
-            det.observe(&[105.0]);
+            let _ = det.observe(&[105.0]);
         }
         assert!(det.accumulators()[0].drift_samples > 0);
         // Return to reference — S+ decays by `slack` per tick.
         // 20 steps of +4.5 each ≈ S+=90 at trip; 200 steps of
         // −0.5 brings it back below threshold (5).
         for _ in 0..250 {
-            det.observe(&[100.0]);
+            let _ = det.observe(&[100.0]);
         }
         assert_eq!(det.accumulators()[0].drift_samples, 0);
     }
@@ -533,9 +535,9 @@ mod tests {
             slack: 0.5,
             threshold: 5.0,
         });
-        det.observe(&[0.0, 0.0, 0.0]);
+        let _ = det.observe(&[0.0, 0.0, 0.0]);
         for _ in 0..20 {
-            det.observe(&[0.0, 10.0, 0.0]);
+            let _ = det.observe(&[0.0, 10.0, 0.0]);
         }
         let out = det.observe(&[0.0, 10.0, 0.0]);
         assert_eq!(out.max_magnitude, out.per_feature_magnitude[1]);
@@ -549,9 +551,9 @@ mod tests {
             slack: 0.5,
             threshold: 5.0,
         });
-        det.observe(&[100.0, 200.0]);
+        let _ = det.observe(&[100.0, 200.0]);
         for _ in 0..20 {
-            det.observe(&[110.0, 220.0]);
+            let _ = det.observe(&[110.0, 220.0]);
         }
         assert!(det.active_drifts() > 0);
         det.reset();
@@ -570,9 +572,9 @@ mod tests {
             slack: 0.5,
             threshold: 5.0,
         });
-        det.observe(&[100.0, 100.0]);
+        let _ = det.observe(&[100.0, 100.0]);
         for _ in 0..20 {
-            det.observe(&[110.0, 100.0]);
+            let _ = det.observe(&[110.0, 100.0]);
         }
         // Only feature 0 is drifting.
         assert_eq!(det.active_drifts(), 1);
@@ -585,9 +587,9 @@ mod tests {
             slack: 0.5,
             threshold: 5.0,
         });
-        det.observe(&[100.0, 200.0, 300.0]);
+        let _ = det.observe(&[100.0, 200.0, 300.0]);
         for _ in 0..10 {
-            det.observe(&[105.0, 200.0, 300.0]);
+            let _ = det.observe(&[105.0, 200.0, 300.0]);
         }
         let bytes = postcard::to_allocvec(&det).expect("serde ok");
         let back: PerFeatureCusum<3> = postcard::from_bytes(&bytes).expect("serde ok");

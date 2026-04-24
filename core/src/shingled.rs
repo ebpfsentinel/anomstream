@@ -128,6 +128,7 @@ impl<const D: usize> ShingledForestBuilder<D> {
     /// # Errors
     ///
     /// Propagates [`ForestBuilder::build`] errors.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn build(self) -> RcfResult<ShingledForest<D>> {
         let forest = self.inner.build()?;
         Ok(ShingledForest {
@@ -223,6 +224,7 @@ impl<const D: usize> ShingledForest<D> {
     /// - [`RcfError::NaNValue`] on non-finite `value`.
     /// - Propagates [`RandomCutForest::update`] failures once the
     ///   shingle is submitted.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn update_scalar(&mut self, value: f64) -> RcfResult<bool> {
         if !value.is_finite() {
             return Err(RcfError::NaNValue);
@@ -258,6 +260,7 @@ impl<const D: usize> ShingledForest<D> {
     /// - [`RcfError::EmptyForest`] before the ring buffer is full
     ///   or the forest has not yet received its first update.
     /// - Propagates [`RandomCutForest::score`] failures.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_scalar(&self, value: f64) -> RcfResult<AnomalyScore> {
         if !value.is_finite() {
             return Err(RcfError::NaNValue);
@@ -273,6 +276,7 @@ impl<const D: usize> ShingledForest<D> {
     /// # Errors
     ///
     /// Same as [`Self::score_scalar`].
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn attribution_scalar(&self, value: f64) -> RcfResult<DiVector> {
         if !value.is_finite() {
             return Err(RcfError::NaNValue);

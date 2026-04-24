@@ -233,6 +233,7 @@ impl<const D: usize> PerFeatureEwma<D> {
     /// Ingest `input`, returning the per-feature z-scores *iff*
     /// warmup is complete. Accumulators are always updated so a
     /// disabled caller can still warm the detector.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, input: &[f64; D]) -> Option<PerFeatureEwmaResult<D>> {
         let result = if self.is_warmed_up() {
             let mut per_feature_z = [0.0_f64; D];
@@ -289,7 +290,7 @@ mod tests {
             warmup_samples: 5,
         });
         for _ in 0..10 {
-            ewma.observe(&[1.0, 2.0]);
+            let _ = ewma.observe(&[1.0, 2.0]);
         }
         assert!(ewma.is_warmed_up());
         let out = ewma.observe(&[1.0, 2.0]).expect("warmed");
@@ -305,7 +306,7 @@ mod tests {
             warmup_samples: 5,
         });
         for _ in 0..20 {
-            ewma.observe(&[7.0]);
+            let _ = ewma.observe(&[7.0]);
         }
         let out = ewma.observe(&[7.0]).expect("warmed");
         assert_eq!(out.per_feature_z[0], 0.0);
@@ -320,7 +321,7 @@ mod tests {
             warmup_samples: 5,
         });
         for _ in 0..50 {
-            ewma.observe(&[7.0]);
+            let _ = ewma.observe(&[7.0]);
         }
         let out = ewma.observe(&[1000.0]).expect("warmed");
         assert_eq!(out.per_feature_z[0], f64::MAX);
@@ -337,7 +338,7 @@ mod tests {
         // Warmup with non-zero variance on every dim so z is finite.
         for i in 0..30 {
             let v = 10.0 + f64::from(i % 3) - 1.0;
-            ewma.observe(&[v, v, v]);
+            let _ = ewma.observe(&[v, v, v]);
         }
         let mut probe = [10.0_f64; 3];
         probe[1] = 1000.0;
@@ -358,12 +359,12 @@ mod tests {
             warmup_samples: 5,
         });
         for _ in 0..20 {
-            fast.observe(&[10.0]);
-            slow.observe(&[10.0]);
+            let _ = fast.observe(&[10.0]);
+            let _ = slow.observe(&[10.0]);
         }
         for _ in 0..10 {
-            fast.observe(&[20.0]);
-            slow.observe(&[20.0]);
+            let _ = fast.observe(&[20.0]);
+            let _ = slow.observe(&[20.0]);
         }
         let fast_out = fast.observe(&[20.0]).expect("warmed");
         let slow_out = slow.observe(&[20.0]).expect("warmed");
@@ -377,7 +378,7 @@ mod tests {
             warmup_samples: 5,
         });
         for _ in 0..20 {
-            ewma.observe(&[10.0, 20.0]);
+            let _ = ewma.observe(&[10.0, 20.0]);
         }
         assert!(ewma.is_warmed_up());
         ewma.reset();
@@ -408,7 +409,7 @@ mod tests {
         });
         for i in 0..30 {
             let v = 10.0 + f64::from(i % 5);
-            ewma.observe(&[v, v * 2.0, v * 3.0]);
+            let _ = ewma.observe(&[v, v * 2.0, v * 3.0]);
         }
         let bytes = postcard::to_allocvec(&ewma).expect("serde ok");
         let mut back: PerFeatureEwma<3> = postcard::from_bytes(&bytes).expect("serde ok");

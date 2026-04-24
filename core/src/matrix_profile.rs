@@ -99,6 +99,7 @@ impl MatrixProfile {
     /// when the series is too short (`series.len() < 2 · window`),
     /// when `series` contains a non-finite value, or when
     /// `exclusion_zone` would leave zero valid neighbours.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn compute(
         series: &[f64],
         window: usize,
@@ -217,7 +218,7 @@ impl MatrixProfile {
 
     /// Discord — subsequence whose nearest neighbour is farthest.
     /// Returns `(start_index, distance)`.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn discord(&self) -> (usize, f64) {
         self.profile
             .iter()
@@ -231,7 +232,7 @@ impl MatrixProfile {
     /// that skips any candidate within the exclusion zone of an
     /// already-emitted discord — prevents the top-`k` from
     /// clustering inside a single anomalous region.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn discord_topk(&self, k: usize) -> Vec<(usize, f64)> {
         let mut candidates: Vec<(usize, f64)> = self.profile.iter().copied().enumerate().collect();
         candidates.sort_by(|a, b| b.1.total_cmp(&a.1));
@@ -256,7 +257,7 @@ impl MatrixProfile {
 
     /// Motif — subsequence whose nearest neighbour is closest.
     /// Returns `(start_index, distance)`.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn motif(&self) -> (usize, f64) {
         self.profile
             .iter()

@@ -37,6 +37,7 @@ pub const DEFAULT_ATTR_CAP: f64 = 8.0;
 
 /// Cluster decision emitted by [`LshAlertClusterer::observe`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LshClusterDecision {
     /// No bucket held a prior alert with this hash — new cluster
     /// opened at the returned hash.
@@ -140,6 +141,7 @@ impl LshAlertClusterer {
     /// Observe an alert. Hashes its attribution via
     /// [`Self::hash_divector`], increments the bucket counter,
     /// returns the bucket hash + the cluster decision.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn observe<K, const D: usize>(
         &mut self,
         record: &AlertRecord<K, D>,
@@ -335,9 +337,9 @@ mod tests {
         let mut di = DiVector::zeros(2);
         di.add_high(0, 1.0).unwrap();
         let r = record_with_di(di.clone());
-        c.observe(&record_with_di(di.clone()));
-        c.observe(&record_with_di(di.clone()));
-        c.observe(&record_with_di(di));
+        let _ = c.observe(&record_with_di(di.clone()));
+        let _ = c.observe(&record_with_di(di.clone()));
+        let _ = c.observe(&record_with_di(di));
         let _ = r;
         assert_eq!(c.observed_total(), 3);
         assert_eq!(c.new_cluster_total(), 1);
@@ -349,7 +351,7 @@ mod tests {
         let mut c = LshAlertClusterer::default_lsh();
         let mut di = DiVector::zeros(2);
         di.add_high(0, 1.0).unwrap();
-        c.observe(&record_with_di(di));
+        let _ = c.observe(&record_with_di(di));
         c.clear_buckets();
         assert_eq!(c.cluster_count(), 0);
         assert_eq!(c.observed_total(), 1);

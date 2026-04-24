@@ -611,6 +611,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///   leaf.
     /// - [`RcfError::InvalidConfig`] when `config.validate` rejects
     ///   the supplied early-term configuration.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_early_term(
         &self,
         point: &[f64; D],
@@ -694,6 +695,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// - [`RcfError::NaNValue`] when `point` contains a non-finite component.
     /// - [`RcfError::EmptyForest`] when no tree currently holds any leaf.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score(&self, point: &[f64; D]) -> RcfResult<AnomalyScore> {
         self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
@@ -745,6 +747,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// - [`RcfError::EmptyForest`] when no tree holds any leaf.
     /// - [`RcfError::InvalidConfig`] when
     ///   `trim_fraction ∉ [0.0, 0.5)`.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_trimmed(&self, point: &[f64; D], trim_fraction: f64) -> RcfResult<AnomalyScore> {
         if !(0.0..0.5).contains(&trim_fraction) || !trim_fraction.is_finite() {
             return Err(RcfError::InvalidConfig(format!(
@@ -838,6 +841,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// - [`RcfError::EmptyForest`] when no tree accepted the probe
     ///   (every tree's reservoir rejected it).
     /// - Propagates [`Self::update_indexed`] / [`Self::delete`] failures.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_codisp(&mut self, point: &[f64; D]) -> RcfResult<AnomalyScore> {
         self.ensure_finite_metered(point)?;
         let idx = self.update_indexed(*point)?;
@@ -1088,6 +1092,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// # Errors
     ///
     /// Same as [`Self::score`].
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_with_confidence(
         &self,
         point: &[f64; D],
@@ -1145,6 +1150,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// # Errors
     ///
     /// Same as [`score`](Self::score).
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn attribution(&self, point: &[f64; D]) -> RcfResult<DiVector> {
         self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
@@ -1186,6 +1192,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// # Errors
     ///
     /// Same as [`Self::score`] / [`Self::attribution`].
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_and_attribution(&self, point: &[f64; D]) -> RcfResult<(AnomalyScore, DiVector)> {
         self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
@@ -1236,6 +1243,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Propagates any [`Self::score`] error hit while processing
     /// the batch.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_many(&self, points: &[[f64; D]]) -> RcfResult<Vec<AnomalyScore>> {
         #[cfg(feature = "parallel")]
         {
@@ -1296,6 +1304,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Propagates any [`Self::score_early_term`] error hit while
     /// processing the batch.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_many_early_term(
         &self,
         points: &[[f64; D]],

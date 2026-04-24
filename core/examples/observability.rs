@@ -46,12 +46,12 @@ fn main() -> Result<(), RcfError> {
     for _ in 0..2048 {
         let p = [rng.random::<f64>() * 0.1, rng.random::<f64>() * 0.1];
         let verdict = detector.process(p)?;
-        drift.observe(f64::from(verdict.score()));
+        let _ = drift.observe(f64::from(verdict.score()));
         score_hist.record(f64::from(verdict.score()));
     }
     for _ in 0..10 {
         let verdict = detector.process([50.0, 50.0])?;
-        drift.observe(f64::from(verdict.score()));
+        let _ = drift.observe(f64::from(verdict.score()));
         score_hist.record(f64::from(verdict.score()));
     }
 

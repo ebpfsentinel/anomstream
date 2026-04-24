@@ -58,6 +58,7 @@ pub const DEFAULT_CAPACITY: usize = 512;
 /// Analyst verdict attached to a stored point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FeedbackLabel {
     /// False positive — the raw score was too high; the probe
     /// should score **down** toward baseline.
@@ -251,7 +252,7 @@ impl<const D: usize> FeedbackStore<D> {
     ///
     /// Returns `raw_score` unchanged when the store is empty or
     /// when `probe` contains a non-finite component.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn adjust(&self, probe: &[f64; D], raw_score: f64) -> f64 {
         if self.entries.is_empty() || !probe.iter().all(|v| v.is_finite()) {
             return raw_score;

@@ -321,7 +321,7 @@ impl PlattCalibrator {
     /// Calibrate a raw score to `P(y = 1 | score) ∈ [0, 1]`.
     /// Non-finite inputs are mapped to `0.5` (maximum entropy,
     /// no-signal) rather than propagating NaN.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn calibrate(&self, score: f64) -> f64 {
         if !score.is_finite() {
             return 0.5;

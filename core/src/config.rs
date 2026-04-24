@@ -83,6 +83,7 @@ pub const DEFAULT_INITIAL_ACCEPT_FRACTION: f64 = 1.0;
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "RcfConfigShadow"))]
+#[non_exhaustive]
 pub struct RcfConfig {
     /// Number of trees in the forest (`num_trees`).
     pub num_trees: usize,
@@ -422,7 +423,7 @@ impl<const D: usize> ForestBuilder<D> {
     }
 
     /// Read-only access to the config under construction.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn config(&self) -> &RcfConfig {
         &self.config
     }
@@ -439,6 +440,7 @@ impl<const D: usize> ForestBuilder<D> {
     ///
     /// Forwards [`RcfConfig::validate`] errors and propagates any
     /// failure from the underlying [`RandomCutForest`] constructor.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn build(self) -> RcfResult<RandomCutForest<D>> {
         RcfConfig::validate_dimension(D)?;
         self.config.validate()?;

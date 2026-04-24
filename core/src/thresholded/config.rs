@@ -51,6 +51,7 @@ pub const DEFAULT_MIN_THRESHOLD: f64 = 1.0;
 /// alert-rate budget (e.g. `p = 0.99` ≈ 1 % firing rate).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum ThresholdMode {
     /// Classic `mean + z · stddev` on the EMA of the score stream.
     /// Back-compat default; keep this mode for Gaussian-like scores
@@ -326,6 +327,7 @@ impl<const D: usize> ThresholdedForestBuilder<D> {
     ///
     /// Propagates [`ForestBuilder::build`] errors and
     /// [`ThresholdedConfig::validate`] errors.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn build(self) -> RcfResult<ThresholdedForest<D>> {
         self.thresholded.validate()?;
         let forest = self.forest.build()?;

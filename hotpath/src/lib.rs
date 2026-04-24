@@ -84,6 +84,7 @@ use anomstream_core::metrics::{MetricsSink, default_sink, names};
 /// `keep_every_n = 0` and `keep_every_n = 1` both disable sampling
 /// (every offer is accepted). Values `>= 2` gate proportionally.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct UpdateSampler {
     /// Divisor: keep `1 / keep_every_n` offered updates.
     keep_every_n: u32,
@@ -300,6 +301,7 @@ impl UpdateSampler {
 /// this handle per classifier thread. `try_enqueue` is non-blocking
 /// — on queue full it returns `false` and increments `dropped_total`.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct UpdateProducer<const D: usize> {
     /// Underlying bounded MPSC sender.
     tx: SyncSender<[f64; D]>,
@@ -377,6 +379,7 @@ impl<const D: usize> UpdateProducer<D> {
 /// Consumer end of the hot-path update queue. Single-consumer: hand
 /// this handle to the dedicated updater thread.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct UpdateConsumer<const D: usize> {
     /// Underlying MPSC receiver.
     rx: Receiver<[f64; D]>,
@@ -474,6 +477,7 @@ pub fn channel_with_sink<const D: usize>(
 /// }
 /// ```
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct PrefixRateCap {
     /// Per-bucket admit counter. 256 buckets keep the struct at
     /// 1 KiB and give tolerable collision rates for typical

@@ -31,7 +31,7 @@ fn main() -> Result<(), RcfError> {
     for i in 0..50 {
         let jitter = f64::from(i) * 0.001;
         let rec = AlertRecord::from_forest(&forest, &[10.0 + jitter, 10.0, 10.0, 10.0], &ctx_a)?;
-        clusterer.observe(rec);
+        let _ = clusterer.observe(rec);
     }
     let ctx_b = AlertContext::<String>::for_tenant("tenant-b".into(), 2_000);
     let outlier = AlertRecord::from_forest(&forest, &[0.0, 0.0, 0.0, 50.0], &ctx_b)?;

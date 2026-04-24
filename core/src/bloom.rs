@@ -261,21 +261,21 @@ impl BloomFilter {
 
     /// Query a `Hash`-able value. Returns `true` when every probed
     /// bit is set — may be a false positive, never a false negative.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn contains<T: Hash + ?Sized>(&self, value: &T) -> bool {
         let (h1, h2) = double_hash(value);
         self.contains_hash(h1, h2)
     }
 
     /// Query a raw byte key.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn contains_bytes(&self, key: &[u8]) -> bool {
         let (h1, h2) = double_hash(key);
         self.contains_hash(h1, h2)
     }
 
     /// Query with a caller-supplied `(h1, h2)` pair.
-    #[must_use]
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn contains_hash(&self, h1: u64, h2: u64) -> bool {
         for i in 0..self.num_hashes {
             let idx = self.combined_index(h1, h2, i);

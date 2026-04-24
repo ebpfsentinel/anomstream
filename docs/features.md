@@ -1199,6 +1199,29 @@ evasion via contextual shift, model extraction, and classifier-
 side resource exhaustion — with the MITRE ATLAS technique IDs
 and the defences shipped in-crate for each.
 
+### SemVer hygiene (v1)
+
+Public enums expected to grow carry `#[non_exhaustive]` so additive
+variants do not require a major version bump — callers must use a
+`_` wildcard arm. Enums tagged: `DriftLevel`, `DriftDirection`,
+`DriftKind`, `Severity`, `ThresholdMode`, `ClusterDecision`,
+`FeedbackLabel`, `LshClusterDecision`.
+
+Public structs with `pub` fields carry `#[non_exhaustive]` so
+additional fields can be added without breaking downstream literal
+construction: `RcfConfig`, `AlertRecord`, `UpdateSampler`,
+`UpdateProducer`, `UpdateConsumer`, `PrefixRateCap`. Assemble
+`AlertRecord` through `AlertRecord::new(...)` /
+`AlertRecord::from_forest(...)` / `AlertRecord::from_thresholded(...)`
+rather than a struct literal.
+
+Every `.score*()` on `RandomCutForest`, every `ForestBuilder` /
+`ShingledForestBuilder` / `ThresholdedForestBuilder` build method,
+and every `.observe()` / `.update()` / `.record()` /
+`.process()` / `.adjust()` / `.explain()` returning a non-unit
+verdict is `#[must_use = "…"]`. Drops in hot paths must use
+`let _ = detector.observe(x);` explicitly.
+
 ### Serde deserialization hardening
 
 All stateful public types that derive `Deserialize` route through

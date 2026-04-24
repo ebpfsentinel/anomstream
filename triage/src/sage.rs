@@ -133,6 +133,7 @@ impl<const D: usize> SageEstimator<D> {
     /// # Errors
     ///
     /// Propagates [`RandomCutForest::score`] failures.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn explain(
         &self,
         forest: &RandomCutForest<D>,

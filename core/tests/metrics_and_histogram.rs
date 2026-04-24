@@ -113,7 +113,7 @@ fn drift_sink_records_cusum_and_fires() {
     .with_metrics_sink(sink.clone());
 
     for _ in 0..64 {
-        drift.observe(1.0);
+        let _ = drift.observe(1.0);
     }
     for _ in 0..200 {
         let v = drift.observe(5.0);
@@ -325,7 +325,7 @@ fn drift_sink_splits_upward_and_downward() {
 
     // Warm the EMA, then drive score upward.
     for _ in 0..64 {
-        drift.observe(1.0);
+        let _ = drift.observe(1.0);
     }
     for _ in 0..200 {
         if drift.observe(5.0).drift.is_some() {

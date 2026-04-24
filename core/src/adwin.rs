@@ -178,6 +178,7 @@ impl AdwinDetector {
     /// Returns `false` otherwise (no drift on this update).
     ///
     /// Non-finite values are silently dropped.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn update(&mut self, value: f64) -> bool {
         if !value.is_finite() {
             return false;
@@ -282,7 +283,7 @@ mod tests {
         let mut d = AdwinDetector::default_bounded();
         // Fill with baseline mean 0.1.
         for _ in 0..256 {
-            d.update(0.1);
+            let _ = d.update(0.1);
         }
         // Shift to mean 0.9 — should trigger within a handful of
         // post-shift samples.
@@ -309,7 +310,7 @@ mod tests {
     fn window_respects_cap() {
         let mut d = AdwinDetector::new(1.0, DEFAULT_DELTA, 64).unwrap();
         for i in 0..200 {
-            d.update(f64::from(i % 2));
+            let _ = d.update(f64::from(i % 2));
         }
         assert!(d.len() <= 64);
     }
@@ -318,7 +319,7 @@ mod tests {
     fn reset_window_clears_buffer() {
         let mut d = AdwinDetector::default_bounded();
         for _ in 0..100 {
-            d.update(0.5);
+            let _ = d.update(0.5);
         }
         d.reset_window();
         assert!(d.is_empty());

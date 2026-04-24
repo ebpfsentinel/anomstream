@@ -422,7 +422,7 @@ fn bench_per_feature_cusum(c: &mut Criterion) {
     group.bench_function("observe_below_threshold_d16", |b| {
         let mut det: PerFeatureCusum<16> = PerFeatureCusum::new(cfg);
         let mut rng = ChaCha8Rng::seed_from_u64(2026);
-        det.observe(&[10.0_f64; 16]); // seed refs
+        let _ = det.observe(&[10.0_f64; 16]); // seed refs
         b.iter(|| {
             let mut p = [10.0_f64; 16];
             for slot in &mut p {
@@ -435,10 +435,10 @@ fn bench_per_feature_cusum(c: &mut Criterion) {
 
     group.bench_function("observe_alert_trip_d16", |b| {
         let mut det: PerFeatureCusum<16> = PerFeatureCusum::new(cfg);
-        det.observe(&[10.0_f64; 16]);
+        let _ = det.observe(&[10.0_f64; 16]);
         // Warm the charts so every tick trips an alert.
         for _ in 0..20 {
-            det.observe(&[15.0_f64; 16]);
+            let _ = det.observe(&[15.0_f64; 16]);
         }
         b.iter(|| {
             let r = det.observe(black_box(&[15.0_f64; 16]));
@@ -448,7 +448,7 @@ fn bench_per_feature_cusum(c: &mut Criterion) {
 
     group.bench_function("observe_stable_d16", |b| {
         let mut det: PerFeatureCusum<16> = PerFeatureCusum::new(cfg);
-        det.observe(&[10.0_f64; 16]);
+        let _ = det.observe(&[10.0_f64; 16]);
         b.iter(|| {
             let r = det.observe(black_box(&[10.0_f64; 16]));
             black_box(r);
@@ -476,7 +476,7 @@ fn bench_per_feature_ewma(c: &mut Criterion) {
             for slot in &mut p {
                 *slot = rng.random::<f64>() * 10.0;
             }
-            ewma.observe(&p);
+            let _ = ewma.observe(&p);
         }
         b.iter(|| {
             let mut p = [0.0_f64; 16];
@@ -497,7 +497,7 @@ fn bench_per_feature_ewma(c: &mut Criterion) {
                 for slot in &mut p {
                     *slot = rng.random::<f64>() * 10.0;
                 }
-                ewma.observe(black_box(&p));
+                let _ = ewma.observe(black_box(&p));
             }
             black_box(&ewma);
         });
@@ -511,7 +511,7 @@ fn bench_per_feature_ewma(c: &mut Criterion) {
             for slot in &mut p {
                 *slot = rng.random::<f64>() * 10.0;
             }
-            ewma.observe(&p);
+            let _ = ewma.observe(&p);
         }
         let mut spike = [10.0_f64; 16];
         spike[3] = 1_000.0;

@@ -228,6 +228,7 @@ impl<const D: usize> ThresholdedForest<D> {
     ///   component.
     /// - Any error bubbled up from [`RandomCutForest::update`] or
     ///   [`RandomCutForest::score`].
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn process(&mut self, point: [f64; D]) -> RcfResult<AnomalyGrade> {
         ensure_finite(&point)?;
 

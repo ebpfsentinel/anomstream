@@ -67,6 +67,7 @@ pub const PSI_ALERT_THRESHOLD: f64 = 0.25;
 /// Ordinal drift level derived from a PSI value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum DriftLevel {
     /// `PSI < 0.10` — distribution is stable vs. baseline.
     Stable,
@@ -237,6 +238,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
     ///
     /// - [`RcfError::NaNValue`] when `point` contains a non-finite
     ///   component.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, point: &[f64; D]) -> RcfResult<()> {
         if !point.iter().all(|v| v.is_finite()) {
             return Err(RcfError::NaNValue);
@@ -333,6 +335,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
     ///
     /// Returns [`RcfError::EmptyForest`] when the baseline has not
     /// been frozen.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn psi(&self) -> RcfResult<Vec<f64>> {
         let baseline = self.baseline.as_ref().ok_or(RcfError::EmptyForest)?;
         let mut out = Vec::with_capacity(D);

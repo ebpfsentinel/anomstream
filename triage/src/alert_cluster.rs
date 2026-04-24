@@ -99,6 +99,7 @@ where
 /// Decision returned by [`AlertClusterer::observe`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum ClusterDecision {
     /// Alert opened a brand-new cluster at the returned index.
     NewCluster(usize),
@@ -226,6 +227,7 @@ where
     /// (anything older than `window_ms` vs `rec.timestamp_ms`), then
     /// joins the highest-similarity cluster above threshold, or
     /// opens a new one.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, rec: AlertRecord<K, D>) -> ClusterDecision {
         #[cfg(feature = "std")]
         self.metrics

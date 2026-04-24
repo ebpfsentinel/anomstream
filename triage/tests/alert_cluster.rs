@@ -28,7 +28,7 @@ fn identical_alerts_fold_into_one_cluster() {
     let ctx = AlertContext::<String>::for_tenant("t1".into(), 1_000);
     for _ in 0..20 {
         let rec = AlertRecord::from_forest(&f, &[5.0, 5.0, 5.0, 5.0], &ctx).unwrap();
-        c.observe(rec);
+        let _ = c.observe(rec);
     }
     assert_eq!(c.len(), 1);
     assert_eq!(c.clusters()[0].count, 20);
@@ -43,8 +43,8 @@ fn disparate_alerts_open_separate_clusters() {
     // clusters split.
     let r0 = AlertRecord::from_forest(&f, &[100.0, 0.0, 0.0, 0.0], &ctx).unwrap();
     let r3 = AlertRecord::from_forest(&f, &[0.0, 0.0, 0.0, 100.0], &ctx).unwrap();
-    c.observe(r0);
-    c.observe(r3);
+    let _ = c.observe(r0);
+    let _ = c.observe(r3);
     assert_eq!(c.len(), 2);
 }
 
@@ -54,7 +54,7 @@ fn cluster_prune_drops_stale() {
     let mut c: AlertClusterer<String, 4> = AlertClusterer::new(0.95, 500).unwrap();
     let ctx = AlertContext::<String>::untenanted(1_000);
     let rec = AlertRecord::from_forest(&f, &[5.0; 4], &ctx).unwrap();
-    c.observe(rec);
+    let _ = c.observe(rec);
     c.prune_stale(10_000); // 10 s later, window 500 ms
     assert!(c.is_empty());
 }
@@ -65,7 +65,7 @@ fn observe_prunes_before_matching() {
     let mut c: AlertClusterer<String, 4> = AlertClusterer::new(0.95, 500).unwrap();
     let ctx_old = AlertContext::<String>::untenanted(1_000);
     let r_old = AlertRecord::from_forest(&f, &[5.0; 4], &ctx_old).unwrap();
-    c.observe(r_old);
+    let _ = c.observe(r_old);
 
     let ctx_new = AlertContext::<String>::untenanted(5_000);
     let r_new = AlertRecord::from_forest(&f, &[5.0; 4], &ctx_new).unwrap();
@@ -81,7 +81,7 @@ fn cluster_tracks_multiple_tenants() {
     for tenant in &["a", "b", "c"] {
         let ctx = AlertContext::<String>::for_tenant((*tenant).to_string(), 1_000);
         let rec = AlertRecord::from_forest(&f, &[5.0, 5.0, 5.0, 5.0], &ctx).unwrap();
-        c.observe(rec);
+        let _ = c.observe(rec);
     }
     assert_eq!(c.len(), 1);
     assert_eq!(c.clusters()[0].contributing_tenants.len(), 3);

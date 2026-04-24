@@ -105,6 +105,7 @@ impl<K: Clone> AlertContext<K> {
     feature = "serde",
     serde(bound(deserialize = "K: Clone + serde::Deserialize<'de>"))
 )]
+#[non_exhaustive]
 pub struct AlertRecord<K = String, const D: usize = 4>
 where
     K: Clone,
@@ -188,6 +189,36 @@ impl<K: Clone, const D: usize> TryFrom<AlertRecordShadow<K, D>> for AlertRecord<
 }
 
 impl<K: Clone, const D: usize> AlertRecord<K, D> {
+    /// Assemble a record from caller-supplied parts. Escape hatch
+    /// for downstream code that produces analytics through its own
+    /// detector pipeline and wants to reuse the `AlertRecord`
+    /// envelope. Always stamps [`ALERT_RECORD_VERSION`] so consumers
+    /// downstream of serde decode can trust the version field.
+    #[must_use = "assembled record should be emitted to an audit sink"]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        tenant: Option<K>,
+        timestamp_ms: u64,
+        point: [f64; D],
+        score: AnomalyScore,
+        grade: Option<AnomalyGrade>,
+        severity: Option<Severity>,
+        attribution: DiVector,
+        baseline: ForensicBaseline<D>,
+    ) -> Self {
+        Self {
+            version: ALERT_RECORD_VERSION,
+            tenant,
+            timestamp_ms,
+            point,
+            score,
+            grade,
+            severity,
+            attribution,
+            baseline,
+        }
+    }
+
     /// Build an audit record from a bare [`RandomCutForest`]. No
     /// TRCF grade is produced — [`Self::grade`] stays `None`.
     ///

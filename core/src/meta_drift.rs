@@ -73,6 +73,7 @@ pub const DEFAULT_DECAY: f64 = 0.01;
 /// Direction of a detected drift.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum DriftKind {
     /// The score stream shifted upward — sustained higher anomaly
     /// scores than the running mean. Typical in baseline drift where
@@ -271,6 +272,7 @@ impl MetaDriftDetector {
     ///
     /// Non-finite inputs are silently ignored and return a verdict
     /// flagged as not-ready without mutating the detector.
+    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, score: f64) -> DriftVerdict {
         if !score.is_finite() {
             return DriftVerdict {
@@ -461,7 +463,7 @@ mod tests {
         // Warmup: noisy baseline.
         for i in 0..64 {
             let noise = if i % 2 == 0 { 0.95 } else { 1.05 };
-            d.observe(noise);
+            let _ = d.observe(noise);
         }
         // Sustained shift upward.
         let mut saw_upward = false;
@@ -480,7 +482,7 @@ mod tests {
         let mut d = detector(3.0);
         for i in 0..64 {
             let noise = if i % 2 == 0 { 4.95 } else { 5.05 };
-            d.observe(noise);
+            let _ = d.observe(noise);
         }
         let mut saw_downward = false;
         for _ in 0..100 {
@@ -500,7 +502,7 @@ mod tests {
     fn non_finite_input_ignored() {
         let mut d = detector(3.0);
         for _ in 0..16 {
-            d.observe(1.0);
+            let _ = d.observe(1.0);
         }
         let obs_before = d.stats().observations();
         let v_nan = d.observe(f64::NAN);
@@ -515,10 +517,10 @@ mod tests {
         let mut d = detector(3.0);
         for i in 0..64 {
             let noise = if i % 2 == 0 { 0.95 } else { 1.05 };
-            d.observe(noise);
+            let _ = d.observe(noise);
         }
         for _ in 0..50 {
-            d.observe(5.0);
+            let _ = d.observe(5.0);
         }
         assert!(d.s_high() > 0.0);
         let stats_obs = d.stats().observations();
@@ -536,7 +538,7 @@ mod tests {
     fn reset_stats_clears_everything() {
         let mut d = detector(3.0);
         for _ in 0..64 {
-            d.observe(1.0);
+            let _ = d.observe(1.0);
         }
         d.reset_stats();
         assert_eq!(d.s_high(), 0.0);
@@ -548,7 +550,7 @@ mod tests {
     fn verdict_exposes_reference_mean_and_stddev() {
         let mut d = detector(5.0);
         for _ in 0..32 {
-            d.observe(2.0);
+            let _ = d.observe(2.0);
         }
         let v = d.observe(2.5);
         // After many `2.0` inputs the EMA should be near 2.0; the

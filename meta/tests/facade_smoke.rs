@@ -46,9 +46,9 @@ fn core_per_feature_cusum_plus_severity_via_facade() {
         slack: 0.5,
         threshold: 5.0,
     });
-    det.observe(&[100.0, 200.0]);
+    let _ = det.observe(&[100.0, 200.0]);
     for _ in 0..20 {
-        det.observe(&[105.0, 200.0]);
+        let _ = det.observe(&[105.0, 200.0]);
     }
     let bands = SeverityBands::default();
     assert_eq!(bands.classify(0.5), Severity::Normal);
