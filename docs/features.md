@@ -1199,6 +1199,24 @@ evasion via contextual shift, model extraction, and classifier-
 side resource exhaustion — with the MITRE ATLAS technique IDs
 and the defences shipped in-crate for each.
 
+### Serde deserialization hardening
+
+All stateful public types that derive `Deserialize` route through
+a private `<Name>Shadow` struct with plain derive, and a
+`TryFrom<Shadow>` impl that re-runs the constructor's invariant
+checks before a live value escapes. Attacker-controlled
+`postcard::from_bytes(bytes)` therefore cannot produce a
+`BloomFilter` with `num_hashes > MAX_HASHES`, a `HyperLogLog`
+whose register bank length disagrees with `precision`, a
+`ScoreHistogram` with NaN bounds, an `RcfConfig` outside the AWS
+SageMaker bounds, a `PerFeatureCusumAccumulator` seeded with
+NaN/Inf, or an `AlertRecord` with a mismatched
+`ALERT_RECORD_VERSION`. Types hardened this way:
+`BloomFilter`, `HyperLogLog`, `HistogramConfig`, `ScoreHistogram`,
+`RcfConfig`, `PerFeatureCusumAccumulator`, `PerFeatureCusumConfig`,
+`AlertRecord`. Adversarial-deserialize regression tests live
+alongside the roundtrip tests in each module.
+
 ## Multi-tenancy
 
 ### Tenant similarity index

@@ -30,6 +30,7 @@ pub const DEFAULT_BIN_COUNT: usize = 32;
 /// Validated configuration of a [`ScoreHistogram`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "HistogramConfigShadow"))]
 pub struct HistogramConfig {
     /// Number of equal-width bins covering `[min, max)`.
     pub bin_count: usize,
@@ -37,6 +38,34 @@ pub struct HistogramConfig {
     pub min: f64,
     /// Exclusive upper bound of the binned range.
     pub max: f64,
+}
+
+/// Over-the-wire [`HistogramConfig`] layout. Deserialization lands
+/// here first so [`TryFrom`] can re-run [`HistogramConfig::validate`]
+/// before a live config is handed out — `bin_count > 0`, finite
+/// `min`/`max`, `min < max`.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::missing_docs_in_private_items)]
+struct HistogramConfigShadow {
+    bin_count: usize,
+    min: f64,
+    max: f64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<HistogramConfigShadow> for HistogramConfig {
+    type Error = RcfError;
+
+    fn try_from(raw: HistogramConfigShadow) -> Result<Self, Self::Error> {
+        let c = Self {
+            bin_count: raw.bin_count,
+            min: raw.min,
+            max: raw.max,
+        };
+        c.validate()?;
+        Ok(c)
+    }
 }
 
 impl HistogramConfig {
@@ -96,6 +125,7 @@ impl HistogramConfig {
 /// Fixed-bin histogram over an `f64` stream.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "ScoreHistogramShadow"))]
 pub struct ScoreHistogram {
     /// Validated bin layout.
     config: HistogramConfig,
@@ -109,6 +139,44 @@ pub struct ScoreHistogram {
     /// Non-finite observations (`NaN`, `±∞`) — counted separately so
     /// `total()` can still reason about the sum of bin counts.
     non_finite: u64,
+}
+
+/// Over-the-wire [`ScoreHistogram`] layout. Deserialization lands
+/// here first so [`TryFrom`] can re-run [`HistogramConfig::validate`]
+/// and confirm `bins.len() == config.bin_count` before a live
+/// histogram is handed out.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::missing_docs_in_private_items)]
+struct ScoreHistogramShadow {
+    config: HistogramConfig,
+    bins: Vec<u64>,
+    underflow: u64,
+    overflow: u64,
+    non_finite: u64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<ScoreHistogramShadow> for ScoreHistogram {
+    type Error = RcfError;
+
+    fn try_from(raw: ScoreHistogramShadow) -> Result<Self, Self::Error> {
+        raw.config.validate()?;
+        if raw.bins.len() != raw.config.bin_count {
+            return Err(RcfError::InvalidConfig(format!(
+                "ScoreHistogram: bins length {} != config.bin_count {}",
+                raw.bins.len(),
+                raw.config.bin_count
+            )));
+        }
+        Ok(Self {
+            config: raw.config,
+            bins: raw.bins,
+            underflow: raw.underflow,
+            overflow: raw.overflow,
+            non_finite: raw.non_finite,
+        })
+    }
 }
 
 impl ScoreHistogram {
@@ -449,5 +517,50 @@ mod tests {
     fn with_range_uses_default_bin_count() {
         let h = ScoreHistogram::with_range(0.0, 1.0).unwrap();
         assert_eq!(h.bins().len(), DEFAULT_BIN_COUNT);
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_nan_bounds() {
+        let bad = HistogramConfigShadow {
+            bin_count: 10,
+            min: f64::NAN,
+            max: 10.0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<HistogramConfig, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_inverted_bounds() {
+        let bad = HistogramConfigShadow {
+            bin_count: 10,
+            min: 5.0,
+            max: 1.0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<HistogramConfig, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_bin_length_mismatch() {
+        let bad = ScoreHistogramShadow {
+            config: HistogramConfig {
+                bin_count: 10,
+                min: 0.0,
+                max: 1.0,
+            },
+            bins: alloc::vec![0_u64; 3],
+            underflow: 0,
+            overflow: 0,
+            non_finite: 0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<ScoreHistogram, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
     }
 }

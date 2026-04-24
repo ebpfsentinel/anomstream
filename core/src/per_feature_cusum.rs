@@ -61,6 +61,10 @@ pub struct PerFeatureCusumAlert {
 /// One univariate two-sided CUSUM accumulator.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(try_from = "PerFeatureCusumAccumulatorShadow")
+)]
 pub struct PerFeatureCusumAccumulator {
     /// Positive cumulative sum (detects increases).
     pub s_pos: f64,
@@ -73,6 +77,52 @@ pub struct PerFeatureCusumAccumulator {
     /// Consecutive samples the current drift has been
     /// accumulating.
     pub drift_samples: u64,
+}
+
+/// Over-the-wire [`PerFeatureCusumAccumulator`] layout.
+/// Deserialization lands here first so [`TryFrom`] can reject
+/// `NaN` / `±inf` poisoning of the cumulative sums or the
+/// reference mean — fields that later feed the `update()`
+/// recurrence and would propagate non-finite state indefinitely.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::missing_docs_in_private_items)]
+struct PerFeatureCusumAccumulatorShadow {
+    s_pos: f64,
+    s_neg: f64,
+    reference: f64,
+    reference_set: bool,
+    drift_samples: u64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<PerFeatureCusumAccumulatorShadow> for PerFeatureCusumAccumulator {
+    type Error = crate::error::RcfError;
+
+    fn try_from(raw: PerFeatureCusumAccumulatorShadow) -> Result<Self, Self::Error> {
+        if !raw.s_pos.is_finite() || !raw.s_neg.is_finite() || !raw.reference.is_finite() {
+            return Err(crate::error::RcfError::InvalidConfig(alloc::format!(
+                "PerFeatureCusumAccumulator: non-finite field (s_pos={}, s_neg={}, reference={})",
+                raw.s_pos,
+                raw.s_neg,
+                raw.reference
+            )));
+        }
+        if raw.s_pos < 0.0 || raw.s_neg < 0.0 {
+            return Err(crate::error::RcfError::InvalidConfig(alloc::format!(
+                "PerFeatureCusumAccumulator: cumulative sums must be non-negative (s_pos={}, s_neg={})",
+                raw.s_pos,
+                raw.s_neg
+            )));
+        }
+        Ok(Self {
+            s_pos: raw.s_pos,
+            s_neg: raw.s_neg,
+            reference: raw.reference,
+            reference_set: raw.reference_set,
+            drift_samples: raw.drift_samples,
+        })
+    }
 }
 
 impl PerFeatureCusumAccumulator {
@@ -148,6 +198,7 @@ impl Default for PerFeatureCusumAccumulator {
 /// Hyper-parameters for [`PerFeatureCusum`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "PerFeatureCusumConfigShadow"))]
 pub struct PerFeatureCusumConfig {
     /// Slack `k` — allowable drift before accumulation starts.
     /// Typical `0.5·σ` of the reference signal.
@@ -155,6 +206,43 @@ pub struct PerFeatureCusumConfig {
     /// Threshold `h` — cumulative sum at which an alert fires.
     /// Typical `4·σ` of the reference signal.
     pub threshold: f64,
+}
+
+/// Over-the-wire [`PerFeatureCusumConfig`] layout.
+/// Deserialization lands here first so [`TryFrom`] can enforce
+/// finite, non-negative `slack` and strictly-positive `threshold`
+/// — an attacker-supplied `threshold ≤ 0` would make every
+/// observation emit an alert.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::missing_docs_in_private_items)]
+struct PerFeatureCusumConfigShadow {
+    slack: f64,
+    threshold: f64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<PerFeatureCusumConfigShadow> for PerFeatureCusumConfig {
+    type Error = crate::error::RcfError;
+
+    fn try_from(raw: PerFeatureCusumConfigShadow) -> Result<Self, Self::Error> {
+        if !raw.slack.is_finite() || raw.slack < 0.0 {
+            return Err(crate::error::RcfError::InvalidConfig(alloc::format!(
+                "PerFeatureCusumConfig: slack must be finite and ≥ 0, got {}",
+                raw.slack
+            )));
+        }
+        if !raw.threshold.is_finite() || raw.threshold <= 0.0 {
+            return Err(crate::error::RcfError::InvalidConfig(alloc::format!(
+                "PerFeatureCusumConfig: threshold must be finite and > 0, got {}",
+                raw.threshold
+            )));
+        }
+        Ok(Self {
+            slack: raw.slack,
+            threshold: raw.threshold,
+        })
+    }
 }
 
 impl Default for PerFeatureCusumConfig {
@@ -509,5 +597,59 @@ mod tests {
             back.accumulators()[0].reference,
             det.accumulators()[0].reference
         );
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_nan_in_accumulator() {
+        let bad = PerFeatureCusumAccumulatorShadow {
+            s_pos: f64::NAN,
+            s_neg: 0.0,
+            reference: 0.0,
+            reference_set: true,
+            drift_samples: 0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<PerFeatureCusumAccumulator, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_negative_cumsum() {
+        let bad = PerFeatureCusumAccumulatorShadow {
+            s_pos: -1.0,
+            s_neg: 0.0,
+            reference: 0.0,
+            reference_set: true,
+            drift_samples: 0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<PerFeatureCusumAccumulator, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_non_positive_threshold() {
+        let bad = PerFeatureCusumConfigShadow {
+            slack: 0.5,
+            threshold: 0.0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<PerFeatureCusumConfig, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_nan_threshold() {
+        let bad = PerFeatureCusumConfigShadow {
+            slack: 0.5,
+            threshold: f64::NAN,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<PerFeatureCusumConfig, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
     }
 }

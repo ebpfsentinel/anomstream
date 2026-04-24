@@ -82,6 +82,7 @@ pub const DEFAULT_INITIAL_ACCEPT_FRACTION: f64 = 1.0;
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "RcfConfigShadow"))]
 pub struct RcfConfig {
     /// Number of trees in the forest (`num_trees`).
     pub num_trees: usize,
@@ -138,6 +139,45 @@ pub struct RcfConfig {
 #[must_use]
 fn default_initial_accept_fraction() -> f64 {
     DEFAULT_INITIAL_ACCEPT_FRACTION
+}
+
+/// Over-the-wire [`RcfConfig`] layout. Deserialization lands here
+/// first so [`TryFrom`] can re-run [`RcfConfig::validate`] —
+/// enforcing the AWS `SageMaker` hyperparameter bounds
+/// (`num_trees`, `sample_size`, `time_decay`) and finite /
+/// positive `feature_scales` — before a live config is handed out.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::missing_docs_in_private_items)]
+struct RcfConfigShadow {
+    num_trees: usize,
+    sample_size: usize,
+    time_decay: f64,
+    seed: Option<u64>,
+    num_threads: Option<usize>,
+    #[serde(default = "default_initial_accept_fraction")]
+    initial_accept_fraction: f64,
+    #[serde(default)]
+    feature_scales: Option<Vec<f64>>,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<RcfConfigShadow> for RcfConfig {
+    type Error = RcfError;
+
+    fn try_from(raw: RcfConfigShadow) -> Result<Self, Self::Error> {
+        let cfg = Self {
+            num_trees: raw.num_trees,
+            sample_size: raw.sample_size,
+            time_decay: raw.time_decay,
+            seed: raw.seed,
+            num_threads: raw.num_threads,
+            initial_accept_fraction: raw.initial_accept_fraction,
+            feature_scales: raw.feature_scales,
+        };
+        cfg.validate()?;
+        Ok(cfg)
+    }
 }
 
 impl RcfConfig {
@@ -641,5 +681,56 @@ mod tests {
     fn builder_build_validates() {
         let err = ForestBuilder::<4>::new().num_trees(10).build().unwrap_err();
         assert!(matches!(err, RcfError::InvalidConfig(_)));
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_out_of_range_num_trees() {
+        let bad = RcfConfigShadow {
+            num_trees: MAX_NUM_TREES + 1,
+            sample_size: 256,
+            time_decay: 0.0,
+            seed: None,
+            num_threads: None,
+            initial_accept_fraction: 1.0,
+            feature_scales: None,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<RcfConfig, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_nan_time_decay() {
+        let bad = RcfConfigShadow {
+            num_trees: 100,
+            sample_size: 256,
+            time_decay: f64::NAN,
+            seed: None,
+            num_threads: None,
+            initial_accept_fraction: 1.0,
+            feature_scales: None,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<RcfConfig, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_negative_feature_scale() {
+        let bad = RcfConfigShadow {
+            num_trees: 100,
+            sample_size: 256,
+            time_decay: 0.0,
+            seed: None,
+            num_threads: None,
+            initial_accept_fraction: 1.0,
+            feature_scales: Some(alloc::vec![1.0, -0.5]),
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<RcfConfig, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
     }
 }

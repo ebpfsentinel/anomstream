@@ -100,6 +100,11 @@ impl<K: Clone> AlertContext<K> {
 /// producing detector guaranteed.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "AlertRecordShadow<K, D>"))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(deserialize = "K: Clone + serde::Deserialize<'de>"))
+)]
 pub struct AlertRecord<K = String, const D: usize = 4>
 where
     K: Clone,
@@ -130,6 +135,56 @@ where
     pub attribution: DiVector,
     /// Per-dim imputation-like baseline for `point`.
     pub baseline: ForensicBaseline<D>,
+}
+
+/// Over-the-wire [`AlertRecord`] layout. Deserialization lands
+/// here first so [`TryFrom`] can enforce
+/// `version == ALERT_RECORD_VERSION` — rejecting silent schema
+/// drift. Incompatible future schema changes will bump the
+/// constant and fail loudly at decode time rather than producing
+/// field-misaligned audit trails.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(bound(deserialize = "K: serde::Deserialize<'de>"))]
+#[allow(clippy::missing_docs_in_private_items)]
+struct AlertRecordShadow<K, const D: usize> {
+    version: u32,
+    tenant: Option<K>,
+    timestamp_ms: u64,
+    #[serde(with = "anomstream_core::serde_util::fixed_array_f64")]
+    point: [f64; D],
+    score: AnomalyScore,
+    grade: Option<AnomalyGrade>,
+    severity: Option<Severity>,
+    attribution: DiVector,
+    baseline: ForensicBaseline<D>,
+}
+
+#[cfg(feature = "serde")]
+impl<K: Clone, const D: usize> TryFrom<AlertRecordShadow<K, D>> for AlertRecord<K, D> {
+    type Error = anomstream_core::error::RcfError;
+
+    fn try_from(raw: AlertRecordShadow<K, D>) -> Result<Self, Self::Error> {
+        if raw.version != ALERT_RECORD_VERSION {
+            return Err(anomstream_core::error::RcfError::InvalidConfig(
+                alloc::format!(
+                    "AlertRecord: version {} unsupported (expected {ALERT_RECORD_VERSION})",
+                    raw.version
+                ),
+            ));
+        }
+        Ok(Self {
+            version: raw.version,
+            tenant: raw.tenant,
+            timestamp_ms: raw.timestamp_ms,
+            point: raw.point,
+            score: raw.score,
+            grade: raw.grade,
+            severity: raw.severity,
+            attribution: raw.attribution,
+            baseline: raw.baseline,
+        })
+    }
 }
 
 impl<K: Clone, const D: usize> AlertRecord<K, D> {
@@ -303,5 +358,20 @@ mod tests {
         let ctx = AlertContext::<String>::untenanted(123);
         assert!(ctx.tenant.is_none());
         assert_eq!(ctx.timestamp_ms, 123);
+    }
+
+    #[test]
+    fn deserialize_rejects_mismatched_version() {
+        let f = warm_forest();
+        let ctx = AlertContext::<String>::for_tenant("t1".into(), 42);
+        let rec = AlertRecord::from_forest(&f, &[5.0, 5.0, 5.0, 5.0], &ctx).unwrap();
+        let mut bad = rec.clone();
+        bad.version = ALERT_RECORD_VERSION + 42; // forge schema drift.
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let decoded: Result<AlertRecord<String, 4>, _> = postcard::from_bytes(&bytes);
+        assert!(
+            decoded.is_err(),
+            "AlertRecord with mismatched version must be rejected on decode"
+        );
     }
 }

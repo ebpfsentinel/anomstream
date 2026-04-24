@@ -66,6 +66,7 @@ pub const DEFAULT_PRECISION: u8 = 12;
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "HyperLogLogShadow"))]
 pub struct HyperLogLog {
     /// Precision — register count is `2^precision`.
     precision: u8,
@@ -74,6 +75,47 @@ pub struct HyperLogLog {
     /// Total values offered to [`Self::add`] — ops signal, not
     /// used by the estimator.
     total_added: u64,
+}
+
+/// Over-the-wire [`HyperLogLog`] layout — mirrors the public type
+/// field-for-field. Deserialization lands here first so
+/// [`TryFrom`] can re-run the constructor's invariant checks
+/// (`precision ∈ [MIN, MAX]`, register bank length `== 2^precision`)
+/// before a live sketch is handed out.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::missing_docs_in_private_items)]
+struct HyperLogLogShadow {
+    precision: u8,
+    registers: Vec<u8>,
+    total_added: u64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<HyperLogLogShadow> for HyperLogLog {
+    type Error = RcfError;
+
+    fn try_from(raw: HyperLogLogShadow) -> Result<Self, Self::Error> {
+        if !(MIN_PRECISION..=MAX_PRECISION).contains(&raw.precision) {
+            return Err(RcfError::InvalidConfig(alloc::format!(
+                "HyperLogLog: precision {} out of [{MIN_PRECISION}, {MAX_PRECISION}]",
+                raw.precision
+            )));
+        }
+        let expected = 1_usize << raw.precision;
+        if raw.registers.len() != expected {
+            return Err(RcfError::InvalidConfig(alloc::format!(
+                "HyperLogLog: register bank length {} != expected {expected} for precision {}",
+                raw.registers.len(),
+                raw.precision
+            )));
+        }
+        Ok(Self {
+            precision: raw.precision,
+            registers: raw.registers,
+            total_added: raw.total_added,
+        })
+    }
 }
 
 impl HyperLogLog {
@@ -416,5 +458,31 @@ mod tests {
         let back: HyperLogLog = postcard::from_bytes(&bytes).expect("serde ok");
         assert_eq!(back.estimate(), before);
         assert_eq!(back.total_added(), hll.total_added());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_out_of_range_precision() {
+        let bad = HyperLogLogShadow {
+            precision: MAX_PRECISION + 1,
+            registers: alloc::vec![0_u8; 1 << MAX_PRECISION],
+            total_added: 0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<HyperLogLog, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_register_length_mismatch() {
+        let bad = HyperLogLogShadow {
+            precision: DEFAULT_PRECISION,
+            registers: alloc::vec![0_u8; 10], // should be 4096.
+            total_added: 0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<HyperLogLog, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err());
     }
 }

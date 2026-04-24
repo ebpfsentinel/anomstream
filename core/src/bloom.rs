@@ -63,6 +63,7 @@ pub const MAX_HASHES: u32 = 64;
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "BloomFilterShadow"))]
 pub struct BloomFilter {
     /// Bit bank — `ceil(num_bits / 64)` words.
     bits: Vec<u64>,
@@ -73,6 +74,55 @@ pub struct BloomFilter {
     /// Total `insert` calls — ops signal, also feeds the saturation
     /// check in [`Self::effective_fpr`].
     total_added: u64,
+}
+
+/// Over-the-wire [`BloomFilter`] layout — mirrors the public type
+/// field-for-field. Deserialization always lands here first so
+/// [`TryFrom`] can re-run the constructor's invariant checks
+/// (`num_bits > 0`, `num_hashes ∈ (0, MAX_HASHES]`, bit-bank
+/// length `== ceil(num_bits / 64)`) before a live filter is
+/// handed to the caller.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::missing_docs_in_private_items)]
+struct BloomFilterShadow {
+    bits: Vec<u64>,
+    num_bits: usize,
+    num_hashes: u32,
+    total_added: u64,
+}
+
+#[cfg(feature = "serde")]
+impl TryFrom<BloomFilterShadow> for BloomFilter {
+    type Error = RcfError;
+
+    fn try_from(raw: BloomFilterShadow) -> Result<Self, Self::Error> {
+        if raw.num_bits == 0 {
+            return Err(RcfError::InvalidConfig(alloc::string::ToString::to_string(
+                "BloomFilter: num_bits must be > 0",
+            )));
+        }
+        if raw.num_hashes == 0 || raw.num_hashes > MAX_HASHES {
+            return Err(RcfError::InvalidConfig(alloc::format!(
+                "BloomFilter: num_hashes {} out of (0, {MAX_HASHES}]",
+                raw.num_hashes
+            )));
+        }
+        let expected_words = raw.num_bits.div_ceil(64);
+        if raw.bits.len() != expected_words {
+            return Err(RcfError::InvalidConfig(alloc::format!(
+                "BloomFilter: bit-bank length {} != expected {expected_words} for num_bits {}",
+                raw.bits.len(),
+                raw.num_bits
+            )));
+        }
+        Ok(Self {
+            bits: raw.bits,
+            num_bits: raw.num_bits,
+            num_hashes: raw.num_hashes,
+            total_added: raw.total_added,
+        })
+    }
 }
 
 impl BloomFilter {
@@ -446,5 +496,51 @@ mod tests {
         }
         assert_eq!(bf.num_bits(), back.num_bits());
         assert_eq!(bf.num_hashes(), back.num_hashes());
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_oversized_num_hashes() {
+        let mut bf = BloomFilter::with_params(1_024, 7).unwrap();
+        bf.insert_bytes(b"x");
+        // Craft a bad payload via the shadow struct directly.
+        let bad = BloomFilterShadow {
+            bits: bf.bits.clone(),
+            num_bits: bf.num_bits,
+            num_hashes: MAX_HASHES + 1,
+            total_added: bf.total_added,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<BloomFilter, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err(), "oversized num_hashes must be rejected");
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_bit_bank_length_mismatch() {
+        let bf = BloomFilter::with_params(1_024, 4).unwrap();
+        let bad = BloomFilterShadow {
+            bits: vec![0_u64; 3], // expected 16 words for 1024 bits.
+            num_bits: bf.num_bits,
+            num_hashes: bf.num_hashes,
+            total_added: 0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<BloomFilter, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err(), "bit-bank length mismatch must be rejected");
+    }
+
+    #[cfg(all(feature = "serde", feature = "postcard"))]
+    #[test]
+    fn deserialize_rejects_zero_num_bits() {
+        let bad = BloomFilterShadow {
+            bits: alloc::vec::Vec::new(),
+            num_bits: 0,
+            num_hashes: 4,
+            total_added: 0,
+        };
+        let bytes = postcard::to_allocvec(&bad).unwrap();
+        let back: Result<BloomFilter, _> = postcard::from_bytes(&bytes);
+        assert!(back.is_err(), "zero num_bits must be rejected");
     }
 }
