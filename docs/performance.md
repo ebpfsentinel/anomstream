@@ -425,9 +425,9 @@ into `anomstream-core` for OSS reuse.
 | `CountMinSketch::estimate` w=2048 d=4             | 61 ns    | ~16 M/s     |
 | `CountMinSketch::reset` w=2048 d=4                | 808 ns   | per-reset   |
 | `BloomFilter::insert_bytes` n=1k, p=0.01          | 22.6 ns  | ~44 M/s     |
-| `BloomFilter::insert_hash` n=100k, p=0.01         | 18.5 ns  | ~54 M/s     |
-| `BloomFilter::contains_bytes` n=100k, p=0.01      | 32.0 ns  | ~31 M/s     |
-| `BloomFilter::union` two n=10k, p=0.01 filters    | 259 ns   | per-merge   |
+| `BloomFilter::insert_hash` n=100k, p=0.01         | 16.8 ns  | ~60 M/s     |
+| `BloomFilter::contains_bytes` n=100k, p=0.01      | 28.8 ns  | ~35 M/s     |
+| `BloomFilter::union` two n=10k, p=0.01 filters    | 260 ns   | per-merge   |
 | `HyperLogLog::add_bytes` p=12                     | 11.5 ns  | ~87 M/s     |
 | `HyperLogLog::add_hash` p=12                      | 2.7 ns   | ~370 M/s    |
 | `HyperLogLog::estimate` after 100k adds, p=12     | 18.6 µs  | query-only  |

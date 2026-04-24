@@ -191,6 +191,29 @@ impl MetricsSink for TestSink {
 /// Canonical metric names emitted by the crate. Exposed as
 /// constants so downstream dashboards can pin label expectations
 /// without stringly-typing.
+///
+/// # `SemVer` guarantee
+///
+/// Every identifier in this module (`UPDATES_TOTAL`,
+/// `PROCESS_TOTAL`, …) carries a **`SemVer`-stable string value**.
+/// The value assigned to a const never changes across patch /
+/// minor releases — SOC dashboards, Prometheus recording rules,
+/// and Grafana alert expressions that reference these identifiers
+/// or their string values keep working through any non-major
+/// bump. New metrics can be added freely; existing ones are
+/// renamed only with a major release and a documented migration.
+///
+/// # Why `&str` over an enum
+///
+/// [`MetricsSink::inc_counter`] + friends take `&str` rather than
+/// an enum `MetricName` so downstream sinks can emit crate-
+/// external metric names (service-level rollups, tenant-scoped
+/// names, dynamic labels) through the same sink pointer. An
+/// enum would force every integrator to fork the crate or
+/// maintain a parallel dynamic fallback. The const-string
+/// pattern keeps `SemVer` pressure on this module's identifiers
+/// (enforced by the stability note above) without paying the
+/// surface cost.
 pub mod names {
     /// Counter: every [`crate::RandomCutForest::update`] call.
     pub const UPDATES_TOTAL: &str = "rcf_updates_total";

@@ -43,6 +43,28 @@
 //! Sibling member namespaces also stay accessible verbatim via
 //! [`core_lib`], [`triage_lib`], [`hotpath_lib`] when a consumer
 //! needs to spell a module path that the glob cannot disambiguate.
+//!
+//! # `SemVer` scope
+//!
+//! The glob re-exports below (`pub use anomstream_core::*` etc.)
+//! forward every public symbol from each enabled member crate
+//! into the `anomstream::` namespace for DX, but the facade's
+//! `SemVer` commitment is **not** the full glob. The committed
+//! public surface of the `anomstream` crate is exactly the
+//! catalogue printed in `README.md` and `docs/features.md` —
+//! roughly 80 types spanning detectors, sketches, evaluation,
+//! triage, hot-path ingress, and error types. Every other
+//! identifier reachable through the globs (`mod::*`
+//! implementation helpers, private-ish `pub` utilities that
+//! escape by accident) is **explicitly not covered** by `SemVer`
+//! stability: it may move or disappear in any release that ships
+//! a corresponding note in `CHANGELOG.md`.
+//!
+//! For consumers who want compile-time certainty that their
+//! imports only touch the committed surface, prefer importing
+//! from the member crate directly (`anomstream_core::X`,
+//! `anomstream_triage::Y`) — every type in the catalogue is
+//! always re-exported from its owning member.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]

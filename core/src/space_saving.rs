@@ -180,6 +180,7 @@ where
     }
 
     /// Ingest one occurrence of `key` with unit weight.
+    #[inline]
     pub fn observe(&mut self, key: K) {
         self.observe_weighted(key, 1);
     }
@@ -187,6 +188,7 @@ where
     /// Ingest `key` with caller-supplied `weight` — byte-count
     /// heavy hitters in NDR workloads (per-packet bytes, not
     /// just packet counts).
+    #[inline]
     pub fn observe_weighted(&mut self, key: K, weight: u64) {
         if weight == 0 {
             return;

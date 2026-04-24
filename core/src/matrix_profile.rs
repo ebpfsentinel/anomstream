@@ -49,6 +49,14 @@ use crate::error::{RcfError, RcfResult};
 /// z-normalisation to be meaningful.
 pub const MIN_WINDOW: usize = 4;
 
+/// Upper bound on window length. STOMP is `O(n²)` in the series
+/// length and `O(n · m)` in the window-seed step; a runaway
+/// `window` turns a forensic call into a compute bomb. `10 000`
+/// keeps the worst-case first-column seed at `~10⁸` multiplies
+/// (sub-second on a modern core); callers that legitimately need
+/// longer windows should pre-downsample or chunk the series.
+pub const MAX_WINDOW: usize = 10_000;
+
 /// Computed matrix profile for a fixed `(series, window)` pair.
 ///
 /// The profile array is always in 1-to-1 correspondence with the
@@ -93,11 +101,26 @@ impl MatrixProfile {
     /// skipped). Pass `None` for the conventional `ceil(window / 4)`
     /// default (Keogh / Mueen matrix-profile tutorials).
     ///
+    /// # Complexity
+    ///
+    /// Time: `O(n²)` over the series length `n`, with an extra
+    /// `O(n · m)` one-time cost on the first-column seed (where
+    /// `m = window`). Practical wall-clock: ~3 ms at
+    /// `(n = 1 024, m = 32)`, ~49 ms at `(n = 4 096, m = 128)`
+    /// on a modern core. Budget aggressively — doubling `n`
+    /// quadruples the cost. Do **not** call on hot-path streams;
+    /// reserve for forensic windows captured by the online
+    /// [`crate::ShingledForest`] or triage batch jobs.
+    ///
+    /// Memory: `O(n)` for the profile + `O(n)` for the scratch
+    /// dot-product column.
+    ///
     /// # Errors
     ///
-    /// Returns [`RcfError::InvalidConfig`] when `window < MIN_WINDOW`,
-    /// when the series is too short (`series.len() < 2 · window`),
-    /// when `series` contains a non-finite value, or when
+    /// Returns [`RcfError::InvalidConfig`] when
+    /// `window < MIN_WINDOW`, `window > MAX_WINDOW`, when the
+    /// series is too short (`series.len() < 2 · window`), when
+    /// `series` contains a non-finite value, or when
     /// `exclusion_zone` would leave zero valid neighbours.
     #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn compute(
@@ -108,6 +131,11 @@ impl MatrixProfile {
         if window < MIN_WINDOW {
             return Err(RcfError::InvalidConfig(
                 alloc::format!("MatrixProfile: window {window} < MIN_WINDOW {MIN_WINDOW}").into(),
+            ));
+        }
+        if window > MAX_WINDOW {
+            return Err(RcfError::InvalidConfig(
+                alloc::format!("MatrixProfile: window {window} > MAX_WINDOW {MAX_WINDOW}").into(),
             ));
         }
         let n = series.len();
@@ -380,6 +408,12 @@ mod tests {
     fn compute_rejects_tiny_window() {
         let data = cosine_series(128, 0.3);
         assert!(MatrixProfile::compute(&data, 3, None).is_err());
+    }
+
+    #[test]
+    fn compute_rejects_oversized_window() {
+        let data = cosine_series(32_000, 0.3);
+        assert!(MatrixProfile::compute(&data, MAX_WINDOW + 1, None).is_err());
     }
 
     #[test]

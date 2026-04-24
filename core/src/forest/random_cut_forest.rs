@@ -71,7 +71,6 @@ std::thread_local! {
 /// let score: f64 = forest.score(&[10.0, 10.0]).unwrap().into();
 /// assert!(score >= 0.0);
 /// ```
-#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RandomCutForest<const D: usize> {
     /// Validated configuration.
@@ -113,6 +112,25 @@ pub struct RandomCutForest<const D: usize> {
     /// (reservoir eviction or explicit [`Self::delete`]).
     #[cfg_attr(feature = "serde", serde(default))]
     timestamps: alloc::collections::BTreeMap<usize, u64>,
+}
+
+#[allow(clippy::missing_fields_in_debug)] // Bounded summary — see method docstring.
+impl<const D: usize> core::fmt::Debug for RandomCutForest<D> {
+    /// Prints a bounded summary — forest shape, update count,
+    /// live-point total — instead of the derived dump of every
+    /// tree node, reservoir sample, and per-tree RNG state.
+    /// `{:?}` on a default-configured forest would otherwise emit
+    /// several MiB of numbers.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RandomCutForest")
+            .field("D", &D)
+            .field("num_trees", &self.config.num_trees)
+            .field("sample_size", &self.config.sample_size)
+            .field("time_decay", &self.config.time_decay)
+            .field("updates_seen", &self.updates_seen)
+            .field("live_points", &self.point_store.live_count())
+            .finish()
+    }
 }
 
 impl<const D: usize> RandomCutForest<D> {

@@ -118,6 +118,18 @@ pub enum ClusterDecision {
 /// [`AlertCluster`]s; each [`Self::observe`] call either extends one
 /// or opens a new one. Not thread-safe — wrap in `Mutex` / shard
 /// per tenant for concurrent ingest.
+///
+/// # Tenant-key choice
+///
+/// The default `K = String` matches JSON-friendly SIEM sinks but
+/// pays a string-hash + heap allocation per tenant-set insert on
+/// the hot path. Deployments that already carry tenant identity
+/// as a numeric token should instantiate
+/// `AlertClusterer::<u64, D>` (or `u128`, or a tenant-ID
+/// newtype) to keep tenant-set updates branchless + heap-free.
+/// Both specialisations compile under the same feature set; the
+/// default is chosen for JSON ergonomics, not for absolute
+/// throughput.
 pub struct AlertClusterer<K = String, const D: usize = 4>
 where
     K: Clone + PartialEq,

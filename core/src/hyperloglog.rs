@@ -197,6 +197,7 @@ impl HyperLogLog {
     /// Ingest a raw byte key. Cheaper when the caller already has
     /// a fixed-size fingerprint (e.g. `[u8; 16]` IP, flow-hash
     /// tuple) — skips the generic `Hash` dispatch.
+    #[inline]
     pub fn add_bytes(&mut self, key: &[u8]) {
         let mut h = DefaultHasher::new();
         key.hash(&mut h);
@@ -208,6 +209,7 @@ impl HyperLogLog {
     /// a keyed seed) — the sketch's accuracy depends on
     /// `hash % 2^p` being uniform.
     #[allow(clippy::cast_possible_truncation)]
+    #[inline]
     pub fn add_hash(&mut self, hash: u64) {
         self.total_added = self.total_added.saturating_add(1);
         let p = self.precision;

@@ -56,7 +56,10 @@ pub const MAX_DEPTH: usize = 16;
 /// ```
 pub struct CountMinSketch {
     /// `depth × width` counter matrix; row `r` tracks hits under
-    /// hash seed `r`.
+    /// hash seed `r`. Carrying it through the derived `Debug` impl
+    /// would dump up to 32 MiB of `u64` values on a `{:?}`
+    /// formatter call; the custom impl below prints a compact
+    /// summary instead.
     table: Vec<Vec<u64>>,
     /// Per-row deterministic seeds mixed into
     /// [`DefaultHasher`] so the rows are pairwise-independent.
@@ -67,6 +70,23 @@ pub struct CountMinSketch {
     depth: usize,
     /// Sum of every `count` ever passed to `increment`.
     total: u64,
+}
+
+#[allow(clippy::missing_fields_in_debug)] // Bounded summary — see method docstring.
+impl core::fmt::Debug for CountMinSketch {
+    /// Prints a bounded summary (`width`, `depth`, `total`,
+    /// memory footprint) instead of the full counter table.
+    /// `{:?}` on the derived impl would emit up to `width × depth
+    /// × 8 B` of numbers — 32 MiB at the tightest cap — and drown
+    /// any downstream log.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CountMinSketch")
+            .field("width", &self.width)
+            .field("depth", &self.depth)
+            .field("total", &self.total)
+            .field("memory_bytes", &self.memory_bytes())
+            .finish()
+    }
 }
 
 impl CountMinSketch {
@@ -127,6 +147,7 @@ impl CountMinSketch {
 
     /// Increment `key`'s counters by `count`. Saturates at
     /// [`u64::MAX`] to keep adversarial streams from wrapping.
+    #[inline]
     pub fn increment(&mut self, key: &[u8], count: u64) {
         self.total = self.total.saturating_add(count);
         for row in 0..self.depth {
@@ -139,6 +160,7 @@ impl CountMinSketch {
     /// count`; may overestimate by up to `ε·N` with probability
     /// `1 − δ`.
     #[must_use]
+    #[inline]
     pub fn estimate(&self, key: &[u8]) -> u64 {
         (0..self.depth)
             .map(|row| {
@@ -175,6 +197,7 @@ impl CountMinSketch {
     /// Map `(key, row)` to a column in `[0, width)` via a
     /// per-row-seeded [`DefaultHasher`].
     #[allow(clippy::cast_possible_truncation)]
+    #[inline]
     fn hash_to_col(&self, key: &[u8], row: usize) -> usize {
         let (a, b) = self.seeds[row];
         let mut hasher = DefaultHasher::new();

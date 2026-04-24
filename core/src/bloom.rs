@@ -258,12 +258,14 @@ impl BloomFilter {
     }
 
     /// Insert a `Hash`-able value.
+    #[inline]
     pub fn insert<T: Hash + ?Sized>(&mut self, value: &T) {
         let (h1, h2) = double_hash(value);
         self.insert_hash(h1, h2);
     }
 
     /// Insert a raw byte key — skips generic `Hash` dispatch.
+    #[inline]
     pub fn insert_bytes(&mut self, key: &[u8]) {
         let (h1, h2) = double_hash(key);
         self.insert_hash(h1, h2);
@@ -272,6 +274,7 @@ impl BloomFilter {
     /// Insert the caller-supplied `(h1, h2)` pair. Escape hatch for
     /// callers with a stronger hasher — accuracy depends on the
     /// pair being uniform modulo `num_bits`.
+    #[inline]
     pub fn insert_hash(&mut self, h1: u64, h2: u64) {
         self.total_added = self.total_added.saturating_add(1);
         for i in 0..self.num_hashes {
@@ -283,6 +286,7 @@ impl BloomFilter {
     /// Query a `Hash`-able value. Returns `true` when every probed
     /// bit is set — may be a false positive, never a false negative.
     #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[inline]
     pub fn contains<T: Hash + ?Sized>(&self, value: &T) -> bool {
         let (h1, h2) = double_hash(value);
         self.contains_hash(h1, h2)
@@ -290,6 +294,7 @@ impl BloomFilter {
 
     /// Query a raw byte key.
     #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[inline]
     pub fn contains_bytes(&self, key: &[u8]) -> bool {
         let (h1, h2) = double_hash(key);
         self.contains_hash(h1, h2)
@@ -297,6 +302,7 @@ impl BloomFilter {
 
     /// Query with a caller-supplied `(h1, h2)` pair.
     #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[inline]
     pub fn contains_hash(&self, h1: u64, h2: u64) -> bool {
         for i in 0..self.num_hashes {
             let idx = self.combined_index(h1, h2, i);
@@ -344,6 +350,7 @@ impl BloomFilter {
 
     /// Kirsch-Mitzenmacher combined hash: `g_i(x) = h1 + i·h2
     /// (mod m)`.
+    #[inline]
     fn combined_index(&self, h1: u64, h2: u64, i: u32) -> usize {
         let combined = h1.wrapping_add(u64::from(i).wrapping_mul(h2));
         #[allow(clippy::cast_possible_truncation)]
@@ -352,12 +359,14 @@ impl BloomFilter {
     }
 
     /// Set bit `idx` in the word-packed bit bank.
+    #[inline]
     fn set_bit(&mut self, idx: usize) {
         let (w, b) = (idx >> 6, idx & 63);
         self.bits[w] |= 1_u64 << b;
     }
 
     /// Read bit `idx` from the word-packed bit bank.
+    #[inline]
     fn get_bit(&self, idx: usize) -> bool {
         let (w, b) = (idx >> 6, idx & 63);
         (self.bits[w] >> b) & 1 == 1

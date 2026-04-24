@@ -17,6 +17,16 @@ ignore = []
 [licenses]
 version = 2
 # Apache-2.0 parent crate → compatible downstream licenses only.
+#
+# MPL-2.0 is intentionally NOT in the blanket allow list. Under
+# MPL-2.0 source disclosure is required for modified MPL files
+# when distributed as a combined work; static linking from a
+# proprietary binary is safe only when the MPL source stays
+# unmodified. Consumers who static-link the whole dependency
+# tree into a closed-source product must audit individual MPL
+# crates themselves. Add per-crate exceptions in `exceptions`
+# below (with a justification comment) rather than re-enabling
+# MPL globally.
 allow = [
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
@@ -28,8 +38,8 @@ allow = [
     "Unicode-DFS-2016",
     "Zlib",
     "CC0-1.0",
-    "MPL-2.0",
 ]
+exceptions = []
 confidence-threshold = 0.9
 
 [bans]

@@ -441,6 +441,38 @@ enough to run on every detection tick. Policy-free primitives;
 detectors consume them internally, callers consume them directly
 for dashboards or custom logic.
 
+### Capacity planning — safe defaults
+
+Right-sizing each sketch for a target working-set cardinality
+costs a handful of `f64` arithmetic ops up front and saves
+gigabytes of wasted counter bank at run time. The table below
+captures the canonical sizing for the `1 000 000`-distinct-key
+regime typical of day-scale NDR ingest; scale proportionally for
+larger feeds.
+
+| Sketch | Params for 1 M keys | Per-instance memory | Accuracy bound | Constructor |
+|---|---|---|---|---|
+| `CountMinSketch` | `width = 2048`, `depth = 4` | ~64 KiB counter bank | `ε ≈ 1.33 × 10⁻³` (`e/w`), `δ ≈ 1.83 × 10⁻²` (`(1/e)^d`) | `CountMinSketch::new(2048, 4)` |
+| `HyperLogLog` | `precision = 12` | 4 KiB register bank | ≈ 1.625 % relative std error | `HyperLogLog::with_default_precision()` |
+| `BloomFilter` | `capacity = 1_000_000`, `fpr = 0.01` | ~1.2 MiB bit bank (`m ≈ 9 585 059`, `k = 7`) | 1 % false-positive rate, 0 false negatives | `BloomFilter::new(1_000_000, 0.01)` |
+| `SpaceSaving<K>` | `capacity = 1024` | ~32 KiB (16-byte keys × table × 2 for open-addressing) | Guaranteed retention of keys with true frequency `> N / K`; worst-case overestimate `≤ N / K` | `SpaceSaving::new(1024)` |
+
+Rules of thumb:
+
+- **Bloom at target FPR `p`**: bit bank ≈ `-1.44 · n · log₂(p)`
+  bits. Doubling `n` costs 2× memory; halving `p` costs ~+1 bit
+  per key.
+- **CMS**: memory is `width · depth · 8 B`. Pick `width` from the
+  additive-error budget `ε · N`; add rows until `δ` fits your
+  confidence floor (usually 4–8 already gets you `(1/e)⁸ ≈
+  3 × 10⁻⁴`).
+- **HLL** is cardinality-insensitive by design — `p = 12` holds
+  to `~10⁹` distinct elements at 1.6 % std error; bump to
+  `p = 14` (16 KiB) when sub-percent error matters.
+- **`SpaceSaving`** keeps exactly `K` entries — `K = 2 · target_topk`
+  is a safe cushion; the theoretical guarantee is tight at `K =
+  target_topk / ε` for relative-error `ε`.
+
 ### `OnlineStats` — Welford mean + variance
 
 Numerically stable single-pass variance (Welford 1962 / Knuth
@@ -1221,6 +1253,57 @@ and every `.observe()` / `.update()` / `.record()` /
 `.process()` / `.adjust()` / `.explain()` returning a non-unit
 verdict is `#[must_use = "…"]`. Drops in hot paths must use
 `let _ = detector.observe(x);` explicitly.
+
+### v1 polish batch
+
+Grab-bag of pre-release cleanups driven by the audit:
+
+- **Cross-crate inlining hints.** Hot sketch helpers —
+  `BloomFilter::{insert,insert_bytes,insert_hash,contains,
+  contains_bytes,contains_hash,combined_index,set_bit,get_bit}`,
+  `HyperLogLog::{add_hash,add_bytes}`, `CountMinSketch::{increment,
+  estimate,hash_to_col}`, `SpaceSaving::{observe,observe_weighted}`
+  — carry `#[inline]` so `rustc` inlines them across the
+  anomstream-core / anomstream-hotpath crate boundary. Measured:
+  **bloom `contains_bytes` -11 %** (32.0 → 28.8 ns), **`insert_hash`
+  -12 %** (18.5 → 16.8 ns). Other sketches stay flat within
+  noise — they were already reachable through mono-generic
+  dispatch that rustc inlines regardless.
+- **Bounded `Debug` on large stateful types.** `CountMinSketch`
+  and `RandomCutForest<D>` now implement a manual `fmt::Debug`
+  that prints `width / depth / memory` and `num_trees /
+  sample_size / live_points` summaries respectively. The derived
+  impls were dumping up to tens of MiB of counter / tree state
+  on a single `{:?}` call — a trap for anyone inadvertently
+  logging `debug!("{forest:?}")`.
+- **`MatrixProfile` window cap.** `MAX_WINDOW = 10_000`; the
+  first-column seed is `O(n · m)` and doubling `m` doubles the
+  cost, so a runaway `window` turned forensic calls into
+  compute bombs. The public docstring now carries a
+  `# Complexity` note with practical wall-clock numbers.
+- **`AlertClusterer` tenant key.** Docstring updated to
+  recommend `AlertClusterer::<u64, D>` for deployments that
+  carry numeric tenant identifiers; the default `K = String`
+  stays for JSON ergonomics but incurs a string-hash + heap
+  allocation per tenant-set insert.
+- **`deny.toml`: MPL-2.0 removed from the blanket allow list.**
+  Static-link redistribution from an Apache-2.0 product into a
+  proprietary binary stays safe only when MPL source is
+  unmodified; consumers needing per-crate exceptions add them
+  to the `exceptions` list with a written justification.
+- **`MetricsSink` name stability.** Module-level docstring on
+  `metrics::names` now carries an explicit `SemVer` guarantee:
+  identifiers and their string values never change across patch
+  / minor releases, so Prometheus / Grafana queries referencing
+  them survive every non-major bump. Explains why
+  `inc_counter` takes `&str` rather than an enum
+  (integrator-supplied dynamic names).
+- **Facade `SemVer` scope documented.** `meta/src/lib.rs`
+  module doc draws the line between the committed public surface
+  (the catalogue of ~80 types printed in `README.md` / this file)
+  and the glob-reachable transitive set. Consumers who want
+  strict compile-time pinning should import from member crates
+  directly.
 
 ### Supply-chain + build hygiene
 
