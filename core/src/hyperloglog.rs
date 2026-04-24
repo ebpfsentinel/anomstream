@@ -97,18 +97,24 @@ impl TryFrom<HyperLogLogShadow> for HyperLogLog {
 
     fn try_from(raw: HyperLogLogShadow) -> Result<Self, Self::Error> {
         if !(MIN_PRECISION..=MAX_PRECISION).contains(&raw.precision) {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "HyperLogLog: precision {} out of [{MIN_PRECISION}, {MAX_PRECISION}]",
-                raw.precision
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "HyperLogLog: precision {} out of [{MIN_PRECISION}, {MAX_PRECISION}]",
+                    raw.precision
+                )
+                .into(),
+            ));
         }
         let expected = 1_usize << raw.precision;
         if raw.registers.len() != expected {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "HyperLogLog: register bank length {} != expected {expected} for precision {}",
-                raw.registers.len(),
-                raw.precision
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "HyperLogLog: register bank length {} != expected {expected} for precision {}",
+                    raw.registers.len(),
+                    raw.precision
+                )
+                .into(),
+            ));
         }
         Ok(Self {
             precision: raw.precision,
@@ -127,9 +133,12 @@ impl HyperLogLog {
     /// outside `[MIN_PRECISION, MAX_PRECISION]`.
     pub fn new(precision: u8) -> RcfResult<Self> {
         if !(MIN_PRECISION..=MAX_PRECISION).contains(&precision) {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "HyperLogLog: precision {precision} out of [{MIN_PRECISION}, {MAX_PRECISION}]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "HyperLogLog: precision {precision} out of [{MIN_PRECISION}, {MAX_PRECISION}]"
+                )
+                .into(),
+            ));
         }
         let m = 1_usize << precision;
         Ok(Self {
@@ -268,11 +277,14 @@ impl HyperLogLog {
     /// disagree on `precision`.
     pub fn merge(&mut self, other: &Self) -> RcfResult<()> {
         if self.precision != other.precision {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "HyperLogLog::merge: precision mismatch ({} vs {})",
-                self.precision,
-                other.precision
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "HyperLogLog::merge: precision mismatch ({} vs {})",
+                    self.precision,
+                    other.precision
+                )
+                .into(),
+            ));
         }
         for (slot, other_r) in self.registers.iter_mut().zip(other.registers.iter()) {
             if *other_r > *slot {

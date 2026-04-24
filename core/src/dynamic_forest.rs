@@ -75,9 +75,9 @@ impl<const MAX_D: usize> DynamicForest<MAX_D> {
             ));
         }
         if active_dim > MAX_D {
-            return Err(RcfError::InvalidConfig(format!(
-                "DynamicForest: active_dim {active_dim} exceeds MAX_D {MAX_D}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("DynamicForest: active_dim {active_dim} exceeds MAX_D {MAX_D}").into(),
+            ));
         }
         let forest = builder.build()?;
         Ok(Self { forest, active_dim })

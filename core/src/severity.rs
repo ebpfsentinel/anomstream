@@ -120,22 +120,21 @@ impl SeverityBands {
             ("critical", self.critical),
         ] {
             if !value.is_finite() {
-                return Err(RcfError::InvalidConfig(format!(
-                    "SeverityBands::{name} must be finite, got {value}"
-                )));
+                return Err(RcfError::InvalidConfig(
+                    format!("SeverityBands::{name} must be finite, got {value}").into(),
+                ));
             }
         }
         if self.low < 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "SeverityBands::low must be >= 0, got {}",
-                self.low
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("SeverityBands::low must be >= 0, got {}", self.low).into(),
+            ));
         }
         if !(self.low < self.medium && self.medium < self.high && self.high < self.critical) {
             return Err(RcfError::InvalidConfig(format!(
                 "SeverityBands must be strictly ascending: low={} medium={} high={} critical={}",
                 self.low, self.medium, self.high, self.critical
-            )));
+            ).into()));
         }
         Ok(())
     }

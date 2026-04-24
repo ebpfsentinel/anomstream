@@ -98,16 +98,22 @@ impl HistogramConfig {
             ));
         }
         if !self.min.is_finite() || !self.max.is_finite() {
-            return Err(RcfError::InvalidConfig(format!(
-                "HistogramConfig bounds must be finite, got min={} max={}",
-                self.min, self.max
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "HistogramConfig bounds must be finite, got min={} max={}",
+                    self.min, self.max
+                )
+                .into(),
+            ));
         }
         if self.min >= self.max {
-            return Err(RcfError::InvalidConfig(format!(
-                "HistogramConfig::min ({}) must be strictly less than max ({})",
-                self.min, self.max
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "HistogramConfig::min ({}) must be strictly less than max ({})",
+                    self.min, self.max
+                )
+                .into(),
+            ));
         }
         Ok(())
     }
@@ -163,11 +169,14 @@ impl TryFrom<ScoreHistogramShadow> for ScoreHistogram {
     fn try_from(raw: ScoreHistogramShadow) -> Result<Self, Self::Error> {
         raw.config.validate()?;
         if raw.bins.len() != raw.config.bin_count {
-            return Err(RcfError::InvalidConfig(format!(
-                "ScoreHistogram: bins length {} != config.bin_count {}",
-                raw.bins.len(),
-                raw.config.bin_count
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "ScoreHistogram: bins length {} != config.bin_count {}",
+                    raw.bins.len(),
+                    raw.config.bin_count
+                )
+                .into(),
+            ));
         }
         Ok(Self {
             config: raw.config,

@@ -5,6 +5,7 @@
 //! caller to act without re-fetching state. [`RcfResult`] is the
 //! convenient `Result` alias used in public signatures.
 
+use alloc::boxed::Box;
 use alloc::string::String;
 
 use thiserror::Error;
@@ -35,9 +36,12 @@ pub enum RcfError {
     },
 
     /// A configuration value falls outside the AWS `SageMaker` spec
-    /// bounds enforced by `ForestBuilder`.
+    /// bounds enforced by `ForestBuilder`. The message payload is
+    /// `Box<str>` rather than `String` so the variant fits in
+    /// 16 bytes on 64-bit targets (vs 24 for `String`) — matters
+    /// when `RcfError` propagates through hot-path return values.
     #[error("invalid configuration: {0}")]
-    InvalidConfig(String),
+    InvalidConfig(Box<str>),
 
     /// An operation that requires a non-empty forest was attempted on
     /// an empty one (e.g. scoring before any `update` call).
@@ -63,11 +67,19 @@ pub enum RcfError {
     },
 
     /// Persistence: serialising the forest failed.
+    ///
+    /// Left as `String` (not `Box<str>`) because every emission
+    /// site formats a fresh heap-allocated message from an
+    /// upstream `serde` / `postcard` error — the extra 8 bytes
+    /// per variant vs `Box<str>` would cost a round-trip through
+    /// `Box::from(String)` on an already-cold path.
     #[error("serialization failed: {0}")]
     SerializationFailed(String),
 
     /// Persistence: deserialising the forest failed (truncated bytes,
-    /// malformed JSON, version-skew payload, etc).
+    /// malformed JSON, version-skew payload, etc). See
+    /// [`Self::SerializationFailed`] for the `String`-vs-`Box<str>`
+    /// rationale.
     #[error("deserialization failed: {0}")]
     DeserializationFailed(String),
 

@@ -178,9 +178,9 @@ where
             || similarity_threshold <= 0.0
             || similarity_threshold > 1.0
         {
-            return Err(RcfError::InvalidConfig(format!(
-                "similarity_threshold {similarity_threshold} out of (0, 1]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("similarity_threshold {similarity_threshold} out of (0, 1]").into(),
+            ));
         }
         Ok(Self {
             similarity_threshold,

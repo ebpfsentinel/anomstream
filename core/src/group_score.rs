@@ -81,9 +81,9 @@ impl FeatureGroup {
         }
         let indices: Vec<usize> = indices.into_iter().collect();
         if indices.is_empty() {
-            return Err(RcfError::InvalidConfig(format!(
-                "FeatureGroup \"{name}\" must declare at least one index"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("FeatureGroup \"{name}\" must declare at least one index").into(),
+            ));
         }
         Ok(Self { name, indices })
     }
@@ -200,15 +200,18 @@ impl FeatureGroupsBuilder {
         let mut max_index: usize = 0;
         for (i, g) in self.groups.iter().enumerate() {
             if g.name.is_empty() {
-                return Err(RcfError::InvalidConfig(format!(
-                    "FeatureGroup at position {i} has an empty name"
-                )));
+                return Err(RcfError::InvalidConfig(
+                    format!("FeatureGroup at position {i} has an empty name").into(),
+                ));
             }
             if g.indices.is_empty() {
-                return Err(RcfError::InvalidConfig(format!(
-                    "FeatureGroup \"{}\" must declare at least one index",
-                    g.name
-                )));
+                return Err(RcfError::InvalidConfig(
+                    format!(
+                        "FeatureGroup \"{}\" must declare at least one index",
+                        g.name
+                    )
+                    .into(),
+                ));
             }
             for &idx in &g.indices {
                 if idx > max_index {
@@ -220,10 +223,9 @@ impl FeatureGroupsBuilder {
         for i in 0..self.groups.len() {
             for j in (i + 1)..self.groups.len() {
                 if self.groups[i].name == self.groups[j].name {
-                    return Err(RcfError::InvalidConfig(format!(
-                        "duplicate FeatureGroup name \"{}\"",
-                        self.groups[i].name
-                    )));
+                    return Err(RcfError::InvalidConfig(
+                        format!("duplicate FeatureGroup name \"{}\"", self.groups[i].name).into(),
+                    ));
                 }
             }
         }
@@ -248,7 +250,8 @@ pub struct GroupScores {
 
 impl GroupScores {
     /// Build from components. Normally produced by
-    /// [`RandomCutForest::group_scores`] / [`ThresholdedForest::group_scores`];
+    /// [`crate::RandomCutForest::group_scores`] /
+    /// [`crate::ThresholdedForest::group_scores`];
     /// the constructor is public so tests and alternative backends
     /// can synthesise instances too.
     #[must_use]

@@ -59,9 +59,9 @@ impl EmaStats {
     /// or falls outside `(0.0, 1.0]`.
     pub fn new(decay: f64) -> RcfResult<Self> {
         if !decay.is_finite() || decay <= 0.0 || decay > 1.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "EmaStats decay must be in (0.0, 1.0], got {decay}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("EmaStats decay must be in (0.0, 1.0], got {decay}").into(),
+            ));
         }
         Ok(Self {
             mean: 0.0,

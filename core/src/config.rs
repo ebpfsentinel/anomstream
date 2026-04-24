@@ -194,22 +194,27 @@ impl RcfConfig {
     /// parameter when any bound is violated.
     pub fn validate(&self) -> RcfResult<()> {
         if !(MIN_NUM_TREES..=MAX_NUM_TREES).contains(&self.num_trees) {
-            return Err(RcfError::InvalidConfig(format!(
-                "num_trees {} out of [{}, {}]",
-                self.num_trees, MIN_NUM_TREES, MAX_NUM_TREES
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "num_trees {} out of [{}, {}]",
+                    self.num_trees, MIN_NUM_TREES, MAX_NUM_TREES
+                )
+                .into(),
+            ));
         }
         if !(MIN_SAMPLE_SIZE..=MAX_SAMPLE_SIZE).contains(&self.sample_size) {
-            return Err(RcfError::InvalidConfig(format!(
-                "sample_size {} out of [{}, {}]",
-                self.sample_size, MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "sample_size {} out of [{}, {}]",
+                    self.sample_size, MIN_SAMPLE_SIZE, MAX_SAMPLE_SIZE
+                )
+                .into(),
+            ));
         }
         if !self.time_decay.is_finite() || !(0.0..=1.0).contains(&self.time_decay) {
-            return Err(RcfError::InvalidConfig(format!(
-                "time_decay {} out of [0.0, 1.0]",
-                self.time_decay
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("time_decay {} out of [0.0, 1.0]", self.time_decay).into(),
+            ));
         }
         if let Some(n) = self.num_threads
             && n == 0
@@ -223,17 +228,20 @@ impl RcfConfig {
             || self.initial_accept_fraction <= 0.0
             || self.initial_accept_fraction > 1.0
         {
-            return Err(RcfError::InvalidConfig(format!(
-                "initial_accept_fraction {} out of (0.0, 1.0]",
-                self.initial_accept_fraction
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "initial_accept_fraction {} out of (0.0, 1.0]",
+                    self.initial_accept_fraction
+                )
+                .into(),
+            ));
         }
         if let Some(scales) = &self.feature_scales {
             for (i, s) in scales.iter().enumerate() {
                 if !s.is_finite() || *s <= 0.0 {
-                    return Err(RcfError::InvalidConfig(format!(
-                        "feature_scales[{i}] must be finite and > 0, got {s}"
-                    )));
+                    return Err(RcfError::InvalidConfig(
+                        format!("feature_scales[{i}] must be finite and > 0, got {s}").into(),
+                    ));
                 }
             }
         }
@@ -270,9 +278,9 @@ impl RcfConfig {
     /// `[MIN_DIMENSION, MAX_DIMENSION]`.
     pub fn validate_dimension(dimension: usize) -> RcfResult<()> {
         if !(MIN_DIMENSION..=MAX_DIMENSION).contains(&dimension) {
-            return Err(RcfError::InvalidConfig(format!(
-                "dimension {dimension} out of [{MIN_DIMENSION}, {MAX_DIMENSION}]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("dimension {dimension} out of [{MIN_DIMENSION}, {MAX_DIMENSION}]").into(),
+            ));
         }
         Ok(())
     }

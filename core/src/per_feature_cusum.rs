@@ -107,14 +107,14 @@ impl TryFrom<PerFeatureCusumAccumulatorShadow> for PerFeatureCusumAccumulator {
                 raw.s_pos,
                 raw.s_neg,
                 raw.reference
-            )));
+            ).into()));
         }
         if raw.s_pos < 0.0 || raw.s_neg < 0.0 {
             return Err(crate::error::RcfError::InvalidConfig(alloc::format!(
                 "PerFeatureCusumAccumulator: cumulative sums must be non-negative (s_pos={}, s_neg={})",
                 raw.s_pos,
                 raw.s_neg
-            )));
+            ).into()));
         }
         Ok(Self {
             s_pos: raw.s_pos,
@@ -228,16 +228,22 @@ impl TryFrom<PerFeatureCusumConfigShadow> for PerFeatureCusumConfig {
 
     fn try_from(raw: PerFeatureCusumConfigShadow) -> Result<Self, Self::Error> {
         if !raw.slack.is_finite() || raw.slack < 0.0 {
-            return Err(crate::error::RcfError::InvalidConfig(alloc::format!(
-                "PerFeatureCusumConfig: slack must be finite and ≥ 0, got {}",
-                raw.slack
-            )));
+            return Err(crate::error::RcfError::InvalidConfig(
+                alloc::format!(
+                    "PerFeatureCusumConfig: slack must be finite and ≥ 0, got {}",
+                    raw.slack
+                )
+                .into(),
+            ));
         }
         if !raw.threshold.is_finite() || raw.threshold <= 0.0 {
-            return Err(crate::error::RcfError::InvalidConfig(alloc::format!(
-                "PerFeatureCusumConfig: threshold must be finite and > 0, got {}",
-                raw.threshold
-            )));
+            return Err(crate::error::RcfError::InvalidConfig(
+                alloc::format!(
+                    "PerFeatureCusumConfig: threshold must be finite and > 0, got {}",
+                    raw.threshold
+                )
+                .into(),
+            ));
         }
         Ok(Self {
             slack: raw.slack,

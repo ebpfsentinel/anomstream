@@ -27,15 +27,18 @@
 //!
 //! # Life cycle
 //!
-//! 1. Build with [`FeatureDriftDetector::new(num_bins)`].
-//! 2. Feed the warm-up window via [`Self::observe`].
-//! 3. Call [`Self::freeze_baseline`] — pins the per-dim range and
-//!    freezes the current histogram as the reference.
-//! 4. Keep calling [`Self::observe`] with live traffic; the counts
-//!    accrue into the production histogram.
-//! 5. Periodically read [`Self::psi`] / [`Self::kl_divergence`] /
-//!    [`Self::max_psi`]; optionally [`Self::reset_production`] to
-//!    start a fresh production window.
+//! 1. Build with [`FeatureDriftDetector::new`] (supplying `num_bins`).
+//! 2. Feed the warm-up window via [`FeatureDriftDetector::observe`].
+//! 3. Call [`FeatureDriftDetector::freeze_baseline`] — pins the
+//!    per-dim range and freezes the current histogram as the
+//!    reference.
+//! 4. Keep calling [`FeatureDriftDetector::observe`] with live
+//!    traffic; the counts accrue into the production histogram.
+//! 5. Periodically read [`FeatureDriftDetector::psi`] /
+//!    [`FeatureDriftDetector::kl_divergence`] /
+//!    [`FeatureDriftDetector::max_psi`]; optionally
+//!    [`FeatureDriftDetector::reset_production`] to start a fresh
+//!    production window.
 
 use alloc::format;
 use alloc::vec;
@@ -168,14 +171,15 @@ impl<const D: usize> FeatureDriftDetector<D> {
             ));
         }
         if num_bins < 2 {
-            return Err(RcfError::InvalidConfig(format!(
-                "FeatureDriftDetector: num_bins must be >= 2, got {num_bins}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("FeatureDriftDetector: num_bins must be >= 2, got {num_bins}").into(),
+            ));
         }
         if !smoothing.is_finite() || smoothing <= 0.0 || smoothing > 1.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "FeatureDriftDetector: smoothing must be in (0, 1], got {smoothing}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("FeatureDriftDetector: smoothing must be in (0, 1], got {smoothing}")
+                    .into(),
+            ));
         }
         Ok(Self {
             num_bins,

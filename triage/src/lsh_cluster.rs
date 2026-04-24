@@ -96,14 +96,18 @@ impl LshAlertClusterer {
     /// non-finite / non-positive `attr_cap`.
     pub fn new(buckets_per_dim: usize, attr_cap: f64) -> RcfResult<Self> {
         if !(2..=256).contains(&buckets_per_dim) {
-            return Err(RcfError::InvalidConfig(format!(
-                "LshAlertClusterer: buckets_per_dim must be in [2, 256], got {buckets_per_dim}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "LshAlertClusterer: buckets_per_dim must be in [2, 256], got {buckets_per_dim}"
+                )
+                .into(),
+            ));
         }
         if !attr_cap.is_finite() || attr_cap <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "LshAlertClusterer: attr_cap must be finite and > 0, got {attr_cap}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("LshAlertClusterer: attr_cap must be finite and > 0, got {attr_cap}")
+                    .into(),
+            ));
         }
         Ok(Self {
             buckets: HashMap::new(),

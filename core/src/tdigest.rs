@@ -97,9 +97,10 @@ impl TDigest {
     /// non-finite or out of `[2, 10_000]`.
     pub fn new(compression: f64) -> RcfResult<Self> {
         if !compression.is_finite() || !(2.0..=10_000.0).contains(&compression) {
-            return Err(RcfError::InvalidConfig(format!(
-                "TDigest: compression must be finite in [2, 10000], got {compression}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("TDigest: compression must be finite in [2, 10000], got {compression}")
+                    .into(),
+            ));
         }
         Ok(Self {
             compression,
@@ -284,10 +285,13 @@ impl TDigest {
         #[allow(clippy::float_cmp)]
         let compat = self.compression == other.compression;
         if !compat {
-            return Err(RcfError::InvalidConfig(format!(
-                "TDigest merge: compression mismatch ({} vs {})",
-                self.compression, other.compression
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "TDigest merge: compression mismatch ({} vs {})",
+                    self.compression, other.compression
+                )
+                .into(),
+            ));
         }
         self.flush_buffer();
         // Fold other's centroids + buffer into self's buffer, then

@@ -217,9 +217,10 @@ impl ReservoirSampler {
             ));
         }
         if !time_decay.is_finite() || time_decay < 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "ReservoirSampler time_decay must be finite and >= 0, got {time_decay}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("ReservoirSampler time_decay must be finite and >= 0, got {time_decay}")
+                    .into(),
+            ));
         }
         if !initial_accept_fraction.is_finite()
             || initial_accept_fraction <= 0.0
@@ -227,7 +228,7 @@ impl ReservoirSampler {
         {
             return Err(RcfError::InvalidConfig(format!(
                 "ReservoirSampler initial_accept_fraction must be in (0.0, 1.0], got {initial_accept_fraction}"
-            )));
+            ).into()));
         }
         Ok(Self {
             heap: BinaryHeap::with_capacity(capacity),

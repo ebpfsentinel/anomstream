@@ -86,14 +86,14 @@ impl CountMinSketch {
     #[allow(clippy::cast_possible_truncation)]
     pub fn new(width: usize, depth: usize) -> RcfResult<Self> {
         if width == 0 || width > MAX_WIDTH {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "CountMinSketch: width {width} out of (0, {MAX_WIDTH}]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!("CountMinSketch: width {width} out of (0, {MAX_WIDTH}]").into(),
+            ));
         }
         if depth == 0 || depth > MAX_DEPTH {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "CountMinSketch: depth {depth} out of (0, {MAX_DEPTH}]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!("CountMinSketch: depth {depth} out of (0, {MAX_DEPTH}]").into(),
+            ));
         }
         let seeds: Vec<(u64, u64)> = (0..depth)
             .map(|i| {

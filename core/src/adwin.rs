@@ -93,20 +93,23 @@ impl AdwinDetector {
     /// `window_cap < 2 · MIN_SUBWINDOW_LEN`.
     pub fn new(range: f64, delta: f64, window_cap: usize) -> RcfResult<Self> {
         if !range.is_finite() || range <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "AdwinDetector: range must be finite and > 0, got {range}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("AdwinDetector: range must be finite and > 0, got {range}").into(),
+            ));
         }
         if !delta.is_finite() || !(0.0..1.0).contains(&delta) || delta <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "AdwinDetector: delta must be in (0.0, 1.0), got {delta}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("AdwinDetector: delta must be in (0.0, 1.0), got {delta}").into(),
+            ));
         }
         if window_cap < 2 * MIN_SUBWINDOW_LEN {
-            return Err(RcfError::InvalidConfig(format!(
-                "AdwinDetector: window_cap must be >= {}, got {window_cap}",
-                2 * MIN_SUBWINDOW_LEN
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "AdwinDetector: window_cap must be >= {}, got {window_cap}",
+                    2 * MIN_SUBWINDOW_LEN
+                )
+                .into(),
+            ));
         }
         Ok(Self {
             range,

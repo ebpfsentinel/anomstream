@@ -96,21 +96,24 @@ pub fn vus_pr_with_buffer(scores: &[f64], labels: &[bool], max_buffer: usize) ->
 /// Shared precondition check for the public entry points.
 fn validate(scores: &[f64], labels: &[bool]) -> RcfResult<()> {
     if scores.len() != labels.len() {
-        return Err(RcfError::InvalidConfig(alloc::format!(
-            "vus_pr: length mismatch — scores {} vs labels {}",
-            scores.len(),
-            labels.len()
-        )));
+        return Err(RcfError::InvalidConfig(
+            alloc::format!(
+                "vus_pr: length mismatch — scores {} vs labels {}",
+                scores.len(),
+                labels.len()
+            )
+            .into(),
+        ));
     }
     if scores.is_empty() {
-        return Err(RcfError::InvalidConfig(alloc::string::ToString::to_string(
-            "vus_pr: empty input",
-        )));
+        return Err(RcfError::InvalidConfig(
+            alloc::string::ToString::to_string("vus_pr: empty input").into(),
+        ));
     }
     if scores.iter().any(|v| !v.is_finite()) {
-        return Err(RcfError::InvalidConfig(alloc::string::ToString::to_string(
-            "vus_pr: scores contain non-finite values",
-        )));
+        return Err(RcfError::InvalidConfig(
+            alloc::string::ToString::to_string("vus_pr: scores contain non-finite values").into(),
+        ));
     }
     Ok(())
 }

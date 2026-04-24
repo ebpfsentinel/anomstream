@@ -90,22 +90,47 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      # Pin exact action tag (not `@master`) so a compromised
+      # upstream push cannot silently swap the toolchain download
+      # underneath CI. `@1.12.0` was the latest at lockdown;
+      # bumps are deliberate.
+      - uses: dtolnay/rust-toolchain@1.12.0
         with:
           toolchain: ${{ matrix.rust }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --all-features
       - run: cargo test --workspace --no-default-features --features "anomstream-core/std"
 
+  minimal_versions:
+    name: minimal-versions (nightly -Zminimal-versions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      # Resolve every dependency to the oldest version its
+      # `Cargo.toml` constraint permits. Catches drift where a
+      # loose requirement (`foo = "1"`) relies on features only
+      # added in `1.x.y+n`. Nightly is the only toolchain that
+      # ships `-Z minimal-versions`; we still build under stable
+      # afterwards to confirm the minimal set compiles cleanly.
+      - run: cargo +nightly update -Z minimal-versions
+      - run: cargo check --workspace --all-features
+      - run: cargo update   # restore the normal lockfile.
+
   doc:
     name: cargo doc (workspace)
     runs-on: ubuntu-latest
+    env:
+      # Broken intra-doc links are now a hard error — v1 exits the
+      # "allow everything" era. Every member re-export uses
+      # absolute `[`crate::X`]` paths so facade inlining resolves
+      # cleanly.
+      RUSTDOCFLAGS: -D rustdoc::broken_intra_doc_links
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # 16 pre-existing intra-doc link warnings survive from v0.1.0;
-      # cleanup deferred to a dedicated pass. Build must still succeed.
       - run: cargo doc --workspace --all-features --no-deps
 
   bench-compile:

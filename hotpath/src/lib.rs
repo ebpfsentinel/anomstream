@@ -30,7 +30,7 @@
 //! # Counter semantics
 //!
 //! All lifetime counters ([`UpdateSampler::accepted_total`],
-//! `rejected_total`, [`UpdateProducer::enqueued`], `dropped_total`,
+//! `rejected_total`, `UpdateProducer::enqueued`, `dropped_total`,
 //! [`PrefixRateCap::admitted_total`], `capped_total`) are plain
 //! `AtomicU64::fetch_add(1, Relaxed)`. Atomic `fetch_add` is
 //! wrapping by definition — `profile.release.overflow-checks` does
@@ -370,7 +370,7 @@ impl<const D: usize> UpdateProducer<D> {
         &self.metrics
     }
 
-    /// Channel capacity as configured at [`channel`].
+    /// Channel capacity as configured at [`update_channel`].
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.capacity

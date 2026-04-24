@@ -152,14 +152,14 @@ impl<const D: usize> FeedbackStore<D> {
             ));
         }
         if !sigma.is_finite() || sigma <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "FeedbackStore: sigma must be finite and > 0, got {sigma}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("FeedbackStore: sigma must be finite and > 0, got {sigma}").into(),
+            ));
         }
         if !strength.is_finite() {
-            return Err(RcfError::InvalidConfig(format!(
-                "FeedbackStore: strength must be finite, got {strength}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("FeedbackStore: strength must be finite, got {strength}").into(),
+            ));
         }
         Ok(Self {
             entries: VecDeque::with_capacity(capacity),

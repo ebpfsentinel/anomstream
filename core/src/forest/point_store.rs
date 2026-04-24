@@ -219,9 +219,9 @@ impl<const D: usize> PointStore<D> {
         }
         let rc = self.ref_counts[idx].load(Ordering::Acquire);
         if rc != 0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "PointStore::drop_unreferenced: slot {idx} still has refcount {rc}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("PointStore::drop_unreferenced: slot {idx} still has refcount {rc}").into(),
+            ));
         }
         self.points[idx] = None;
         self.free_list.push(idx);
@@ -268,9 +268,9 @@ impl<const D: usize> PointStore<D> {
         loop {
             let current = self.ref_counts[idx].load(Ordering::Acquire);
             if current == 0 {
-                return Err(RcfError::InvalidConfig(format!(
-                    "PointStore::decr_ref: slot {idx} already at zero refcount"
-                )));
+                return Err(RcfError::InvalidConfig(
+                    format!("PointStore::decr_ref: slot {idx} already at zero refcount").into(),
+                ));
             }
             let next = current - 1;
             if self.ref_counts[idx]
@@ -301,9 +301,9 @@ impl<const D: usize> PointStore<D> {
         }
         let rc = self.ref_counts[idx].load(Ordering::Acquire);
         if rc != 0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "PointStore::set_free: slot {idx} has refcount {rc}, not zero"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("PointStore::set_free: slot {idx} has refcount {rc}, not zero").into(),
+            ));
         }
         self.points[idx] = None;
         self.free_list.push(idx);

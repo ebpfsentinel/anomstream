@@ -101,17 +101,17 @@ impl TsbAdMDataset {
         let mut lines = raw.lines().filter(|l| !l.trim().is_empty());
         let header = lines
             .next()
-            .ok_or_else(|| RcfError::InvalidConfig("TSB-AD-M: empty CSV".to_string()))?;
+            .ok_or_else(|| RcfError::InvalidConfig("TSB-AD-M: empty CSV".into()))?;
         let columns: Vec<&str> = header.split(',').map(str::trim).collect();
         let label_idx = columns
             .iter()
             .rposition(|h| h.eq_ignore_ascii_case("label"))
             .ok_or_else(|| {
-                RcfError::InvalidConfig("TSB-AD-M: no 'Label' column in header".to_string())
+                RcfError::InvalidConfig("TSB-AD-M: no 'Label' column in header".into())
             })?;
         if columns.len() < 2 {
             return Err(RcfError::InvalidConfig(
-                "TSB-AD-M: header must contain at least one feature + Label".to_string(),
+                "TSB-AD-M: header must contain at least one feature + Label".into(),
             ));
         }
         let feature_headers: Vec<String> = columns
@@ -127,18 +127,22 @@ impl TsbAdMDataset {
         for (row_idx, line) in lines.enumerate() {
             let cells: Vec<&str> = line.split(',').map(str::trim).collect();
             if cells.len() != columns.len() {
-                return Err(RcfError::InvalidConfig(alloc::format!(
-                    "TSB-AD-M: row {} has {} cells, expected {}",
-                    row_idx,
-                    cells.len(),
-                    columns.len()
-                )));
+                return Err(RcfError::InvalidConfig(
+                    alloc::format!(
+                        "TSB-AD-M: row {} has {} cells, expected {}",
+                        row_idx,
+                        cells.len(),
+                        columns.len()
+                    )
+                    .into(),
+                ));
             }
             let label_cell = cells[label_idx];
             let label = parse_label(label_cell).ok_or_else(|| {
-                RcfError::InvalidConfig(alloc::format!(
-                    "TSB-AD-M: row {row_idx} label '{label_cell}' not binary"
-                ))
+                RcfError::InvalidConfig(
+                    alloc::format!("TSB-AD-M: row {row_idx} label '{label_cell}' not binary")
+                        .into(),
+                )
             })?;
             let mut feats = Vec::with_capacity(columns.len() - 1);
             for (i, cell) in cells.iter().enumerate() {
@@ -146,9 +150,10 @@ impl TsbAdMDataset {
                     continue;
                 }
                 let v: f64 = cell.parse().map_err(|_| {
-                    RcfError::InvalidConfig(alloc::format!(
-                        "TSB-AD-M: row {row_idx} col {i} value '{cell}' is not f64"
-                    ))
+                    RcfError::InvalidConfig(
+                        alloc::format!("TSB-AD-M: row {row_idx} col {i} value '{cell}' is not f64")
+                            .into(),
+                    )
                 })?;
                 feats.push(v);
             }
@@ -158,7 +163,7 @@ impl TsbAdMDataset {
 
         if features.is_empty() {
             return Err(RcfError::InvalidConfig(
-                "TSB-AD-M: CSV has no data rows".to_string(),
+                "TSB-AD-M: CSV has no data rows".into(),
             ));
         }
         Ok(Self {
@@ -176,10 +181,13 @@ impl TsbAdMDataset {
     /// Returns [`RcfError::InvalidConfig`] on out-of-range index.
     pub fn column(&self, c: usize) -> RcfResult<Vec<f64>> {
         if c >= self.feature_dim() {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "TSB-AD-M: column {c} out of range (dim = {})",
-                self.feature_dim()
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "TSB-AD-M: column {c} out of range (dim = {})",
+                    self.feature_dim()
+                )
+                .into(),
+            ));
         }
         Ok(self.features.iter().map(|row| row[c]).collect())
     }
@@ -197,7 +205,7 @@ fn parse_label(cell: &str) -> Option<bool> {
 /// Wrap an `io::Error` into an [`RcfError::InvalidConfig`] with a
 /// TSB-AD-M prefix.
 fn io_err(e: &io::Error) -> RcfError {
-    RcfError::InvalidConfig(alloc::format!("TSB-AD-M: I/O error: {e}"))
+    RcfError::InvalidConfig(alloc::format!("TSB-AD-M: I/O error: {e}").into())
 }
 
 #[cfg(test)]

@@ -38,7 +38,17 @@ confidence-threshold = 0.9
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
-skip = []
+# Acknowledged duplicates that do not ship in the release
+# dependency graph. Removing each requires an upstream bump we
+# do not control.
+skip = [
+    # `getrandom 0.4` arrives exclusively via `proptest → tempfile
+    # → rusty-fork`, all dev-dependencies. The release binary
+    # still links a single `getrandom 0.3`. Revisit when
+    # proptest ships an update pinning tempfile on the same
+    # major as `rand`.
+    { name = "getrandom", version = "0.4" },
+]
 
 [sources]
 # Only crates.io is authoritative. git deps must be on a vetted

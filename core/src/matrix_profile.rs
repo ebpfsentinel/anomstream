@@ -106,28 +106,37 @@ impl MatrixProfile {
         exclusion_zone: Option<usize>,
     ) -> RcfResult<Self> {
         if window < MIN_WINDOW {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "MatrixProfile: window {window} < MIN_WINDOW {MIN_WINDOW}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!("MatrixProfile: window {window} < MIN_WINDOW {MIN_WINDOW}").into(),
+            ));
         }
         let n = series.len();
         if n < window * 2 {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "MatrixProfile: series len {n} must be ≥ 2·window ({})",
-                window * 2
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "MatrixProfile: series len {n} must be ≥ 2·window ({})",
+                    window * 2
+                )
+                .into(),
+            ));
         }
         if series.iter().any(|v| !v.is_finite()) {
-            return Err(RcfError::InvalidConfig(alloc::string::ToString::to_string(
-                "MatrixProfile: series contains non-finite values",
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::string::ToString::to_string(
+                    "MatrixProfile: series contains non-finite values",
+                )
+                .into(),
+            ));
         }
         let subseq_n = n - window + 1;
         let exclusion_zone = exclusion_zone.unwrap_or_else(|| window.div_ceil(4));
         if exclusion_zone >= subseq_n {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "MatrixProfile: exclusion_zone {exclusion_zone} ≥ subseq count {subseq_n}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "MatrixProfile: exclusion_zone {exclusion_zone} ≥ subseq count {subseq_n}"
+                )
+                .into(),
+            ));
         }
 
         let (means, stds) = sliding_stats(series, window);

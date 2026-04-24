@@ -259,9 +259,9 @@ impl<const D: usize> RandomCutTree<D> {
         ensure_dim(point, D)?;
         ensure_finite(point)?;
         if self.leaf_index_contains(point_idx) {
-            return Err(RcfError::InvalidConfig(format!(
-                "RandomCutTree::add: point_idx {point_idx} already present"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("RandomCutTree::add: point_idx {point_idx} already present").into(),
+            ));
         }
 
         let Some(root) = self.root else {
@@ -497,9 +497,9 @@ impl<const D: usize> RandomCutTree<D> {
         P: PointAccessor<D> + ?Sized,
     {
         let leaf = self.leaf_index_get(point_idx).ok_or_else(|| {
-            RcfError::InvalidConfig(format!(
-                "RandomCutTree::delete: point_idx {point_idx} not present"
-            ))
+            RcfError::InvalidConfig(
+                format!("RandomCutTree::delete: point_idx {point_idx} not present").into(),
+            )
         })?;
 
         let leaf_mass = self.store.view(leaf)?.mass();

@@ -13,9 +13,9 @@
 //!
 //! | Feature | Pulls in | Purpose |
 //! |---|---|---|
-//! | `core` | [`anomstream-core`] | Detectors + streaming primitives + `MetricsSink` + `SeverityBands` |
-//! | `triage` | [`anomstream-triage`] | Platt, SAGE, alert clustering, feedback, audit records |
-//! | `hotpath` | [`anomstream-hotpath`] | eBPF-style ingress `UpdateSampler` / `PrefixRateCap` / `channel` |
+//! | `core` | `anomstream-core` | Detectors + streaming primitives + `MetricsSink` + `SeverityBands` |
+//! | `triage` | `anomstream-triage` | Platt, SAGE, alert clustering, feedback, audit records |
+//! | `hotpath` | `anomstream-hotpath` | eBPF-style ingress `UpdateSampler` / `PrefixRateCap` / `update_channel` |
 //!
 //! `triage` and `hotpath` both depend on `core`; enabling them
 //! implies `core`. Default feature set enables all three plus
@@ -46,11 +46,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
-// Glob re-exports carry intra-doc links like `[crate::X]` that
-// resolved inside the member crate but not under the facade
-// namespace. Known quirk of umbrella re-export crates; rustdoc
-// still renders the linked text correctly.
-#![allow(rustdoc::broken_intra_doc_links)]
+// Every member-crate doc link is either full-path
+// (`[crate::Foo]`) or uses an in-scope identifier, so rustdoc
+// resolves them cleanly under the facade namespace. The old
+// blanket allow for `rustdoc::broken_intra_doc_links` is no
+// longer needed and CI (`RUSTDOCFLAGS="-D
+// rustdoc::broken_intra_doc_links"`) fails on new breakage.
 
 // -- Glob re-exports (flat DX) --
 
@@ -74,19 +75,19 @@ pub mod hot_path {
 
 // -- Named namespaces (escape hatch for module-path reaches) --
 
-/// Direct access to the [`anomstream-core`] crate namespace for
+/// Direct access to the `anomstream-core` crate namespace for
 /// consumers that need the full module tree (`anomstream::core_lib::forest::*`,
 /// `anomstream::core_lib::serde_util::*`, …).
 #[cfg(feature = "core")]
 #[doc(inline)]
 pub use anomstream_core as core_lib;
 
-/// Direct access to the [`anomstream-triage`] crate namespace.
+/// Direct access to the `anomstream-triage` crate namespace.
 #[cfg(feature = "triage")]
 #[doc(inline)]
 pub use anomstream_triage as triage_lib;
 
-/// Direct access to the [`anomstream-hotpath`] crate namespace.
+/// Direct access to the `anomstream-hotpath` crate namespace.
 #[cfg(feature = "hotpath")]
 #[doc(inline)]
 pub use anomstream_hotpath as hotpath_lib;

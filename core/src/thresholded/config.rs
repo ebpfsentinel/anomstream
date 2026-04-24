@@ -129,16 +129,16 @@ impl ThresholdedConfig {
         match self.threshold_mode {
             ThresholdMode::ZSigma { z_factor } => {
                 if !z_factor.is_finite() || z_factor <= 0.0 {
-                    return Err(RcfError::InvalidConfig(format!(
-                        "z_factor must be finite and > 0, got {z_factor}"
-                    )));
+                    return Err(RcfError::InvalidConfig(
+                        format!("z_factor must be finite and > 0, got {z_factor}").into(),
+                    ));
                 }
             }
             ThresholdMode::Quantile { p } => {
                 if !p.is_finite() || !(0.0..1.0).contains(&p) || p <= 0.0 {
-                    return Err(RcfError::InvalidConfig(format!(
-                        "Quantile p must be in (0.0, 1.0), got {p}"
-                    )));
+                    return Err(RcfError::InvalidConfig(
+                        format!("Quantile p must be in (0.0, 1.0), got {p}").into(),
+                    ));
                 }
             }
         }
@@ -146,22 +146,27 @@ impl ThresholdedConfig {
         // building via struct literal (without touching
         // `threshold_mode`) still get the strictness they used to.
         if !self.z_factor.is_finite() || self.z_factor <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "z_factor must be finite and > 0, got {}",
-                self.z_factor
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("z_factor must be finite and > 0, got {}", self.z_factor).into(),
+            ));
         }
         if !self.score_decay.is_finite() || self.score_decay <= 0.0 || self.score_decay > 1.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "score_decay must be in (0.0, 1.0], got {}",
-                self.score_decay
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "score_decay must be in (0.0, 1.0], got {}",
+                    self.score_decay
+                )
+                .into(),
+            ));
         }
         if !self.min_threshold.is_finite() || self.min_threshold < 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "min_threshold must be finite and >= 0, got {}",
-                self.min_threshold
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "min_threshold must be finite and >= 0, got {}",
+                    self.min_threshold
+                )
+                .into(),
+            ));
         }
         Ok(())
     }

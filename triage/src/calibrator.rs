@@ -121,9 +121,9 @@ impl PlattFitConfig {
             ("sigma", self.sigma),
         ] {
             if !value.is_finite() || value <= 0.0 {
-                return Err(RcfError::InvalidConfig(format!(
-                    "PlattFitConfig::{name} must be finite and > 0, got {value}"
-                )));
+                return Err(RcfError::InvalidConfig(
+                    format!("PlattFitConfig::{name} must be finite and > 0, got {value}").into(),
+                ));
             }
         }
         Ok(())
@@ -196,9 +196,9 @@ impl PlattCalibrator {
         }
         for (i, (score, _)) in data.iter().enumerate() {
             if !score.is_finite() {
-                return Err(RcfError::InvalidConfig(format!(
-                    "PlattCalibrator::fit: non-finite score at index {i}"
-                )));
+                return Err(RcfError::InvalidConfig(
+                    format!("PlattCalibrator::fit: non-finite score at index {i}").into(),
+                ));
             }
         }
 
@@ -447,9 +447,10 @@ impl PlattCalibrator {
     /// finite `lr`.
     pub fn update_online(&mut self, score: f64, label: bool, lr: f64) -> RcfResult<()> {
         if !lr.is_finite() || lr <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "PlattCalibrator::update_online: lr must be finite and > 0, got {lr}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("PlattCalibrator::update_online: lr must be finite and > 0, got {lr}")
+                    .into(),
+            ));
         }
         if !score.is_finite() {
             return Ok(());

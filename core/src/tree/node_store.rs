@@ -21,7 +21,7 @@ use crate::domain::{BoundingBox, Cut};
 use crate::error::{RcfError, RcfResult};
 use crate::tree::node::{InternalData, LeafData, NodeRef, NodeView, NodeViewMut};
 
-/// Flat-array storage for [`Node`]s with `O(1)` allocation and
+/// Flat-array storage for [`NodeRef`]-addressed nodes with `O(1)` allocation and
 /// deallocation via per-arena free lists.
 ///
 /// # Examples
@@ -69,10 +69,13 @@ impl<const D: usize> NodeStore<D> {
             ));
         }
         if capacity > NodeRef::MAX_INDEX {
-            return Err(RcfError::InvalidConfig(format!(
-                "NodeStore capacity {capacity} exceeds NodeRef::MAX_INDEX {}",
-                NodeRef::MAX_INDEX
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "NodeStore capacity {capacity} exceeds NodeRef::MAX_INDEX {}",
+                    NodeRef::MAX_INDEX
+                )
+                .into(),
+            ));
         }
         let cap = capacity as usize;
         let internals = (0..cap).map(|_| None).collect();

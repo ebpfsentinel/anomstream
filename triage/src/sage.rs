@@ -114,9 +114,12 @@ impl<const D: usize> SageEstimator<D> {
             return Err(RcfError::NaNValue);
         }
         if permutations == 0 || permutations > MAX_PERMUTATIONS {
-            return Err(RcfError::InvalidConfig(format!(
-                "SageEstimator: permutations {permutations} out of (0, {MAX_PERMUTATIONS}]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "SageEstimator: permutations {permutations} out of (0, {MAX_PERMUTATIONS}]"
+                )
+                .into(),
+            ));
         }
         Ok(Self {
             baseline,

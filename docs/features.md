@@ -1222,6 +1222,37 @@ and every `.observe()` / `.update()` / `.record()` /
 verdict is `#[must_use = "…"]`. Drops in hot paths must use
 `let _ = detector.observe(x);` explicitly.
 
+### Supply-chain + build hygiene
+
+- **`RcfError::InvalidConfig(Box<str>)`** — the hot-path variant
+  drops from 24 B to 16 B on 64-bit targets by switching the
+  payload from `String` to `Box<str>`. The `Display` impl,
+  `.contains(..)` checks, and every existing callsite keep
+  working via `Deref<Target = str>`.
+  `SerializationFailed` / `DeserializationFailed` stay `String`
+  because their emission sites always allocate a fresh message
+  from upstream errors — forcing a `String → Box<str>` hop would
+  spend the saved 8 B and more.
+- **Intra-doc links are strict.** Every member-crate doc link
+  uses an absolute `[\`crate::X\`]` path or an in-scope
+  identifier, so rustdoc resolves cleanly under both the member
+  and the facade namespaces. The former blanket `#![allow(
+  rustdoc::broken_intra_doc_links)]` is gone; CI runs
+  `RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links"` and fails
+  on new breakage.
+- **CI MSRV + minimal-versions pin.** `dtolnay/rust-toolchain` is
+  now version-pinned (`@1.12.0`) so a compromised upstream push
+  cannot swap the toolchain download under CI. A new
+  `minimal_versions` job runs `cargo +nightly update -Z
+  minimal-versions && cargo check --workspace --all-features`;
+  loose `foo = "1"` requirements that rely on features only
+  added in `1.x.y+n` trip this job.
+- **`deny.toml` acknowledges dev-only `getrandom 0.4`.** The
+  duplicate comes exclusively from `proptest → tempfile →
+  rusty-fork`, all dev-dependencies; the release graph still
+  links a single `getrandom 0.3`. Revisit when proptest ships an
+  update pinning tempfile on the same major as `rand`.
+
 ### Calibration + feedback quality
 
 - **Platt skew fallback** — `PlattCalibrator::fit` now detects

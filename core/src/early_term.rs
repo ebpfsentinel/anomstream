@@ -10,14 +10,14 @@
 //! early cuts inline detection latency by 30-50 % on "obvious"
 //! cases without losing alerting signal.
 //!
-//! [`RandomCutForest::score_early_term`] walks trees sequentially,
+//! [`crate::RandomCutForest::score_early_term`] walks trees sequentially,
 //! maintains a Welford (1962) running mean / variance, and breaks
 //! when the standard error of the mean falls below
 //! [`EarlyTermConfig::confidence_threshold`] times the absolute
 //! mean. The returned [`EarlyTermScore`] reports how many trees
 //! were actually evaluated so callers can meter latency savings.
 //!
-//! The parallel [`RandomCutForest::score`] path is unchanged — use
+//! The parallel [`crate::RandomCutForest::score`] path is unchanged — use
 //! it when you do not care about tail latency and want the full
 //! ensemble answer.
 
@@ -74,10 +74,13 @@ impl EarlyTermConfig {
             || self.confidence_threshold <= 0.0
             || self.confidence_threshold > 1.0
         {
-            return Err(RcfError::InvalidConfig(format!(
-                "EarlyTermConfig::confidence_threshold must be in (0, 1], got {}",
-                self.confidence_threshold
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "EarlyTermConfig::confidence_threshold must be in (0, 1], got {}",
+                    self.confidence_threshold
+                )
+                .into(),
+            ));
         }
         Ok(())
     }

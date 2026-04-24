@@ -176,9 +176,10 @@ impl DiVector {
     /// non-finite.
     pub fn scale(&mut self, divisor: f64) -> RcfResult<()> {
         if divisor == 0.0 || !divisor.is_finite() {
-            return Err(RcfError::InvalidConfig(format!(
-                "DiVector::scale divisor must be non-zero and finite, got {divisor}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("DiVector::scale divisor must be non-zero and finite, got {divisor}")
+                    .into(),
+            ));
         }
         for d in 0..self.dim() {
             self.high[d] /= divisor;

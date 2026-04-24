@@ -124,9 +124,9 @@ where
     /// Returns [`RcfError::InvalidConfig`] on `capacity == 0`.
     pub fn new(capacity: usize) -> RcfResult<Self> {
         if capacity == 0 {
-            return Err(RcfError::InvalidConfig(alloc::string::ToString::to_string(
-                "SpaceSaving: capacity must be > 0",
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::string::ToString::to_string("SpaceSaving: capacity must be > 0").into(),
+            ));
         }
         Ok(Self {
             counts: HashMap::with_capacity(capacity),

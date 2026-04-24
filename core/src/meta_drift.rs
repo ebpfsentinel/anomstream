@@ -122,22 +122,27 @@ impl CusumConfig {
     /// slack), `decay` must be finite and in `(0, 1]`.
     pub fn validate(&self) -> RcfResult<()> {
         if !self.allowance_k.is_finite() || self.allowance_k < 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "allowance_k must be finite and >= 0, got {}",
-                self.allowance_k
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "allowance_k must be finite and >= 0, got {}",
+                    self.allowance_k
+                )
+                .into(),
+            ));
         }
         if !self.threshold_h.is_finite() || self.threshold_h <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "threshold_h must be finite and > 0, got {}",
-                self.threshold_h
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "threshold_h must be finite and > 0, got {}",
+                    self.threshold_h
+                )
+                .into(),
+            ));
         }
         if !self.decay.is_finite() || self.decay <= 0.0 || self.decay > 1.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "decay must be in (0.0, 1.0], got {}",
-                self.decay
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("decay must be in (0.0, 1.0], got {}", self.decay).into(),
+            ));
         }
         Ok(())
     }

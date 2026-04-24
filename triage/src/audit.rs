@@ -171,7 +171,8 @@ impl<K: Clone, const D: usize> TryFrom<AlertRecordShadow<K, D>> for AlertRecord<
                 alloc::format!(
                     "AlertRecord: version {} unsupported (expected {ALERT_RECORD_VERSION})",
                     raw.version
-                ),
+                )
+                .into(),
             ));
         }
         Ok(Self {

@@ -106,24 +106,33 @@ impl TryFrom<BloomFilterShadow> for BloomFilter {
 
     fn try_from(raw: BloomFilterShadow) -> Result<Self, Self::Error> {
         if raw.num_bits == 0 || raw.num_bits > MAX_NUM_BITS {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "BloomFilter: num_bits {} out of (0, {MAX_NUM_BITS}]",
-                raw.num_bits
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "BloomFilter: num_bits {} out of (0, {MAX_NUM_BITS}]",
+                    raw.num_bits
+                )
+                .into(),
+            ));
         }
         if raw.num_hashes == 0 || raw.num_hashes > MAX_HASHES {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "BloomFilter: num_hashes {} out of (0, {MAX_HASHES}]",
-                raw.num_hashes
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "BloomFilter: num_hashes {} out of (0, {MAX_HASHES}]",
+                    raw.num_hashes
+                )
+                .into(),
+            ));
         }
         let expected_words = raw.num_bits.div_ceil(64);
         if raw.bits.len() != expected_words {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "BloomFilter: bit-bank length {} != expected {expected_words} for num_bits {}",
-                raw.bits.len(),
-                raw.num_bits
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "BloomFilter: bit-bank length {} != expected {expected_words} for num_bits {}",
+                    raw.bits.len(),
+                    raw.num_bits
+                )
+                .into(),
+            ));
         }
         Ok(Self {
             bits: raw.bits,
@@ -145,14 +154,14 @@ impl BloomFilter {
     /// hash count exceeds [`MAX_HASHES`].
     pub fn new(capacity: usize, fpr: f64) -> RcfResult<Self> {
         if capacity == 0 {
-            return Err(RcfError::InvalidConfig(alloc::string::ToString::to_string(
-                "BloomFilter: capacity must be > 0",
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::string::ToString::to_string("BloomFilter: capacity must be > 0").into(),
+            ));
         }
         if !fpr.is_finite() || fpr <= 0.0 || fpr >= 1.0 {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "BloomFilter: fpr {fpr} must be in (0, 1)"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!("BloomFilter: fpr {fpr} must be in (0, 1)").into(),
+            ));
         }
         let ln2 = core::f64::consts::LN_2;
         #[allow(clippy::cast_precision_loss)]
@@ -186,14 +195,16 @@ impl BloomFilter {
     /// `num_hashes > MAX_HASHES`.
     pub fn with_params(num_bits: usize, num_hashes: u32) -> RcfResult<Self> {
         if num_bits == 0 || num_bits > MAX_NUM_BITS {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "BloomFilter: num_bits {num_bits} out of (0, {MAX_NUM_BITS}]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!("BloomFilter: num_bits {num_bits} out of (0, {MAX_NUM_BITS}]")
+                    .into(),
+            ));
         }
         if num_hashes == 0 || num_hashes > MAX_HASHES {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "BloomFilter: num_hashes {num_hashes} out of (0, {MAX_HASHES}]"
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!("BloomFilter: num_hashes {num_hashes} out of (0, {MAX_HASHES}]")
+                    .into(),
+            ));
         }
         let words = num_bits.div_ceil(64);
         Ok(Self {
@@ -305,13 +316,16 @@ impl BloomFilter {
     /// disagree on `num_bits` or `num_hashes`.
     pub fn union(&mut self, other: &Self) -> RcfResult<()> {
         if self.num_bits != other.num_bits || self.num_hashes != other.num_hashes {
-            return Err(RcfError::InvalidConfig(alloc::format!(
-                "BloomFilter::union: shape mismatch ({}/{} vs {}/{})",
-                self.num_bits,
-                self.num_hashes,
-                other.num_bits,
-                other.num_hashes,
-            )));
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "BloomFilter::union: shape mismatch ({}/{} vs {}/{})",
+                    self.num_bits,
+                    self.num_hashes,
+                    other.num_bits,
+                    other.num_hashes,
+                )
+                .into(),
+            ));
         }
         for (a, b) in self.bits.iter_mut().zip(other.bits.iter()) {
             *a |= *b;

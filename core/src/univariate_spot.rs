@@ -101,9 +101,9 @@ impl PotDetector {
     /// or outside `(0, 1)`.
     pub fn new(q: f64) -> RcfResult<Self> {
         if !q.is_finite() || !(0.0..1.0).contains(&q) || q <= 0.0 {
-            return Err(RcfError::InvalidConfig(format!(
-                "PotDetector: q must be in (0.0, 1.0), got {q}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("PotDetector: q must be in (0.0, 1.0), got {q}").into(),
+            ));
         }
         Ok(Self {
             digest: TDigest::new(DEFAULT_COMPRESSION)?,

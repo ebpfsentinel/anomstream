@@ -135,9 +135,9 @@ impl<const D: usize> RandomCutForest<D> {
         } else {
             let mut bytes = [0_u8; 8];
             getrandom::fill(&mut bytes).map_err(|e| {
-                RcfError::InvalidConfig(format!(
-                    "OS RNG unavailable for seed-less forest construction: {e}"
-                ))
+                RcfError::InvalidConfig(
+                    format!("OS RNG unavailable for seed-less forest construction: {e}").into(),
+                )
             })?;
             ChaCha8Rng::seed_from_u64(u64::from_le_bytes(bytes))
         };
@@ -146,10 +146,9 @@ impl<const D: usize> RandomCutForest<D> {
         for _ in 0..config.num_trees {
             let tree =
                 RandomCutTree::<D>::new(u32::try_from(config.sample_size).map_err(|_| {
-                    RcfError::InvalidConfig(format!(
-                        "sample_size {} exceeds u32::MAX",
-                        config.sample_size
-                    ))
+                    RcfError::InvalidConfig(
+                        format!("sample_size {} exceeds u32::MAX", config.sample_size).into(),
+                    )
                 })?)?;
             let sampler = ReservoirSampler::with_initial_accept_fraction(
                 config.sample_size,
@@ -169,9 +168,10 @@ impl<const D: usize> RandomCutForest<D> {
                     .num_threads(n)
                     .build()
                     .map_err(|e| {
-                        RcfError::InvalidConfig(format!(
-                            "rayon ThreadPool build failed for num_threads={n}: {e}"
-                        ))
+                        RcfError::InvalidConfig(
+                            format!("rayon ThreadPool build failed for num_threads={n}: {e}")
+                                .into(),
+                        )
                     })?,
             )),
             None => None,
@@ -763,9 +763,10 @@ impl<const D: usize> RandomCutForest<D> {
     #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
     pub fn score_trimmed(&self, point: &[f64; D], trim_fraction: f64) -> RcfResult<AnomalyScore> {
         if !(0.0..0.5).contains(&trim_fraction) || !trim_fraction.is_finite() {
-            return Err(RcfError::InvalidConfig(format!(
-                "score_trimmed: trim_fraction must be in [0.0, 0.5), got {trim_fraction}"
-            )));
+            return Err(RcfError::InvalidConfig(
+                format!("score_trimmed: trim_fraction must be in [0.0, 0.5), got {trim_fraction}")
+                    .into(),
+            ));
         }
         self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
@@ -841,11 +842,12 @@ impl<const D: usize> RandomCutForest<D> {
     }
 
     /// Score `point` and attach a confidence interval derived from
-    /// per-tree dispersion. Returns a [`ScoreWithConfidence`] with
-    /// `score` (mean), `stddev` (unbiased sample), `stderr`
-    /// (`stddev / sqrt(n)`), and `trees_evaluated` so callers can
-    /// build arbitrary-level CIs via
-    /// [`ScoreWithConfidence::ci`] / [`ScoreWithConfidence::ci95`].
+    /// per-tree dispersion. Returns a
+    /// [`crate::ScoreWithConfidence`] with `score` (mean), `stddev`
+    /// (unbiased sample), `stderr` (`stddev / sqrt(n)`), and
+    /// `trees_evaluated` so callers can build arbitrary-level CIs
+    /// via [`crate::ScoreWithConfidence::ci`] /
+    /// [`crate::ScoreWithConfidence::ci95`].
     ///
     /// Always walks every tree (no early-term) — use this path when
     /// SOC tuning needs the dispersion estimate on the full
