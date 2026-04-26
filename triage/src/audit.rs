@@ -7,6 +7,24 @@
 //! every analytic output plus provenance fields (tenant, timestamp,
 //! point) into one `serde`-roundtrippable struct.
 //!
+//! # Tamper-evidence
+//!
+//! On its own, an [`AlertRecord`] is an **operational log**, not
+//! a tamper-evident audit trail. Once written to a SIEM / object
+//! store / WORM bucket the bytes can be rewritten by anyone with
+//! storage write access, and a downstream consumer has no
+//! cryptographic check that the bytes they decoded match the
+//! producer's emission. The compliance scenarios above generally
+//! require the trail itself to be tamper-evident.
+//!
+//! Enable the **`audit-integrity`** feature and feed each record
+//! through [`crate::audit_chain::AuditChain`] to wrap it in an
+//! HMAC-SHA256-chained envelope that detects post-write
+//! tampering, deletion, and reordering. Without that feature the
+//! re-export remains a faithful structured log — useful for
+//! observability / dashboards, but **not** sufficient on its own
+//! for SOC2 CC6 / NIS2 / PCI-DSS 10.5 audit-trail requirements.
+//!
 //! # Typical flow
 //!
 //! ```
@@ -53,6 +71,7 @@ pub const ALERT_RECORD_VERSION: u32 = 1;
 /// them in explicitly on each emission.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct AlertContext<K = String>
 where
     K: Clone,
@@ -147,6 +166,7 @@ where
 #[cfg(feature = "serde")]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(bound(deserialize = "K: serde::Deserialize<'de>"))]
+#[serde(deny_unknown_fields)]
 #[allow(clippy::missing_docs_in_private_items)]
 struct AlertRecordShadow<K, const D: usize> {
     version: u32,
@@ -390,6 +410,48 @@ mod tests {
         let ctx = AlertContext::<String>::untenanted(123);
         assert!(ctx.tenant.is_none());
         assert_eq!(ctx.timestamp_ms, 123);
+    }
+
+    #[test]
+    fn deserialize_rejects_unknown_fields_on_record() {
+        // Schema drift defence: if a future producer adds a
+        // field, an older consumer (with deny_unknown_fields)
+        // must REJECT the payload rather than silently drop the
+        // new field. Silent drops break the audit-integrity
+        // story — a tamperer could splice extra metadata into
+        // the wire format that older consumers ignore while
+        // newer consumers act on it.
+        let json = r#"{
+            "version": 1,
+            "tenant": "t1",
+            "timestamp_ms": 42,
+            "point": [0.0, 0.0, 0.0, 0.0],
+            "score": 1.0,
+            "grade": null,
+            "severity": null,
+            "attribution": {"high": [0.0, 0.0, 0.0, 0.0], "low": [0.0, 0.0, 0.0, 0.0]},
+            "baseline": {
+                "observed": [0.0, 0.0, 0.0, 0.0],
+                "expected": [0.0, 0.0, 0.0, 0.0],
+                "stddev":   [0.0, 0.0, 0.0, 0.0],
+                "delta":    [0.0, 0.0, 0.0, 0.0],
+                "zscore":   [0.0, 0.0, 0.0, 0.0],
+                "live_points": 0
+            },
+            "rogue_field": "spliced"
+        }"#;
+        let res: Result<AlertRecord<String, 4>, _> = serde_json::from_str(json);
+        assert!(
+            res.is_err(),
+            "rogue_field must be rejected by deny_unknown_fields"
+        );
+    }
+
+    #[test]
+    fn deserialize_rejects_unknown_fields_on_context() {
+        let json = r#"{"tenant": "t1", "timestamp_ms": 42, "rogue_field": "spliced"}"#;
+        let res: Result<AlertContext<String>, _> = serde_json::from_str(json);
+        assert!(res.is_err(), "rogue_field on AlertContext must be rejected");
     }
 
     #[test]

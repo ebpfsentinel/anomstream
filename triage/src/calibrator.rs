@@ -333,13 +333,33 @@ impl PlattCalibrator {
                 break;
             }
             let gd = g1 * da + g2 * db;
+            // Bail out before line-searching if `gd` or the
+            // current objective is non-finite — both feed every
+            // Armijo comparison below and would silently corrupt
+            // the (a, b) update path otherwise.
+            let current = negative_log_likelihood(a, b);
+            if !gd.is_finite() || !current.is_finite() {
+                break;
+            }
 
             let mut step_size = 1.0_f64;
-            let current = negative_log_likelihood(a, b);
             loop {
                 let new_a = a + step_size * da;
                 let new_b = b + step_size * db;
                 let new_f = negative_log_likelihood(new_a, new_b);
+                // Reject any step that made the objective NaN /
+                // Inf — the next Armijo comparison would propagate
+                // it and could even succeed by accident, locking
+                // (a, b) into a non-finite state. Treat it as a
+                // step-too-large signal and shrink instead.
+                if !new_f.is_finite() || !new_a.is_finite() || !new_b.is_finite() {
+                    step_size /= 2.0;
+                    if step_size < config.min_step {
+                        converged = true;
+                        break;
+                    }
+                    continue;
+                }
                 if new_f < current + 1e-4 * step_size * gd {
                     a = new_a;
                     b = new_b;

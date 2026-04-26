@@ -135,6 +135,15 @@ pub use anomstream_triage::{
     SAGE_DEFAULT_SEED, SageEstimator, SageExplanation,
 };
 
+// Tamper-evident audit chain — HMAC-SHA256 envelope around each
+// `AlertRecord`. Surface mirrors the owning module exactly.
+#[cfg(feature = "audit-integrity")]
+#[doc(inline)]
+pub use anomstream_triage::{
+    AUDIT_CHAIN_GENESIS_PREV, AUDIT_CHAIN_MIN_KEY_LEN, AUDIT_CHAIN_TAG_LEN, AuditChain,
+    AuditChainEntry, verify_audit_chain,
+};
+
 // -- Hot-path re-exports --------------------------------------
 //
 // Mirrors `anomstream_hotpath/src/lib.rs` root surface. Lives

@@ -193,6 +193,42 @@ fn hot_path_update_channel_reachable_via_facade() {
     let (_p, _c): (UpdateProducer<4>, UpdateConsumer<4>) = update_channel(8);
 }
 
+// --- Audit-integrity smoke -----------------------------------
+//
+// HMAC-SHA256 chain re-exports reachable through the facade
+// when `audit-integrity` is on. Round-trip a single-entry
+// chain to confirm the wiring composes end-to-end.
+
+#[cfg(feature = "audit-integrity")]
+#[test]
+fn audit_chain_round_trip_via_facade() {
+    use anomstream::{
+        AUDIT_CHAIN_GENESIS_PREV, AUDIT_CHAIN_MIN_KEY_LEN, AlertContext, AlertRecord, AuditChain,
+        ForestBuilder, verify_audit_chain,
+    };
+    let mut forest = ForestBuilder::<4>::new()
+        .num_trees(50)
+        .sample_size(16)
+        .seed(42)
+        .build()
+        .unwrap();
+    for i in 0..32 {
+        let v = f64::from(i) * 0.01;
+        forest.update([v, v + 0.1, v + 0.2, v + 0.3]).unwrap();
+    }
+    let key = [0x42u8; AUDIT_CHAIN_MIN_KEY_LEN];
+    let mut chain: AuditChain<String, 4> = AuditChain::new(&key).unwrap();
+    let ctx = AlertContext::<String>::untenanted(1_000);
+    let rec: AlertRecord<String, 4> = AlertRecord::from_forest(&forest, &[5.0; 4], &ctx).unwrap();
+    let entry = chain.append(rec).unwrap();
+    verify_audit_chain(
+        core::slice::from_ref(&entry),
+        &key,
+        &AUDIT_CHAIN_GENESIS_PREV,
+    )
+    .unwrap();
+}
+
 // --- Namespace escape hatches --------------------------------
 //
 // Verify `core_lib`, `triage_lib`, `hotpath_lib` reach deep

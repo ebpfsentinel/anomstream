@@ -30,6 +30,9 @@ rayon = { version = "1" }
 criterion = { version = "0.8", default-features = false, features = ["plotters", "cargo_bench_support"] }
 proptest = { version = "1" }
 mimalloc = { version = "0.1", default-features = false }
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+subtle = { version = "2", default-features = false }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

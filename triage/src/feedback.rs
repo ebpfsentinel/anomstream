@@ -56,6 +56,28 @@ pub const DEFAULT_STRENGTH: f64 = 1.0;
 /// bounded-memory guarantees.
 pub const DEFAULT_CAPACITY: usize = 512;
 
+/// Hard ceiling on caller-configured ledger capacity. A
+/// `LabelledPoint<D>` is `D · 8 + 8` bytes; at the maximum allowed
+/// `D = 10000` (matching the AWS RCF `feature_dim` ceiling) and
+/// `MAX_CAPACITY = 65 536` the worst-case per-tenant footprint is
+/// ~5 GiB — already far above any realistic SOC labelling volume.
+/// The cap exists to defeat caller-controlled OOM (a hostile or
+/// buggy config that passes `usize::MAX` would otherwise panic
+/// the allocator); raise it deliberately if a deployment really
+/// needs more room.
+pub const MAX_CAPACITY: usize = 65_536;
+
+/// Floor on the kernel-weight sum used by [`FeedbackStore::adjust`]
+/// to detect "every label too far from the probe to register".
+/// `f64::EPSILON` (~2.22e-16) is too tight under accumulated FP
+/// error from hundreds of labels — the kernel sum can sit just
+/// above zero and produce a `bias = signed_sum / kernel_sum` of
+/// many orders of magnitude. `1e-12` keeps the guard well below
+/// any meaningful kernel weight (a single label at distance
+/// `7σ` already contributes ~`1e-21`) while staying safely
+/// above the FP-noise floor of summing 65 536 near-zero terms.
+const KERNEL_SUM_FLOOR: f64 = 1e-12;
+
 /// Analyst verdict attached to a stored point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -144,11 +166,21 @@ impl<const D: usize> FeedbackStore<D> {
     /// # Errors
     ///
     /// Returns [`RcfError::InvalidConfig`] on `capacity == 0`,
-    /// non-positive `sigma`, or non-finite `strength`.
+    /// `capacity > MAX_CAPACITY`, non-positive `sigma`, or
+    /// non-finite `strength`.
     pub fn new(capacity: usize, sigma: f64, strength: f64) -> RcfResult<Self> {
         if capacity == 0 {
             return Err(RcfError::InvalidConfig(
                 "FeedbackStore: capacity must be > 0".into(),
+            ));
+        }
+        if capacity > MAX_CAPACITY {
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "FeedbackStore: capacity {capacity} exceeds MAX_CAPACITY {MAX_CAPACITY} \
+                     (caller-controlled OOM guard)"
+                )
+                .into(),
             ));
         }
         if !sigma.is_finite() || sigma <= 0.0 {
@@ -291,7 +323,15 @@ impl<const D: usize> FeedbackStore<D> {
         // Guard the `0 / 0` case where every stored label is too
         // far from `probe` to register any kernel weight — return
         // the raw score unchanged rather than propagate `NaN`.
-        let bias = if kernel_sum > f64::EPSILON {
+        // The threshold is `KERNEL_SUM_FLOOR` (1e-12) rather than
+        // `f64::EPSILON` because accumulated FP error from summing
+        // up to `MAX_CAPACITY` near-zero kernel terms can leave
+        // `kernel_sum` just above `EPSILON` while every individual
+        // contribution is numerical noise — the resulting
+        // `signed_sum / kernel_sum` ratio swings wildly. The
+        // larger floor keeps the guard above the FP-noise band
+        // and well below any meaningful kernel weight.
+        let bias = if kernel_sum > KERNEL_SUM_FLOOR {
             signed_sum / kernel_sum
         } else {
             0.0
@@ -428,6 +468,36 @@ mod tests {
         // Bias should be near +strength since every label is
         // Confirmed and sits on the probe.
         assert!((adjusted - (raw + 1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn new_rejects_capacity_above_max() {
+        // Hard cap protects against caller-controlled OOM; passing
+        // `usize::MAX` must fail loudly rather than allocator-panic.
+        assert!(FeedbackStore::<2>::new(MAX_CAPACITY + 1, 1.0, 1.0).is_err());
+        assert!(FeedbackStore::<2>::new(usize::MAX, 1.0, 1.0).is_err());
+        // Boundary: exactly MAX_CAPACITY accepted.
+        assert!(FeedbackStore::<2>::new(MAX_CAPACITY, 1.0, 1.0).is_ok());
+    }
+
+    #[test]
+    fn far_probe_does_not_explode_under_full_ledger() {
+        // Saturate the ledger with labels far from the probe so
+        // every kernel contribution is ~0 — accumulated FP error
+        // can leave `kernel_sum` slightly above `f64::EPSILON`.
+        // The relaxed `KERNEL_SUM_FLOOR` guard must still treat
+        // this as "no signal" and return the raw score, not
+        // amplify FP noise into a swing.
+        let mut s = FeedbackStore::<2>::new(8192, 0.001, 1.0).unwrap();
+        for _ in 0..8192 {
+            s.label([1.0e6, 1.0e6], FeedbackLabel::Confirmed).unwrap();
+        }
+        let raw = 0.5;
+        let adjusted = s.adjust(&[0.0, 0.0], raw);
+        assert!(
+            (adjusted - raw).abs() < 1e-6,
+            "FP-noise-floor leak: raw {raw}, adjusted {adjusted}"
+        );
     }
 
     #[test]

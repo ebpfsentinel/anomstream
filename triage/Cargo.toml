@@ -20,6 +20,10 @@ std = ["anomstream-core/std", "rand/std", "rand/std_rng", "rand/thread_rng", "ra
 serde = ["anomstream-core/serde", "dep:serde", "rand_chacha/serde"]
 serde_json = ["serde", "anomstream-core/serde_json", "dep:serde_json"]
 postcard = ["serde", "anomstream-core/postcard", "dep:postcard"]
+# Tamper-evident audit trail: HMAC-SHA256-chained AlertRecord
+# stream. Pulls `hmac` + `sha2` + `subtle`. Requires `serde +
+# postcard` for canonical record serialisation.
+audit-integrity = ["serde", "postcard", "dep:hmac", "dep:sha2", "dep:subtle"]
 
 [dependencies]
 anomstream-core = { workspace = true }
@@ -29,6 +33,9 @@ rand_chacha = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+subtle = { workspace = true, optional = true }
 
 [dev-dependencies]
 anomstream-core = { workspace = true, features = ["std", "serde", "postcard", "parallel"] }

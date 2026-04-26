@@ -312,6 +312,69 @@ fn bench_feedback(c: &mut Criterion) {
     group.finish();
 }
 
+/// `AuditChain::append` + `verify_chain` cost on a 256-entry
+/// chain — characterises HMAC-SHA256 + postcard-encode overhead
+/// per emission and the linear walk on verification.
+#[cfg(all(feature = "audit-integrity", feature = "postcard"))]
+fn bench_audit_chain(c: &mut Criterion) {
+    use anomstream_triage::audit::{AlertContext, AlertRecord};
+    use anomstream_triage::audit_chain::{AuditChain, GENESIS_PREV, verify_chain};
+
+    let mut group = c.benchmark_group("audit_chain");
+    group.sample_size(20);
+
+    let mut forest: RandomCutForest<4> = ForestBuilder::<4>::new()
+        .num_trees(50)
+        .sample_size(16)
+        .seed(2026)
+        .build()
+        .expect("forest");
+    for i in 0..32_u32 {
+        let v = f64::from(i) * 0.01;
+        forest
+            .update([v, v + 0.1, v + 0.2, v + 0.3])
+            .expect("update");
+    }
+    let key = [0x42u8; 32];
+
+    group.bench_function("append_d4", |b| {
+        let mut chain: AuditChain<String, 4> = AuditChain::new(&key).expect("chain");
+        let ctx = AlertContext::<String>::for_tenant("t1".into(), 0);
+        let rec = AlertRecord::from_forest(&forest, &[5.0; 4], &ctx).expect("rec");
+        b.iter(|| {
+            let entry = chain.append(black_box(rec.clone())).expect("append");
+            black_box(entry);
+        });
+    });
+
+    group.bench_function("verify_chain_256_entries", |b| {
+        let mut chain: AuditChain<String, 4> = AuditChain::new(&key).expect("chain");
+        let entries: Vec<_> = (0..256_u64)
+            .map(|ts| {
+                let ctx = AlertContext::<String>::for_tenant("t1".into(), ts);
+                let rec = AlertRecord::from_forest(&forest, &[5.0; 4], &ctx).expect("rec");
+                chain.append(rec).expect("append")
+            })
+            .collect();
+        b.iter(|| {
+            verify_chain(black_box(&entries), &key, &GENESIS_PREV).expect("verify");
+        });
+    });
+
+    group.finish();
+}
+
+#[cfg(all(feature = "audit-integrity", feature = "postcard"))]
+criterion_group!(
+    benches,
+    bench_lsh_cluster,
+    bench_calibrator,
+    bench_sage,
+    bench_alert_cluster,
+    bench_feedback,
+    bench_audit_chain
+);
+#[cfg(not(all(feature = "audit-integrity", feature = "postcard")))]
 criterion_group!(
     benches,
     bench_lsh_cluster,

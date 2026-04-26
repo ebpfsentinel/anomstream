@@ -23,15 +23,20 @@ workspace = true
 # under the `full` convenience feature for callers who want the
 # old behaviour without enumerating flags.
 default = ["core", "std"]
-full = ["core", "triage", "hotpath", "std", "parallel", "serde", "postcard", "serde_json"]
+full = ["core", "triage", "hotpath", "std", "parallel", "serde", "postcard", "serde_json", "audit-integrity"]
 core = ["dep:anomstream-core"]
 triage = ["dep:anomstream-triage", "core"]
 hotpath = ["dep:anomstream-hotpath", "core", "std"]
 std = ["anomstream-core?/std", "anomstream-triage?/std", "anomstream-hotpath?/std"]
 parallel = ["anomstream-core?/parallel"]
 serde = ["anomstream-core?/serde", "anomstream-triage?/serde"]
-postcard = ["anomstream-core?/postcard"]
+postcard = ["anomstream-core?/postcard", "anomstream-triage?/postcard"]
 serde_json = ["anomstream-core?/serde_json"]
+# Tamper-evident audit trail (HMAC-SHA256 chain) — pulls
+# `hmac` + `sha2` + `subtle` via the triage member. Implies
+# `triage + serde + postcard` because chain entries are
+# canonicalised through postcard before signing.
+audit-integrity = ["triage", "serde", "postcard", "anomstream-triage?/audit-integrity"]
 
 [dependencies]
 anomstream-core = { workspace = true, optional = true }
