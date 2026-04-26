@@ -7,6 +7,7 @@
 #![allow(clippy::cast_precision_loss)]
 
 use anomstream_core::{AnomalyScore, DiVector, ForensicBaseline, ForestBuilder, RandomCutForest};
+use anomstream_triage::alert_cluster::MAX_TENANTS_PER_CLUSTER;
 use anomstream_triage::{
     AlertClusterer, AlertContext, AlertRecord, FeedbackLabel, FeedbackStore, LshAlertClusterer,
     PlattCalibrator, PlattFitConfig, SageEstimator,
@@ -62,6 +63,21 @@ fn bench_lsh_cluster(c: &mut Criterion) {
         });
     });
 
+    // Same shape as `hash_divector_d16` but on a `with_seed`
+    // clusterer — confirms the per-instance seed mix adds zero
+    // measurable overhead vs the default constructor (the seed
+    // is one extra XOR pre-loop and one extra wrapping_mul +
+    // XOR post-loop).
+    group.bench_function("hash_divector_d16_seeded", |b| {
+        let clusterer =
+            LshAlertClusterer::with_seed(16, 8.0, 0xdead_beef_cafe_f00d_dead_beef_cafe_f00d)
+                .expect("with_seed");
+        b.iter(|| {
+            let h = clusterer.hash_divector(black_box(&di));
+            black_box(h);
+        });
+    });
+
     group.finish();
 }
 
@@ -76,6 +92,20 @@ fn bench_calibrator(c: &mut Criterion) {
                 let s: f64 = rng.random::<f64>() * 5.0;
                 (s, s > 3.0)
             })
+            .collect();
+        b.iter(|| {
+            let cal =
+                PlattCalibrator::fit(black_box(&data), PlattFitConfig::default()).expect("fit");
+            black_box(cal);
+        });
+    });
+
+    // Singular-Hessian path: every score collapses to the same
+    // value so `det = 0`. Validates the bail-out short-circuits
+    // promptly instead of NaN-spinning to `max_iters`.
+    group.bench_function("fit_singular_hessian", |b| {
+        let data: Vec<(f64, bool)> = (0..512_u32)
+            .map(|i| (1.0_f64, i.is_multiple_of(2)))
             .collect();
         b.iter(|| {
             let cal =
@@ -181,6 +211,48 @@ fn bench_alert_cluster(c: &mut Criterion) {
         let mut idx = 16;
         b.iter(|| {
             let r = records[idx % records.len()].clone();
+            idx += 1;
+            let d = clusterer.observe(black_box(r));
+            black_box(d);
+        });
+    });
+
+    // High-cardinality tenant churn against a single cluster:
+    // shared attribution + rotating tenant key floods the
+    // contributing_tenants rolodex. Validates that capping at
+    // MAX_TENANTS_PER_CLUSTER keeps per-observe cost bounded.
+    let churn_count: u32 = u32::try_from(MAX_TENANTS_PER_CLUSTER).expect("cap fits u32") * 4;
+    let shared_attr_records: Vec<AlertRecord<u32, 16>> = (0..churn_count)
+        .map(|tenant| {
+            let mut high = vec![0.0_f64; 16];
+            high[0] = 1.0;
+            let attr = DiVector::from_arrays(high, vec![0.0; 16]).expect("divector");
+            AlertRecord::new(
+                Some(tenant),
+                u64::from(tenant),
+                [0.0; 16],
+                AnomalyScore::new(1.0).expect("score"),
+                None,
+                None,
+                attr,
+                ForensicBaseline::<16> {
+                    observed: [0.0; 16],
+                    expected: [0.0; 16],
+                    stddev: [0.0; 16],
+                    delta: [0.0; 16],
+                    zscore: [0.0; 16],
+                    live_points: 0,
+                },
+            )
+        })
+        .collect();
+
+    group.bench_function("observe_d16_tenant_churn_capped", |b| {
+        let mut clusterer: AlertClusterer<u32, 16> =
+            AlertClusterer::new(0.5, u64::MAX).expect("clusterer");
+        let mut idx = 0;
+        b.iter(|| {
+            let r = shared_attr_records[idx % shared_attr_records.len()].clone();
             idx += 1;
             let d = clusterer.observe(black_box(r));
             black_box(d);

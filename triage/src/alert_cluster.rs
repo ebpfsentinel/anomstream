@@ -70,6 +70,17 @@ use std::sync::Arc;
 /// stream would otherwise reach.
 pub const DEFAULT_MAX_CLUSTERS: usize = 16_384;
 
+/// Per-cluster cap on the distinct-tenant rolodex tracked in
+/// [`AlertCluster::contributing_tenants`]. Capped both for a
+/// memory bound (a hostile per-cluster stream cannot grow the
+/// vector unboundedly) and a CPU bound (the per-observe
+/// `.contains()` membership check is O(n) on this vector). 32
+/// distinct tenants per cluster covers the vast majority of MSSP
+/// fan-in patterns while keeping the membership check effectively
+/// constant-time. Once the cap is hit, the oldest tenant is
+/// FIFO-evicted to make room for a new arrival.
+pub const MAX_TENANTS_PER_CLUSTER: usize = 32;
+
 /// Running cluster of near-duplicate alerts.
 ///
 /// Serializable under the `serde` feature so SIEM sinks can emit
@@ -97,9 +108,13 @@ where
     /// Running max score across the cluster (worst-case severity
     /// signal for SOC triage).
     pub max_score: AnomalyScore,
-    /// Distinct tenant identifiers that contributed. Bounded by
-    /// cluster `count`; callers that truly do not care about
-    /// per-tenant provenance can ignore this field.
+    /// Distinct tenant identifiers that contributed. Hard-capped
+    /// at [`MAX_TENANTS_PER_CLUSTER`] entries; once full, the
+    /// oldest entry is FIFO-evicted on the next distinct-tenant
+    /// arrival. The cap protects against an attacker who can
+    /// craft alerts with churning `tenant` keys to grow this
+    /// vector and the surrounding `.contains()` membership check
+    /// without bound. Order is insertion order, oldest first.
     pub contributing_tenants: Vec<Option<K>>,
 }
 
@@ -316,6 +331,13 @@ where
                 cluster.max_score = rec.score;
             }
             if !cluster.contributing_tenants.contains(&rec.tenant) {
+                if cluster.contributing_tenants.len() >= MAX_TENANTS_PER_CLUSTER {
+                    // FIFO-evict the oldest entry to keep the
+                    // tenant rolodex bounded — an attacker rotating
+                    // synthetic tenant keys cannot grow this vector
+                    // unboundedly within a single cluster.
+                    cluster.contributing_tenants.remove(0);
+                }
                 cluster.contributing_tenants.push(rec.tenant.clone());
             }
             #[cfg(feature = "std")]
@@ -693,6 +715,84 @@ mod tests {
                 "ts {ts} should have been evicted; live = {live_first_seen:?}"
             );
         }
+    }
+
+    /// Build a record on a synthetic shared attribution so a flood
+    /// of records with churning tenant keys all merge into the
+    /// same cluster — exercises the contributing-tenants cap path.
+    fn shared_attr_rec_with_tenant(tenant: u32, ts: u64) -> AlertRecord<u32, 4> {
+        let attr = DiVector::from_arrays(vec![1.0, 0.0, 0.0, 0.0], vec![0.0; 4]).unwrap();
+        let baseline = anomstream_core::forensic::ForensicBaseline::<4> {
+            observed: [0.0; 4],
+            expected: [0.0; 4],
+            stddev: [0.0; 4],
+            delta: [0.0; 4],
+            zscore: [0.0; 4],
+            live_points: 0,
+        };
+        AlertRecord::new(
+            Some(tenant),
+            ts,
+            [0.0; 4],
+            AnomalyScore::new(1.0).unwrap(),
+            None,
+            None,
+            attr,
+            baseline,
+        )
+    }
+
+    #[test]
+    fn contributing_tenants_capped_under_high_cardinality() {
+        // 1 000 distinct tenants on the same attribution all merge
+        // into a single cluster; the tenant rolodex must stay
+        // bounded by `MAX_TENANTS_PER_CLUSTER`. Without the cap
+        // this vector grows linearly with attacker-controlled
+        // tenant cardinality and `.contains()` becomes O(n²) over
+        // the cluster lifetime.
+        let mut c: AlertClusterer<u32, 4> = AlertClusterer::new(0.5, u64::MAX).unwrap();
+        for tenant in 0..1_000_u32 {
+            let _ = c.observe(shared_attr_rec_with_tenant(
+                tenant,
+                1_000 + u64::from(tenant),
+            ));
+        }
+        assert_eq!(c.len(), 1, "all records share attribution → one cluster");
+        assert_eq!(
+            c.clusters()[0].contributing_tenants.len(),
+            MAX_TENANTS_PER_CLUSTER,
+            "tenant rolodex must be bounded by MAX_TENANTS_PER_CLUSTER"
+        );
+        // FIFO eviction means the most recent tenants survive.
+        let last = c.clusters()[0]
+            .contributing_tenants
+            .last()
+            .copied()
+            .flatten();
+        assert_eq!(last, Some(999_u32), "newest tenant must be present");
+        let first = c.clusters()[0]
+            .contributing_tenants
+            .first()
+            .copied()
+            .flatten();
+        assert_eq!(
+            first,
+            Some(1_000_u32 - u32::try_from(MAX_TENANTS_PER_CLUSTER).unwrap()),
+            "oldest surviving tenant must be at FIFO head"
+        );
+    }
+
+    #[test]
+    fn contributing_tenants_dedupes_repeats() {
+        // Same tenant submitting many alerts under one cluster
+        // must appear exactly once in the rolodex.
+        let mut c: AlertClusterer<u32, 4> = AlertClusterer::new(0.5, u64::MAX).unwrap();
+        for ts in 0..50_u64 {
+            let _ = c.observe(shared_attr_rec_with_tenant(7, 1_000 + ts));
+        }
+        assert_eq!(c.len(), 1);
+        assert_eq!(c.clusters()[0].contributing_tenants.len(), 1);
+        assert_eq!(c.clusters()[0].count, 50);
     }
 
     #[test]

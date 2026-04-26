@@ -16,6 +16,24 @@
 //! agree on every dim. Exact duplicates are always co-bucketed;
 //! near-duplicates co-bucket when every dim's magnitude agrees
 //! modulo the quantisation step.
+//!
+//! # Adversarial-resistance disclaimer
+//!
+//! [`LshAlertClusterer::hash_divector`] is **not** a cryptographic
+//! hash and is **not** designed to resist an attacker who can
+//! probe many alerts and learn the per-instance seed. The hash is
+//! seeded with a random `u128` at construction
+//! ([`LshAlertClusterer::new`] / [`Self::default_lsh`]) so an
+//! attacker who only sees a black-box clusterer cannot trivially
+//! craft attribution vectors that collide and collapse distinct
+//! alerts into a single bucket — the seed rotates each instance,
+//! so collision-collision attacks cooked offline against a fixed
+//! seed do not transfer. For deterministic / reproducible test
+//! suites use [`LshAlertClusterer::with_seed`]. For deployments
+//! with a strict adversarial-deduplication requirement (forensic
+//! evidence pipelines, regulator-facing audit trails) prefer the
+//! cosine-similarity [`crate::alert_cluster::AlertClusterer`] or
+//! pair this clusterer with an out-of-band correlation check.
 
 #![cfg(feature = "std")]
 
@@ -62,6 +80,12 @@ pub struct LshAlertClusterer {
     buckets_per_dim: usize,
     /// Attribution magnitude cap used by the quantiser.
     attr_cap: f64,
+    /// Per-instance random seed mixed into the FNV hash so two
+    /// clusterers built with the same parameters produce different
+    /// keys for the same input — defeats trivial offline collision
+    /// crafting. See module-level "Adversarial-resistance
+    /// disclaimer" for the precise threat model.
+    seed: u128,
     /// Lifetime alerts observed.
     observed_total: u64,
     /// Lifetime merges (existing bucket hit).
@@ -78,6 +102,7 @@ impl Default for LshAlertClusterer {
             buckets: HashMap::new(),
             buckets_per_dim: DEFAULT_BUCKETS_PER_DIM,
             attr_cap: DEFAULT_ATTR_CAP,
+            seed: random_seed(),
             observed_total: 0,
             joined_total: 0,
             new_cluster_total: 0,
@@ -86,8 +111,21 @@ impl Default for LshAlertClusterer {
     }
 }
 
+/// Sample a fresh per-instance hash seed from the thread-local
+/// RNG (auto-seeded from the OS entropy source).
+fn random_seed() -> u128 {
+    let lo: u64 = rand::random();
+    let hi: u64 = rand::random();
+    (u128::from(hi) << 64) | u128::from(lo)
+}
+
 impl LshAlertClusterer {
-    /// Build with caller-configured quantisation settings.
+    /// Build with caller-configured quantisation settings. The hash
+    /// seed is sampled fresh from the thread-local RNG so two
+    /// clusterers built with identical parameters produce different
+    /// hashes for the same input (per-instance seed rotation). Use
+    /// [`Self::with_seed`] for deterministic / reproducible test
+    /// fixtures.
     ///
     /// # Errors
     ///
@@ -95,6 +133,18 @@ impl LshAlertClusterer {
     /// `buckets_per_dim > 256` (single hex / 2-hex overflow), or
     /// non-finite / non-positive `attr_cap`.
     pub fn new(buckets_per_dim: usize, attr_cap: f64) -> RcfResult<Self> {
+        Self::with_seed(buckets_per_dim, attr_cap, random_seed())
+    }
+
+    /// Build with caller-supplied hash seed — use for reproducible
+    /// test fixtures and snapshot diffing. **Do not** hard-code a
+    /// constant seed in production: that voids the per-instance
+    /// rotation that defends against offline collision crafting.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::new`].
+    pub fn with_seed(buckets_per_dim: usize, attr_cap: f64, seed: u128) -> RcfResult<Self> {
         if !(2..=256).contains(&buckets_per_dim) {
             return Err(RcfError::InvalidConfig(
                 format!(
@@ -113,11 +163,20 @@ impl LshAlertClusterer {
             buckets: HashMap::new(),
             buckets_per_dim,
             attr_cap,
+            seed,
             observed_total: 0,
             joined_total: 0,
             new_cluster_total: 0,
             metrics: default_sink(),
         })
+    }
+
+    /// Per-instance hash seed — exposed so callers can persist /
+    /// re-load it across restarts when they need the same
+    /// `(seed, params) → hash` mapping for snapshot continuity.
+    #[must_use]
+    pub fn seed(&self) -> u128 {
+        self.seed
     }
 
     /// Install a metrics sink — every `observe` call emits
@@ -181,20 +240,26 @@ impl LshAlertClusterer {
 
     /// LSH hash of a [`DiVector`]: per-dim signed attribution
     /// (`high - low`) quantised into `buckets_per_dim` buckets on
-    /// `[-attr_cap, +attr_cap]`, folded into a `u128` via FNV-1a.
+    /// `[-attr_cap, +attr_cap]`, folded into a `u128` via FNV-1a
+    /// pre- and post-mixed with the per-instance [`Self::seed`].
     ///
     /// Similar alerts hash to the same key because every dim's
     /// signed attribution falls in the same quantisation bucket.
     /// Switched from a per-dim hex `String` to a fixed-size
     /// integer key to drop the per-observe heap allocation.
+    /// The seed mix prevents a black-box attacker from porting an
+    /// offline-precomputed collision set across clusterers — see
+    /// the module-level "Adversarial-resistance disclaimer".
     #[must_use]
     pub fn hash_divector(&self, di: &DiVector) -> u128 {
         // FNV-1a over the per-dim quantised bucket indices,
         // plus a per-dim tag so two different `(dim, bucket)`
-        // pairs cannot alias via offset.
+        // pairs cannot alias via offset. Pre- and post-XOR with
+        // the per-instance seed so identical input vectors hash
+        // to different keys across clusterer instances.
         const FNV_OFFSET: u128 = 0x6c62_272e_07bb_0142_62b8_2175_6295_c58d;
         const FNV_PRIME: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013b;
-        let mut h = FNV_OFFSET;
+        let mut h = FNV_OFFSET ^ self.seed;
         let dims = di.dim();
         for d in 0..dims {
             let signed = di.high()[d] - di.low()[d];
@@ -206,6 +271,9 @@ impl LshAlertClusterer {
             h ^= bucket;
             h = h.wrapping_mul(FNV_PRIME);
         }
+        // Final seed mix so the leading and trailing avalanche
+        // both depend on the per-instance secret.
+        h ^= self.seed.wrapping_mul(FNV_PRIME);
         h
     }
 
@@ -362,6 +430,57 @@ mod tests {
         assert_eq!(c.observed_total(), 3);
         assert_eq!(c.new_cluster_total(), 1);
         assert_eq!(c.joined_total(), 2);
+    }
+
+    #[test]
+    fn seed_rotates_per_instance() {
+        // Two clusterers built with identical params must hash the
+        // same input to different keys — defends against offline
+        // collision crafting on a fixed seed.
+        let c1 = LshAlertClusterer::new(16, 4.0).unwrap();
+        let c2 = LshAlertClusterer::new(16, 4.0).unwrap();
+        assert_ne!(
+            c1.seed(),
+            c2.seed(),
+            "fresh instances must draw distinct seeds"
+        );
+        let mut di = DiVector::zeros(4);
+        di.add_high(0, 2.0).unwrap();
+        let h1 = c1.hash_divector(&di);
+        let h2 = c2.hash_divector(&di);
+        assert_ne!(
+            h1, h2,
+            "identical input must hash differently across rotated seeds"
+        );
+    }
+
+    #[test]
+    fn with_seed_is_deterministic() {
+        // Same explicit seed → same hash. Required for snapshot /
+        // replay test fixtures.
+        let c1 = LshAlertClusterer::with_seed(16, 4.0, 0xdead_beef_dead_beef_dead_beef_dead_beef)
+            .unwrap();
+        let c2 = LshAlertClusterer::with_seed(16, 4.0, 0xdead_beef_dead_beef_dead_beef_dead_beef)
+            .unwrap();
+        assert_eq!(c1.seed(), c2.seed());
+        let mut di = DiVector::zeros(4);
+        di.add_high(0, 2.0).unwrap();
+        assert_eq!(c1.hash_divector(&di), c2.hash_divector(&di));
+    }
+
+    #[test]
+    fn seeded_observe_pipeline_round_trips() {
+        // End-to-end: with_seed clusterer must still bucket
+        // identical inputs together (LSH semantics preserved).
+        let mut c = LshAlertClusterer::with_seed(16, 4.0, 0x42).unwrap();
+        let mut di = DiVector::zeros(4);
+        di.add_high(0, 1.0).unwrap();
+        let r = record_with_di(di.clone());
+        let (h1, d1) = c.observe(&r);
+        let (h2, d2) = c.observe(&r);
+        assert_eq!(h1, h2);
+        assert_eq!(d1, LshClusterDecision::NewCluster);
+        assert_eq!(d2, LshClusterDecision::Joined);
     }
 
     #[test]

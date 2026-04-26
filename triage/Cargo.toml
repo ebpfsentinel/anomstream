@@ -16,7 +16,7 @@ workspace = true
 
 [features]
 default = ["std", "serde", "postcard"]
-std = ["anomstream-core/std", "rand/std", "rand/std_rng", "rand_chacha/std"]
+std = ["anomstream-core/std", "rand/std", "rand/std_rng", "rand/thread_rng", "rand_chacha/std"]
 serde = ["anomstream-core/serde", "dep:serde", "rand_chacha/serde"]
 serde_json = ["serde", "anomstream-core/serde_json", "dep:serde_json"]
 postcard = ["serde", "anomstream-core/postcard", "dep:postcard"]

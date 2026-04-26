@@ -319,8 +319,19 @@ impl PlattCalibrator {
                 break;
             }
             let det = h11 * h22 - h21 * h21;
+            // Singular / ill-conditioned Hessian → dividing produces
+            // NaN or Inf and corrupts (a, b) for every subsequent
+            // iteration. Bail with the best-so-far estimate; caller
+            // surfaces `converged() == false` and can refit with a
+            // larger `sigma` damping or more data.
+            if !det.is_finite() || det.abs() < f64::EPSILON {
+                break;
+            }
             let da = -(h22 * g1 - h21 * g2) / det;
             let db = -(-h21 * g1 + h11 * g2) / det;
+            if !da.is_finite() || !db.is_finite() {
+                break;
+            }
             let gd = g1 * da + g2 * db;
 
             let mut step_size = 1.0_f64;
@@ -588,6 +599,39 @@ mod tests {
         }
         let cal = PlattCalibrator::fit(&data, PlattFitConfig::default()).unwrap();
         assert!(!cal.high_skew());
+    }
+
+    #[test]
+    fn singular_hessian_does_not_produce_nan_calibrator() {
+        // All scores identical → h21² = h11·h22 → det = 0. Newton
+        // path must bail without producing NaN parameters.
+        let data: Vec<(f64, bool)> = (0..200_u32)
+            .map(|i| (1.0_f64, i.is_multiple_of(2)))
+            .collect();
+        let cal = PlattCalibrator::fit(&data, PlattFitConfig::default()).unwrap();
+        assert!(cal.a().is_finite(), "slope must be finite");
+        assert!(cal.b().is_finite(), "intercept must be finite");
+        let p = cal.calibrate(1.0);
+        assert!(
+            (0.0..=1.0).contains(&p),
+            "calibrated probability out of [0,1]: {p}"
+        );
+    }
+
+    #[test]
+    fn collinear_scores_do_not_produce_nan_calibrator() {
+        // Two-point pile-up: every label-true score = 0.0,
+        // every label-false score = 0.0 → degenerate gradient
+        // direction. Must not blow up.
+        let mut data = Vec::new();
+        for _ in 0..50 {
+            data.push((0.0_f64, true));
+        }
+        for _ in 0..50 {
+            data.push((0.0_f64, false));
+        }
+        let cal = PlattCalibrator::fit(&data, PlattFitConfig::default()).unwrap();
+        assert!(cal.a().is_finite() && cal.b().is_finite());
     }
 
     #[test]
