@@ -1265,23 +1265,31 @@ mod tests {
         assert!(!unkeyed.accept_hash(1));
         assert!(!unkeyed.accept_hash(2));
 
-        // A keyed sampler shifts the residue class. Same hashes
-        // land on a different admission set unless the mix keys
-        // happen to map them back — vanishingly unlikely on a
-        // 128-bit secret.
-        let keyed = UpdateSampler::new_keyed(4).expect("getrandom works");
+        // A keyed sampler shifts the residue class: the same
+        // hashes land on a different admission set. Use fixed seeds
+        // so the assertion is deterministic — a randomly-keyed
+        // sampler has a ~1/2^N chance of reproducing the unkeyed
+        // decisions on N hashes, which would flake CI.
+        let keyed = UpdateSampler::new_keyed_with_seeds(4, 0xdead_beef, 0xcafe_f00d);
         assert!(keyed.is_keyed());
-        let same_decision = (0..8_u64)
-            .filter(|h| unkeyed.accept_hash(*h) == keyed.accept_hash(*h))
+        let diff_decision = (0..32_u64)
+            .filter(|h| unkeyed.accept_hash(*h) != keyed.accept_hash(*h))
             .count();
-        // 8 hashes, 2 admission outcomes → expected match rate 50 %
-        // under a random mix. Allow a wide range because the mix
-        // is a random oracle, not a uniform shuffle; the point of
-        // the assertion is that the keyed sampler is *not* the
-        // unkeyed one.
+        // The mix is a random oracle, not a uniform shuffle; the
+        // point of the assertion is only that the keyed sampler is
+        // *not* the unkeyed one. These seeds diverge on 14 of 32
+        // hashes.
         assert!(
-            same_decision < 8,
+            diff_decision > 0,
             "keyed sampler accepted every hash exactly like unkeyed — mix ineffective"
+        );
+
+        // Smoke-check that the getrandom-seeded constructor builds a
+        // keyed sampler too (entropy path, not admission semantics).
+        assert!(
+            UpdateSampler::new_keyed(4)
+                .expect("getrandom works")
+                .is_keyed()
         );
     }
 
