@@ -32,6 +32,11 @@ parallel = ["anomstream-core?/parallel"]
 serde = ["anomstream-core?/serde", "anomstream-triage?/serde"]
 postcard = ["anomstream-core?/postcard", "anomstream-triage?/postcard"]
 serde_json = ["anomstream-core?/serde_json"]
+# Narrow the in-memory + on-disk `Cut` to `{u8 dim, f32 value}` (8 B vs
+# 16 B) for tighter L1 fit. Opt-in; quantises the cut coordinate to
+# `f32` and caps `D ≤ 256`. Snapshots are wire-incompatible with default
+# builds (version-prefix guarded).
+packed-cut = ["anomstream-core?/packed-cut"]
 # Tamper-evident audit trail (HMAC-SHA256 chain) — pulls
 # `hmac` + `sha2` + `subtle` via the triage member. Implies
 # `triage + serde + postcard` because chain entries are

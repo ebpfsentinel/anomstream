@@ -26,6 +26,33 @@ use wide::f64x4;
 use crate::domain::cut::Cut;
 use crate::error::{RcfError, RcfResult};
 
+/// Pin an `f64` cut coordinate to the largest representable value that,
+/// once narrowed to the stored `f32`, still lies inside `[lo, hi)`.
+///
+/// `f32` rounding of a value sampled in `[lo, hi)` can land on or past
+/// `hi` (breaking cut isolation) or just below `lo`; this snaps it back
+/// into the half-open interval. When no `f32` exists strictly inside
+/// `[lo, hi)` — the two bounds are closer than an `f32` ULP, i.e. the
+/// points are coincident at `f32` resolution — the result falls below
+/// `lo`, which yields a non-isolating cut that the tree resolves by
+/// absorbing the point as a duplicate.
+#[cfg(feature = "packed-cut")]
+#[inline]
+// Deliberate `f64 → f32` narrowing — the stored cut coordinate is `f32`
+// under `packed-cut`; this fn exists to keep that narrowing inside
+// `[lo, hi)`.
+#[allow(clippy::cast_possible_truncation)]
+fn narrow_into_range(value: f64, lo: f64, hi: f64) -> f64 {
+    let mut w = value as f32;
+    if f64::from(w) < lo {
+        w = w.next_up();
+    }
+    while f64::from(w) >= hi {
+        w = w.next_down();
+    }
+    f64::from(w)
+}
+
 /// Axis-aligned bounding box for `D`-dimensional points. Storage is
 /// stack-allocated `[f64; D]` so the compiler can unroll the
 /// per-dim loops, vectorise via SIMD, and avoid any heap traffic.
@@ -348,6 +375,14 @@ impl<const D: usize> BoundingBox<D> {
         } else {
             lo + rand::RngExt::random::<f64>(rng) * (hi - lo)
         };
+        // Under `packed-cut` the coordinate is stored as `f32`. `f32`
+        // rounding can push a value sampled in `[lo, hi)` up to (or past)
+        // `hi`, which would route the augmented point to the same side as
+        // the box and silently break isolation. Pin the stored value back
+        // inside `[lo, hi)` so the isolation invariant the tree relies on
+        // survives the narrowing. No-op for the default `f64` cut.
+        #[cfg(feature = "packed-cut")]
+        let value = narrow_into_range(value, lo, hi);
         Ok(Cut::new(chosen, value))
     }
 

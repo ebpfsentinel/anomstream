@@ -2563,6 +2563,26 @@ mod tests {
     }
 
     #[test]
+    fn sub_f32_ulp_points_insert_without_error() {
+        // Points separated by far less than an `f32` ULP near 1.0
+        // (`f32` ULP ≈ 6e-8). Under the default `f64` cut every point is
+        // distinct and gets isolated; under `packed-cut` the `f32` cut
+        // cannot separate them so they collapse onto one leaf as
+        // duplicates. Either way `update` must succeed — never surface
+        // the "leaf reached without isolation" invariant error.
+        let mut f = ForestBuilder::<4>::new().seed(7).build().unwrap();
+        for i in 0..512 {
+            #[allow(clippy::cast_precision_loss)]
+            let v = 1.0 + (i as f64) * 1e-10;
+            f.update([v, v, v, v]).unwrap();
+        }
+        // A clearly out-of-distribution probe still scores finite — the
+        // forest stayed well-formed through the near-duplicate stream.
+        let s = f.score(&[1000.0, 1000.0, 1000.0, 1000.0]).unwrap();
+        assert!(f64::from(s).is_finite());
+    }
+
+    #[test]
     fn point_store_capacity_stays_bounded() {
         let mut f = small_forest();
         for i in 0..1000 {

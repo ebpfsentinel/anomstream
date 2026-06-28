@@ -16,35 +16,103 @@ use rand::{Rng, RngExt};
 use crate::domain::bounding_box::BoundingBox;
 use crate::error::{RcfError, RcfResult};
 
+/// Stored cut-dimension type. `usize` by default; the `packed-cut`
+/// feature narrows it to `u8` (caps `D ≤ 256`) so a [`Cut`] occupies
+/// 8 bytes instead of 16, improving L1 fit on deep tree descents.
+#[cfg(not(feature = "packed-cut"))]
+type StoredDim = usize;
+/// Stored cut-dimension type under `packed-cut`.
+#[cfg(feature = "packed-cut")]
+type StoredDim = u8;
+
+/// Stored cut-coordinate type. `f64` by default; the `packed-cut`
+/// feature narrows it to `f32`. All routing comparisons still happen
+/// in `f64` (the stored value is widened on read) so the only
+/// behavioural change is `f32` quantisation of the cut coordinate.
+#[cfg(not(feature = "packed-cut"))]
+type StoredValue = f64;
+/// Stored cut-coordinate type under `packed-cut`.
+#[cfg(feature = "packed-cut")]
+type StoredValue = f32;
+
 /// A random cut along one dimension at a given coordinate.
+///
+/// The in-memory representation depends on the `packed-cut` feature:
+/// `{dim: usize, value: f64}` (16 B) by default, or `{dim: u8,
+/// value: f32}` (8 B) under `packed-cut`. The public API is identical
+/// either way — [`Cut::new`] takes `usize`/`f64` and [`Cut::dim`] /
+/// [`Cut::value`] return `usize`/`f64` — so callers never observe the
+/// narrowing beyond the `f32` quantisation of the stored coordinate.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cut {
     /// Dimension that the cut is perpendicular to.
-    dim: usize,
+    dim: StoredDim,
     /// Cut coordinate in `[bbox.min[dim], bbox.max[dim]]`.
-    value: f64,
+    value: StoredValue,
 }
 
 impl Cut {
     /// Build a cut explicitly. Used by tests and the persistence layer.
+    ///
+    /// Under the `packed-cut` feature `dim` is narrowed to `u8` and
+    /// `value` to `f32`. `dim` must therefore be `≤ 255` when that
+    /// feature is enabled (it always is in practice: `dim < D` and the
+    /// canonical `D` is 16).
     #[must_use]
     pub fn new(dim: usize, value: f64) -> Self {
-        Self { dim, value }
+        #[cfg(not(feature = "packed-cut"))]
+        {
+            Self { dim, value }
+        }
+        #[cfg(feature = "packed-cut")]
+        {
+            debug_assert!(
+                u8::try_from(dim).is_ok(),
+                "packed-cut caps D at 256; got cut dim {dim}"
+            );
+            // Deliberate narrowing — this *is* the packed-cut feature.
+            // `dim` is bounded by `D ≤ 256` (asserted above); the `f32`
+            // coordinate quantisation is the documented, AUC-validated
+            // trade-off the feature exists to make.
+            #[allow(clippy::cast_possible_truncation)]
+            Self {
+                dim: dim as StoredDim,
+                value: value as StoredValue,
+            }
+        }
     }
 
     /// Cut dimension.
     #[must_use]
     #[inline]
     pub fn dim(&self) -> usize {
-        self.dim
+        #[cfg(not(feature = "packed-cut"))]
+        {
+            self.dim
+        }
+        #[cfg(feature = "packed-cut")]
+        {
+            self.dim as usize
+        }
     }
 
     /// Cut coordinate.
+    ///
+    /// Under `packed-cut` this is the stored `f32` widened back to
+    /// `f64`; the widening is exact, so routing comparisons are
+    /// unaffected beyond the original `f32` quantisation.
     #[must_use]
     #[inline]
     pub fn value(&self) -> f64 {
-        self.value
+        #[cfg(not(feature = "packed-cut"))]
+        {
+            self.value
+        }
+        #[cfg(feature = "packed-cut")]
+        {
+            f64::from(self.value)
+        }
     }
 
     /// Decide which side of the cut a `point` lies on.
@@ -61,7 +129,7 @@ impl Cut {
     #[must_use]
     #[inline]
     pub fn left_of(&self, point: &[f64]) -> bool {
-        point[self.dim] <= self.value
+        point[self.dim()] <= self.value()
     }
 
     /// Sample a random cut over `bbox` with the dimension chosen
@@ -122,7 +190,7 @@ impl Cut {
             lo + rng.random::<f64>() * (hi - lo)
         };
 
-        Ok(Self { dim: chosen, value })
+        Ok(Self::new(chosen, value))
     }
 }
 

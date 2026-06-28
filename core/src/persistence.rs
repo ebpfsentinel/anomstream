@@ -70,6 +70,22 @@ use crate::forest::RandomCutForest;
 #[cfg(feature = "serde")]
 use crate::thresholded::ThresholdedForest;
 
+/// High bit set in the version prefix when the crate is built with the
+/// `packed-cut` feature. A packed-cut build narrows the on-disk `Cut`
+/// representation (`u8` dim + `f32` value) so its payload is wire-
+/// incompatible with a default build; flipping this bit makes either
+/// build reject the other's snapshot with [`RcfError::IncompatibleVersion`]
+/// instead of silently misparsing the narrowed cut bytes.
+pub const PACKED_CUT_VERSION_FLAG: u32 = 0x8000_0000;
+
+/// Compile-time version offset — `PACKED_CUT_VERSION_FLAG` under
+/// `packed-cut`, otherwise `0`.
+#[cfg(feature = "packed-cut")]
+const PACKED_CUT_OFFSET: u32 = PACKED_CUT_VERSION_FLAG;
+/// Compile-time version offset — `0` for the default `f64` cut layout.
+#[cfg(not(feature = "packed-cut"))]
+const PACKED_CUT_OFFSET: u32 = 0;
+
 /// Persistence format version for [`RandomCutForest`]. Bump on any
 /// breaking layout change. Version `4` splits the `NodeStore` arenas
 /// into typed `InternalData` / `LeafData` records (saves ~90 % on
@@ -78,13 +94,19 @@ use crate::thresholded::ThresholdedForest;
 /// [`RandomCutForest::delete_before`]; version `2` was the first
 /// `postcard` payload after `RustSec` flagged `bincode` as
 /// unmaintained; version `1` was the original `bincode 2` payload.
-pub const PERSISTENCE_VERSION: u32 = 4;
+///
+/// Under the `packed-cut` feature [`PACKED_CUT_VERSION_FLAG`] is OR-ed
+/// in so packed and default snapshots cannot be cross-loaded.
+pub const PERSISTENCE_VERSION: u32 = 4 | PACKED_CUT_OFFSET;
 
 /// Persistence format version for [`ThresholdedForest`]. Distinct
 /// from [`PERSISTENCE_VERSION`] because the threshold envelope carries
 /// additional state (EMA stats, threshold config) that evolves on its
 /// own cadence. Version `4` inherits the forest's typed-arena bump.
-pub const THRESHOLDED_PERSISTENCE_VERSION: u32 = 4;
+///
+/// Carries [`PACKED_CUT_VERSION_FLAG`] under `packed-cut` for the same
+/// cross-load guard as [`PERSISTENCE_VERSION`].
+pub const THRESHOLDED_PERSISTENCE_VERSION: u32 = 4 | PACKED_CUT_OFFSET;
 
 /// Number of bytes reserved for the version prefix.
 pub const VERSION_PREFIX_BYTES: usize = 4;

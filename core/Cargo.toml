@@ -21,6 +21,13 @@ serde = ["dep:serde", "rand_chacha/serde"]
 serde_json = ["dep:serde_json", "serde"]
 postcard = ["dep:postcard", "serde"]
 parallel = ["dep:rayon", "std"]
+# Narrow the in-memory + on-disk `Cut` to `{u8 dim, f32 value}` (8 B vs
+# 16 B) for tighter L1 fit on deep tree descents. Caps `D ≤ 256` and
+# quantises the cut coordinate to `f32`; snapshots are wire-incompatible
+# with default builds (guarded by a version-prefix flag). Opt-in:
+# validated AUC-neutral on TSB-AD-M, but off by default so the canonical
+# scorer stays bit-for-bit `f64`.
+packed-cut = []
 
 [dependencies]
 thiserror = { workspace = true }

@@ -400,12 +400,19 @@ impl<const D: usize> RandomCutTree<D> {
         let (existing_cut, left, right) = match self.store.view(n)? {
             NodeView::Internal(i) => (i.cut, i.left, i.right),
             NodeView::Leaf(_) => {
-                // Cut over a non-degenerate augmented bbox always
-                // isolates one of two distinct points; reaching here
-                // would indicate a bug elsewhere.
+                // A cut over a non-degenerate augmented bbox always
+                // isolates one of two distinct points in the default
+                // `f64` representation, so reaching a leaf here is a bug.
+                #[cfg(not(feature = "packed-cut"))]
                 return Err(RcfError::InvalidConfig(
                     "RandomCutTree::descend_or_split: leaf reached without isolation".into(),
                 ));
+                // Under `packed-cut` two `f64`-distinct points can be
+                // closer than an `f32` ULP on every dimension, so no
+                // `f32` cut can separate them. They are coincident at the
+                // stored resolution — absorb the new point as a duplicate.
+                #[cfg(feature = "packed-cut")]
+                return self.absorb_duplicate(n, point_idx);
             }
         };
 
@@ -743,6 +750,10 @@ impl<const D: usize> RandomCutTree<D> {
 /// Whether `cut` strictly isolates `point` from `n_bbox` (i.e. `point`
 /// ends up alone on one side of the hyperplane).
 #[inline]
+// `Cut` shrinks to 8 bytes under `packed-cut`, tripping the pass-by-ref
+// size heuristic; the `&Cut` signature is shared with the default 16-byte
+// build, so keep the reference and silence the lint only when packed.
+#[cfg_attr(feature = "packed-cut", allow(clippy::trivially_copy_pass_by_ref))]
 fn isolates_point<const D: usize>(cut: &Cut, point: &[f64], n_bbox: &BoundingBox<D>) -> bool {
     let d = cut.dim();
     let v = cut.value();
