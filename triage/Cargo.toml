@@ -54,6 +54,7 @@ rand_chacha = { workspace = true, features = ["std"] }
 [[bench]]
 name = "modules"
 harness = false
+required-features = ["std"]
 
 # Examples carry `required-features` so a `cargo build --examples`
 # under bare default features skips the ones that depend on
