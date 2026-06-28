@@ -447,7 +447,7 @@ Right-sizing each sketch for a target working-set cardinality
 costs a handful of `f64` arithmetic ops up front and saves
 gigabytes of wasted counter bank at run time. The table below
 captures the canonical sizing for the `1 000 000`-distinct-key
-regime typical of day-scale NDR ingest; scale proportionally for
+regime typical of day-scale network-security ingest; scale proportionally for
 larger feeds.
 
 | Sketch | Params for 1 M keys | Per-instance memory | Accuracy bound | Constructor |
@@ -1554,7 +1554,7 @@ Three hot-path sites are now alloc-free:
   default 512-cap under sustained SOC labelling.
 - `RandomCutForest::score_trimmed` — per-call `Vec::with_capacity`
   scratch replaced by a `thread_local!` `RefCell<Vec<f64>>`
-  reused across calls. Per-packet scoring on an NDR hot path no
+  reused across calls. Per-packet scoring on a network-security hot path no
   longer allocates. Falls back to a fresh `Vec` under `no_std`
   where `thread_local!` is unavailable.
 - `LshAlertClusterer::hash_divector` / `observe` — bucket key

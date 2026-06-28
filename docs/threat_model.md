@@ -3,7 +3,7 @@
 Scope: adversarial inputs on the ingress path where the
 `anomstream` workspace (`anomstream-core` detectors +
 `anomstream-hotpath` ingress primitives + `anomstream-triage` SOC
-layer) consumes untrusted feature vectors (eBPF NDR agent, MSSP
+layer) consumes untrusted feature vectors (eBPF network security agent, MSSP
 tenant pool, public-facing API). Out of scope: host compromise of
 the process running the workspace, side-channel attacks on Ed25519
 license verification, upstream supply-chain compromises of rustc /

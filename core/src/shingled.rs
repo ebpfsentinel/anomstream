@@ -44,7 +44,7 @@
 //!
 //! # When to z-score
 //!
-//! Scaling is the caller's job. For NDR feature dims with wildly
+//! Scaling is the caller's job. For network-security feature dims with wildly
 //! different magnitudes (packet-rate, entropy, port-count), z-score
 //! each scalar against its warm-phase `(mean, stddev)` **before**
 //! handing it to [`ShingledForest::update_scalar`] — RCF cuts are

@@ -186,7 +186,7 @@ where
     }
 
     /// Ingest `key` with caller-supplied `weight` — byte-count
-    /// heavy hitters in NDR workloads (per-packet bytes, not
+    /// heavy hitters in network-security workloads (per-packet bytes, not
     /// just packet counts).
     #[inline]
     pub fn observe_weighted(&mut self, key: K, weight: u64) {

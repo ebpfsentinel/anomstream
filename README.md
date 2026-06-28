@@ -4,7 +4,7 @@ A composable Rust toolkit for **streaming anomaly detection**. Multiple detector
 
 Among the detectors: an AWS-conformant Random Cut Forest implementation (Guha et al. ICML 2016) — one of several detectors.
 
-Powers the ML detection pipeline of the **eBPFsentinel Enterprise** NDR agent; designed to be reused anywhere a stream of high-dim observations needs online scoring.
+Powers the ML detection pipeline of the **eBPFsentinel Enterprise** network security agent; designed to be reused anywhere a stream of high-dim observations needs online scoring.
 
 ## Scope
 
