@@ -136,15 +136,26 @@ fn binary_version_mismatch_rejected() {
 
 #[test]
 fn json_version_mismatch_rejected() {
+    // The serialized version is `PERSISTENCE_VERSION`, which OR-s in the
+    // `packed-cut` flag bit under that feature — so it is not always `4`.
+    // Derive the needle and expected value from the constant rather than
+    // hard-coding `4`, keeping the test correct under every feature set.
+    let expected_version = anomstream_core::persistence::PERSISTENCE_VERSION;
+    let bogus_version = expected_version.wrapping_add(1);
+
     let f = trained_2(42, 8, 20, 0.0);
     let json = f.to_json().unwrap();
-    let bogus = json.replacen("\"version\":4", "\"version\":42", 1);
+    let needle = format!("\"version\":{expected_version}");
+    let bogus = json.replacen(&needle, &format!("\"version\":{bogus_version}"), 1);
+    assert_ne!(
+        bogus, json,
+        "version field {needle} not found in serialized JSON"
+    );
+
     assert!(matches!(
         RandomCutForest::<2>::from_json(&bogus).unwrap_err(),
-        RcfError::IncompatibleVersion {
-            found: 42,
-            expected: 4
-        }
+        RcfError::IncompatibleVersion { found, expected }
+            if found == bogus_version && expected == expected_version
     ));
 }
 
