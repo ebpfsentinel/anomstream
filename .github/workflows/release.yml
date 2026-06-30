@@ -176,6 +176,10 @@ jobs:
     name: cargo publish (crates.io)
     runs-on: ubuntu-latest
     needs: [prepare, lint, test, build, security, publish-dry-run, publish]
+    permissions:
+      contents: read
+      id-token: write # keyless build-provenance attestation
+      attestations: write
     # Static `CARGO_REGISTRY_TOKEN` secret scoped to the `crates-io`
     # environment — generate at https://crates.io/settings/tokens
     # with `publish-new` + `publish-update` scopes.
@@ -212,3 +216,11 @@ jobs:
           cargo publish -p anomstream-triage  --allow-dirty
           cargo publish -p anomstream-hotpath --allow-dirty
           cargo publish -p anomstream         --allow-dirty
+
+      # Attest provenance of the packaged .crate files (cargo publish
+      # leaves them under target/package/). Verifiable with
+      # `gh attestation verify <file>.crate --owner ebpfsentinel`.
+      - name: Attest crate provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: target/package/*.crate
