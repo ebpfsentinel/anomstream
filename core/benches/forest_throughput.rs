@@ -138,11 +138,20 @@ fn bench_attribution_for<const D: usize>(
     });
 }
 
+// Shapes straddling the `num_trees × D` fan-out threshold (2048). The
+// `(*, 256, *)` runs hold sample_size fixed so tree count and tree
+// depth are not varied together, which is what makes them usable for
+// calibrating the threshold; `(200, 512, 16)` keeps the historical
+// deep-tree data point. `D = 14` is the shape the eBPFsentinel
+// Enterprise detector runs at (1400 units — below the threshold).
 fn bench_insert(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_update");
     bench_update_for::<16>(&mut group, 50, 128);
     bench_update_for::<4>(&mut group, 100, 256);
+    bench_update_for::<14>(&mut group, 100, 256);
     bench_update_for::<16>(&mut group, 100, 256);
+    bench_update_for::<14>(&mut group, 150, 256);
+    bench_update_for::<16>(&mut group, 200, 256);
     bench_update_for::<64>(&mut group, 100, 256);
     bench_update_for::<16>(&mut group, 200, 512);
     group.finish();
@@ -152,7 +161,10 @@ fn bench_score(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_score");
     bench_score_for::<16>(&mut group, 50, 128);
     bench_score_for::<4>(&mut group, 100, 256);
+    bench_score_for::<14>(&mut group, 100, 256);
     bench_score_for::<16>(&mut group, 100, 256);
+    bench_score_for::<14>(&mut group, 150, 256);
+    bench_score_for::<16>(&mut group, 200, 256);
     bench_score_for::<64>(&mut group, 100, 256);
     bench_score_for::<16>(&mut group, 200, 512);
     group.finish();

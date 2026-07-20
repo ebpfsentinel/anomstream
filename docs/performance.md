@@ -126,6 +126,23 @@ The two `parallel`-arm rows run identical code in both columns and serve
 as the control group: they moved ≤ 8 %, which sets the noise floor for
 the ratios above.
 
+**Consumer shape** — the eBPFsentinel Enterprise RCF detector runs
+`D = 14` at the default 100 trees / 256 samples = 1400 units, so it takes
+the serial arm and picks up the win without any config change. It calls
+only single-probe `score` / `update` (no batch entry point), and keeps
+the `parallel` feature enabled so that raising `num_trees` past the
+threshold restores the fan-out — which a compile-time feature flip could
+not do.
+
+**Open calibration** — nothing is measured between 1600 and 3200 units,
+so `2048` is a midpoint choice rather than a measured optimum; shapes
+landing in that band (150 trees at `D = 14` = 2100) may pick the slower
+arm by a small margin. The historical 3200 sample also varies
+sample_size alongside tree count, confounding depth with breadth. The
+`(100, 256, 14)`, `(150, 256, 14)` and `(200, 256, 16)` cases were added
+to `forest_update` / `forest_score` to settle both; they need an idle
+machine to be meaningful.
+
 This affects only per-tree fan-out. Batch entry points (`score_many`,
 `attribution_many`, `score_codisp_stateless_many`) parallelise across
 *points* — each task is a whole ensemble walk, so the fan-out always

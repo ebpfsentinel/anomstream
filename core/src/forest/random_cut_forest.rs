@@ -1571,6 +1571,24 @@ impl<const D: usize> RandomCutForest<D> {
 /// points (`score_many`, `attribution_many`, `score_codisp_stateless_many`)
 /// parallelise across *points*, where each task is a whole ensemble
 /// walk and the fan-out always pays.
+///
+/// Known calibration limits — the threshold is correct for the shapes
+/// that matter (the AWS default at 1600 and below sit clearly on the
+/// serial side, `D = 64` clearly on the parallel side), but two points
+/// are unresolved:
+///
+/// - The `3200` sample above is `(200 trees, 512 samples, D = 16)`,
+///   which raises tree *depth* along with tree count, so it does not
+///   isolate `num_trees × D` on its own. `forest_{update,score}` now
+///   carry `(200, 256, 16)` for the un-confounded comparison.
+/// - Nothing is measured between 1600 and 3200, so the exact crossover
+///   inside that band is unknown; `2048` is a midpoint choice, not a
+///   measured optimum. Shapes landing there (e.g. 150 trees at
+///   `D = 14`, 2100 units) may pick the slower arm by a small margin.
+///
+/// Re-measure with the `(100, 256, 14)`, `(150, 256, 14)` and
+/// `(200, 256, 16)` bench cases on an otherwise idle machine to close
+/// this out; see `docs/performance.md`.
 #[cfg(feature = "parallel")]
 const PARALLEL_FANOUT_MIN_WORK: usize = 2048;
 
