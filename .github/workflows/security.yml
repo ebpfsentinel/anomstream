@@ -24,20 +24,21 @@ jobs:
     name: cargo audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
           version: ${{ inputs.version }}
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # `rustsec/audit-check` is still pinned to the deprecated Node 20
+      # runtime; run the CLI directly instead (matches the agent repos).
+      - uses: taiki-e/install-action@cargo-audit
+      - run: cargo audit
 
   deny:
     name: cargo deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
@@ -51,7 +52,7 @@ jobs:
     name: cargo machete (unused deps)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
@@ -62,7 +63,7 @@ jobs:
     name: CycloneDX SBOM (workspace)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:

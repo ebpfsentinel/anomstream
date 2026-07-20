@@ -23,7 +23,7 @@ jobs:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
@@ -37,7 +37,7 @@ jobs:
     name: clippy (--all-features)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
@@ -54,7 +54,7 @@ jobs:
     name: clippy (--no-default-features)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:

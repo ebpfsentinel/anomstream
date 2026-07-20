@@ -33,7 +33,7 @@ jobs:
     env:
       RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
@@ -57,7 +57,7 @@ jobs:
     name: no_std build (core, triage)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
@@ -94,7 +94,7 @@ jobs:
           - "core,parallel,postcard,serde_json"
           - "full"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
@@ -111,7 +111,7 @@ jobs:
     env:
       RUSTUP_TOOLCHAIN: nightly
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - if: inputs.version != ''
         uses: ./.github/actions/stamp-version
         with:
