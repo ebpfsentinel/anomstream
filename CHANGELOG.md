@@ -4,6 +4,43 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 uses calendar versioning (`YYYY.M.X`).
 
+## [Unreleased]
+
+### Performance
+
+- Gate the per-tree rayon fan-out on estimated work (`num_trees × D ≥
+  2048`) instead of on the `parallel` cargo feature alone. A single tree
+  walk is a few hundred nanoseconds — under rayon's task-dispatch floor —
+  so small and mid-sized ensembles were paying scheduling overhead that
+  exceeded the work being parallelised. Below the threshold the ensemble
+  walk now stays on the calling thread.
+
+  Measured back-to-back with only the threshold flipped: `forest_update`
+  is 1.7–4.9× faster and `forest_score` 1.35–2.9× faster at
+  `(100, 256, 4)`, `(50, 128, 16)` and `(100, 256, 16)` — the last being
+  the AWS-default shape. Ensembles at or above the threshold
+  (`(200, 512, 16)`, `(100, 256, 64)`) take the same parallel path as
+  before and are unchanged. Applies to `score`, `attribution`,
+  `score_and_attribution`, both codisp aggregates, `update` and `delete`.
+
+  Batch entry points (`score_many`, `attribution_many`,
+  `score_codisp_stateless_many`) fan out across *points*, where each task
+  is a whole ensemble walk; they are unaffected and remain parallel.
+
+  Behaviour-only change — scores are unchanged beyond float summation
+  order, which is not associative and was already unpinned across the
+  serial / parallel arms.
+
+### Fixed
+
+- `audit_record_json_roundtrip_bit_exact_non_fp_fields` asserted bit-exact
+  `f64` equality on the derived `score` field across a `serde_json`
+  round-trip, which the format does not guarantee: some doubles serialise
+  to a shortest decimal form that re-parses one ULP away (e.g.
+  `1.8295224971362654` → `1.8295224971362656`). The test now holds `score`
+  to a one-ULP tolerance, matching what its own comment already described,
+  and keeps bit-exactness for the non-floating-point fields.
+
 ## [2026.4.1] - 2026-04-26
 
 First public release of the **anomstream** workspace — `anomstream-core`

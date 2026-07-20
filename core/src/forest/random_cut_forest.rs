@@ -488,12 +488,15 @@ impl<const D: usize> RandomCutForest<D> {
         } = self;
         let store: &PointStore<D> = point_store;
 
+        // Entering the dedicated pool costs a thread hop, so only do it
+        // when `update_trees` will actually fan out.
         #[cfg(feature = "parallel")]
-        let pending_frees = if let Some(p) = pool.as_deref() {
-            p.install(|| update_trees(trees, store, new_idx))?
-        } else {
-            update_trees(trees, store, new_idx)?
-        };
+        let pending_frees =
+            if let Some(p) = pool.as_deref().filter(|_| fan_out_pays(trees.len(), D)) {
+                p.install(|| update_trees(trees, store, new_idx))?
+            } else {
+                update_trees(trees, store, new_idx)?
+            };
 
         #[cfg(not(feature = "parallel"))]
         let pending_frees = update_trees(trees, store, new_idx)?;
@@ -544,11 +547,12 @@ impl<const D: usize> RandomCutForest<D> {
         let store: &PointStore<D> = point_store;
 
         #[cfg(feature = "parallel")]
-        let (removed_from_any, went_to_zero) = if let Some(p) = pool.as_deref() {
-            p.install(|| delete_from_trees(trees, store, point_idx))?
-        } else {
-            delete_from_trees(trees, store, point_idx)?
-        };
+        let (removed_from_any, went_to_zero) =
+            if let Some(p) = pool.as_deref().filter(|_| fan_out_pays(trees.len(), D)) {
+                p.install(|| delete_from_trees(trees, store, point_idx))?
+            } else {
+                delete_from_trees(trees, store, point_idx)?
+            };
 
         #[cfg(not(feature = "parallel"))]
         let (removed_from_any, went_to_zero) = delete_from_trees(trees, store, point_idx)?;
@@ -733,7 +737,11 @@ impl<const D: usize> RandomCutForest<D> {
         let point = &scaled;
 
         #[cfg(feature = "parallel")]
-        let (total, count) = if let Some(p) = self.pool.as_deref() {
+        let (total, count) = if let Some(p) = self
+            .pool
+            .as_deref()
+            .filter(|_| fan_out_pays(self.trees.len(), D))
+        {
             p.install(|| score_aggregate(&self.trees, point))?
         } else {
             score_aggregate(&self.trees, point)?
@@ -963,7 +971,11 @@ impl<const D: usize> RandomCutForest<D> {
         let point = &scaled;
 
         #[cfg(feature = "parallel")]
-        let (total, count) = if let Some(p) = self.pool.as_deref() {
+        let (total, count) = if let Some(p) = self
+            .pool
+            .as_deref()
+            .filter(|_| fan_out_pays(self.trees.len(), D))
+        {
             p.install(|| codisp_stateless_aggregate(&self.trees, point))?
         } else {
             codisp_stateless_aggregate(&self.trees, point)?
@@ -1221,7 +1233,11 @@ impl<const D: usize> RandomCutForest<D> {
         let point = &scaled;
 
         #[cfg(feature = "parallel")]
-        let (mut accumulator, count) = if let Some(p) = self.pool.as_deref() {
+        let (mut accumulator, count) = if let Some(p) = self
+            .pool
+            .as_deref()
+            .filter(|_| fan_out_pays(self.trees.len(), D))
+        {
             p.install(|| attribution_aggregate::<D>(&self.trees, point))?
         } else {
             attribution_aggregate::<D>(&self.trees, point)?
@@ -1263,7 +1279,11 @@ impl<const D: usize> RandomCutForest<D> {
         let point = &scaled;
 
         #[cfg(feature = "parallel")]
-        let (total, mut accumulator, count) = if let Some(p) = self.pool.as_deref() {
+        let (total, mut accumulator, count) = if let Some(p) = self
+            .pool
+            .as_deref()
+            .filter(|_| fan_out_pays(self.trees.len(), D))
+        {
             p.install(|| score_attribution_aggregate::<D>(&self.trees, point))?
         } else {
             score_attribution_aggregate::<D>(&self.trees, point)?
@@ -1529,21 +1549,58 @@ impl<const D: usize> RandomCutForest<D> {
     }
 }
 
+/// Work-units below which a per-tree rayon fan-out costs more than
+/// it saves, so the ensemble walk stays on the calling thread.
+///
+/// One work unit ≈ one dimension visited in one tree, i.e.
+/// `num_trees × D`. A single tree walk at the AWS-default shape is
+/// ~300 ns — under rayon's task-dispatch floor, so splitting it
+/// across workers loses to the scheduling overhead. Measured on the
+/// crate's own `forest_update` / `forest_score` benches (20 cores):
+///
+/// | `trees × D` | serial | rayon | faster |
+/// |---|---|---|---|
+/// | 400 (100t, D=4) | 14.4 µs | 33.5 µs | serial 2.3× |
+/// | 800 (50t, D=16) | 7.9 µs | 20.6 µs | serial 2.6× |
+/// | 1600 (100t, D=16) | 31.2 µs | 47.7 µs | serial 1.5× |
+/// | 3200 (200t, D=16) | 127.2 µs | 74.6 µs | rayon 1.7× |
+/// | 6400 (100t, D=64) | 218.5 µs | 138.6 µs | rayon 1.6× |
+///
+/// The crossover sits between 1600 and 3200; `2048` is the power of
+/// two inside that gap. Only per-tree fan-out is gated — batch entry
+/// points (`score_many`, `attribution_many`, `score_codisp_stateless_many`)
+/// parallelise across *points*, where each task is a whole ensemble
+/// walk and the fan-out always pays.
+#[cfg(feature = "parallel")]
+const PARALLEL_FANOUT_MIN_WORK: usize = 2048;
+
+/// Whether a per-tree rayon fan-out over `num_trees` trees of `D`
+/// dimensions is expected to beat the serial walk.
+///
+/// See [`PARALLEL_FANOUT_MIN_WORK`] for the calibration.
+#[cfg(feature = "parallel")]
+#[inline]
+fn fan_out_pays(num_trees: usize, d: usize) -> bool {
+    num_trees.saturating_mul(d) >= PARALLEL_FANOUT_MIN_WORK
+}
+
 /// Per-tree insert work — returns the list of evicted point indices
 /// whose refcount just hit zero so the caller can finalise the slot
 /// freeing single-threaded after the (possibly parallel) block.
 ///
-/// Serial when the `parallel` feature is off; rayon `par_chunks_mut`
-/// when enabled. The point store is borrowed immutably from the
-/// closures — refcount mutations are atomic, slot mutations happen
-/// only through `&mut PointStore` outside the parallel block.
+/// Fans out over rayon `par_chunks_mut` when the `parallel` feature
+/// is on *and* the ensemble is large enough for the fan-out to pay
+/// ([`fan_out_pays`]); otherwise walks the trees on the calling
+/// thread. The point store is borrowed immutably from the closures —
+/// refcount mutations are atomic, slot mutations happen only through
+/// `&mut PointStore` outside the parallel block.
 fn update_trees<const D: usize>(
     trees: &mut [TreeSlot<D>],
     store: &PointStore<D>,
     new_idx: usize,
 ) -> RcfResult<Vec<usize>> {
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
         let chunk_size = trees.len().div_ceil(rayon::current_num_threads()).max(1);
         let chunks: RcfResult<Vec<Vec<usize>>> = trees
@@ -1561,34 +1618,32 @@ fn update_trees<const D: usize>(
         for c in chunks? {
             flat.extend(c);
         }
-        Ok(flat)
+        return Ok(flat);
     }
 
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut out = Vec::new();
-        for slot in trees.iter_mut() {
-            let mut local = process_tree_update(slot, store, new_idx)?;
-            out.append(&mut local);
-        }
-        Ok(out)
+    let mut out = Vec::new();
+    for slot in trees.iter_mut() {
+        let mut local = process_tree_update(slot, store, new_idx)?;
+        out.append(&mut local);
     }
+    Ok(out)
 }
 
-/// Parallel-friendly per-tree delete — rayon `par_chunks_mut`
-/// across `trees` under the `parallel` feature, reduce the two
-/// bool flags `(removed_from_any, went_to_zero)` at the end. Each
-/// worker loops through its chunk, attempts sampler removal,
-/// deletes the leaf from the tree, and decrements the store
-/// refcount. `PointStore::decr_ref` is atomic so the shared store
-/// reference is safe to hand to every worker.
+/// Per-tree delete — rayon `par_chunks_mut` across `trees` when the
+/// `parallel` feature is on *and* the ensemble clears
+/// [`fan_out_pays`], reducing the two bool flags
+/// `(removed_from_any, went_to_zero)` at the end; serial on the
+/// calling thread otherwise. Each worker loops through its chunk,
+/// attempts sampler removal, deletes the leaf from the tree, and
+/// decrements the store refcount. `PointStore::decr_ref` is atomic
+/// so the shared store reference is safe to hand to every worker.
 fn delete_from_trees<const D: usize>(
     trees: &mut [TreeSlot<D>],
     store: &PointStore<D>,
     point_idx: usize,
 ) -> RcfResult<(bool, bool)> {
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
         let chunk_size = trees.len().div_ceil(rayon::current_num_threads()).max(1);
         let partials: RcfResult<Vec<(bool, bool)>> = trees
@@ -1605,21 +1660,19 @@ fn delete_from_trees<const D: usize>(
             })
             .collect();
         let parts = partials?;
-        Ok(parts
+        return Ok(parts
             .into_iter()
-            .fold((false, false), |(a1, z1), (a2, z2)| (a1 | a2, z1 | z2)))
+            .fold((false, false), |(a1, z1), (a2, z2)| (a1 | a2, z1 | z2)));
     }
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut any = false;
-        let mut zero = false;
-        for slot in trees.iter_mut() {
-            let (a, z) = process_tree_delete(slot, store, point_idx)?;
-            any |= a;
-            zero |= z;
-        }
-        Ok((any, zero))
+
+    let mut any = false;
+    let mut zero = false;
+    for slot in trees.iter_mut() {
+        let (a, z) = process_tree_delete(slot, store, point_idx)?;
+        any |= a;
+        zero |= z;
     }
+    Ok((any, zero))
 }
 
 /// Per-tree delete step used by [`delete_from_trees`] — returns
@@ -1717,24 +1770,22 @@ fn codisp_many_walks_all_trees<const D: usize>(
     };
 
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
-        trees
+        return trees
             .par_iter()
             .map(|(tree, _, _)| per_tree_fn(tree))
             .try_reduce(
                 || (vec![0.0_f64; n], vec![0_usize; n]),
                 |a, b| Ok(reduce_pair(a, b)),
-            )
+            );
     }
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut acc: PerTree = (vec![0.0_f64; n], vec![0_usize; n]);
-        for (tree, _, _) in trees {
-            acc = reduce_pair(acc, per_tree_fn(tree)?);
-        }
-        Ok(acc)
+
+    let mut acc: PerTree = (vec![0.0_f64; n], vec![0_usize; n]);
+    for (tree, _, _) in trees {
+        acc = reduce_pair(acc, per_tree_fn(tree)?);
     }
+    Ok(acc)
 }
 
 /// Walk `walk_codisp` on every tree that holds leaf `idx` and
@@ -1747,9 +1798,9 @@ fn codisp_walk_all_trees<const D: usize>(
     idx: usize,
 ) -> RcfResult<(f64, usize)> {
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
-        trees
+        return trees
             .par_iter()
             .map(|(tree, _, _)| -> RcfResult<Option<f64>> {
                 let Some(leaf) = tree.leaf_of(idx) else {
@@ -1770,21 +1821,19 @@ fn codisp_walk_all_trees<const D: usize>(
             .try_reduce(
                 || (0.0_f64, 0_usize),
                 |(t1, c1), (t2, c2)| Ok((t1 + t2, c1 + c2)),
-            )
+            );
     }
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut total = 0.0_f64;
-        let mut count = 0_usize;
-        for (tree, _, _) in trees {
-            let Some(leaf) = tree.leaf_of(idx) else {
-                continue;
-            };
-            total += walk_codisp(tree.store(), leaf)?;
-            count = count.saturating_add(1);
-        }
-        Ok((total, count))
+
+    let mut total = 0.0_f64;
+    let mut count = 0_usize;
+    for (tree, _, _) in trees {
+        let Some(leaf) = tree.leaf_of(idx) else {
+            continue;
+        };
+        total += walk_codisp(tree.store(), leaf)?;
+        count = count.saturating_add(1);
     }
+    Ok((total, count))
 }
 
 /// Stateless codisp aggregation across trees — each tree computes
@@ -1796,9 +1845,9 @@ fn codisp_stateless_aggregate<const D: usize>(
     point: &[f64; D],
 ) -> RcfResult<(f64, usize)> {
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
-        trees
+        return trees
             .par_iter()
             .map(|(tree, _, _)| -> RcfResult<Option<f64>> {
                 if tree.root().is_none() {
@@ -1820,22 +1869,19 @@ fn codisp_stateless_aggregate<const D: usize>(
             .try_reduce(
                 || (0.0_f64, 0_usize),
                 |(t1, c1), (t2, c2)| Ok((t1 + t2, c1 + c2)),
-            )
+            );
     }
 
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut total = 0.0_f64;
-        let mut count = 0_usize;
-        for (tree, _, _) in trees {
-            if tree.root().is_none() {
-                continue;
-            }
-            total += tree.codisp_stateless(point)?;
-            count += 1;
+    let mut total = 0.0_f64;
+    let mut count = 0_usize;
+    for (tree, _, _) in trees {
+        if tree.root().is_none() {
+            continue;
         }
-        Ok((total, count))
+        total += tree.codisp_stateless(point)?;
+        count += 1;
     }
+    Ok((total, count))
 }
 
 /// Score aggregation across trees. Serial fold or rayon parallel
@@ -1879,16 +1925,17 @@ fn walk_codisp<const D: usize>(
     Ok(max_disp)
 }
 
-/// Score aggregation across trees. Serial fold or rayon parallel
-/// fold/reduce depending on the `parallel` cargo feature.
+/// Score aggregation across trees. Rayon parallel fold/reduce when
+/// the `parallel` feature is on and the ensemble clears
+/// [`fan_out_pays`]; serial fold on the calling thread otherwise.
 fn score_aggregate<const D: usize>(
     trees: &[TreeSlot<D>],
     point: &[f64; D],
 ) -> RcfResult<(f64, usize)> {
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
-        trees
+        return trees
             .par_iter()
             .map(|(tree, _, _)| -> RcfResult<Option<f64>> {
                 let Some(root) = tree.root() else {
@@ -1912,38 +1959,36 @@ fn score_aggregate<const D: usize>(
             .try_reduce(
                 || (0.0_f64, 0_usize),
                 |(t1, c1), (t2, c2)| Ok((t1 + t2, c1 + c2)),
-            )
+            );
     }
 
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut total = 0.0_f64;
-        let mut count = 0_usize;
-        for (tree, _, _) in trees {
-            let Some(root) = tree.root() else {
-                continue;
-            };
-            let mass = tree.store().view(root)?.mass();
-            let visitor = ScalarScoreVisitor::new(mass);
-            let s = tree.traverse(point, visitor)?;
-            total += f64::from(s);
-            count += 1;
-        }
-        Ok((total, count))
+    let mut total = 0.0_f64;
+    let mut count = 0_usize;
+    for (tree, _, _) in trees {
+        let Some(root) = tree.root() else {
+            continue;
+        };
+        let mass = tree.store().view(root)?.mass();
+        let visitor = ScalarScoreVisitor::new(mass);
+        let s = tree.traverse(point, visitor)?;
+        total += f64::from(s);
+        count += 1;
     }
+    Ok((total, count))
 }
 
-/// Attribution aggregation across trees. Serial accumulate or
-/// rayon parallel fold/reduce depending on the `parallel` cargo
-/// feature.
+/// Attribution aggregation across trees. Rayon parallel fold/reduce
+/// when the `parallel` feature is on and the ensemble clears
+/// [`fan_out_pays`]; serial accumulate on the calling thread
+/// otherwise.
 fn attribution_aggregate<const D: usize>(
     trees: &[TreeSlot<D>],
     point: &[f64; D],
 ) -> RcfResult<(DiVector, usize)> {
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
-        trees
+        return trees
             .par_iter()
             .map(|(tree, _, _)| -> RcfResult<Option<DiVector>> {
                 let Some(root) = tree.root() else {
@@ -1970,38 +2015,37 @@ fn attribution_aggregate<const D: usize>(
                     a1.accumulate(&a2)?;
                     Ok((a1, c1 + c2))
                 },
-            )
+            );
     }
 
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut accumulator = DiVector::zeros(D);
-        let mut count = 0_usize;
-        for (tree, _, _) in trees {
-            let Some(root) = tree.root() else {
-                continue;
-            };
-            let mass = tree.store().view(root)?.mass();
-            let visitor = AttributionVisitor::new(point, mass)?;
-            let di = tree.traverse(point, visitor)?;
-            accumulator.accumulate(&di)?;
-            count += 1;
-        }
-        Ok((accumulator, count))
+    let mut accumulator = DiVector::zeros(D);
+    let mut count = 0_usize;
+    for (tree, _, _) in trees {
+        let Some(root) = tree.root() else {
+            continue;
+        };
+        let mass = tree.store().view(root)?.mass();
+        let visitor = AttributionVisitor::new(point, mass)?;
+        let di = tree.traverse(point, visitor)?;
+        accumulator.accumulate(&di)?;
+        count += 1;
     }
+    Ok((accumulator, count))
 }
 
 /// Combined score + attribution aggregation — single traversal per
-/// tree via [`ScoreAttributionVisitor`]. Serial accumulate or rayon
-/// parallel fold/reduce depending on the `parallel` cargo feature.
+/// tree via [`ScoreAttributionVisitor`]. Rayon parallel fold/reduce
+/// when the `parallel` feature is on and the ensemble clears
+/// [`fan_out_pays`]; serial accumulate on the calling thread
+/// otherwise.
 fn score_attribution_aggregate<const D: usize>(
     trees: &[TreeSlot<D>],
     point: &[f64; D],
 ) -> RcfResult<(f64, DiVector, usize)> {
     #[cfg(feature = "parallel")]
-    {
+    if fan_out_pays(trees.len(), D) {
         use rayon::prelude::*;
-        trees
+        return trees
             .par_iter()
             .map(|(tree, _, _)| -> RcfResult<Option<(f64, DiVector)>> {
                 let Some(root) = tree.root() else {
@@ -2028,27 +2072,24 @@ fn score_attribution_aggregate<const D: usize>(
                     a1.accumulate(&a2)?;
                     Ok((t1 + t2, a1, c1 + c2))
                 },
-            )
+            );
     }
 
-    #[cfg(not(feature = "parallel"))]
-    {
-        let mut total = 0.0_f64;
-        let mut accumulator = DiVector::zeros(D);
-        let mut count = 0_usize;
-        for (tree, _, _) in trees {
-            let Some(root) = tree.root() else {
-                continue;
-            };
-            let mass = tree.store().view(root)?.mass();
-            let visitor = ScoreAttributionVisitor::new(point, mass)?;
-            let (s, di) = tree.traverse(point, visitor)?;
-            total += f64::from(s);
-            accumulator.accumulate(&di)?;
-            count += 1;
-        }
-        Ok((total, accumulator, count))
+    let mut total = 0.0_f64;
+    let mut accumulator = DiVector::zeros(D);
+    let mut count = 0_usize;
+    for (tree, _, _) in trees {
+        let Some(root) = tree.root() else {
+            continue;
+        };
+        let mass = tree.store().view(root)?.mass();
+        let visitor = ScoreAttributionVisitor::new(point, mass)?;
+        let (s, di) = tree.traverse(point, visitor)?;
+        total += f64::from(s);
+        accumulator.accumulate(&di)?;
+        count += 1;
     }
+    Ok((total, accumulator, count))
 }
 
 // Compile-time Send + Sync assertions.
@@ -2104,6 +2145,75 @@ mod tests {
         let score: f64 = f.score(&[5.0, 5.0]).unwrap().into();
         assert!(score >= 0.0);
         assert_eq!(f.config().num_threads, Some(2));
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn fan_out_gate_matches_calibrated_crossover() {
+        // Below the crossover the ensemble walk stays serial.
+        assert!(!fan_out_pays(100, 4)); // 400
+        assert!(!fan_out_pays(50, 16)); // 800
+        assert!(!fan_out_pays(100, 16)); // 1600 — AWS default
+        // At or above it, the rayon fan-out pays for itself.
+        assert!(fan_out_pays(128, 16)); // 2048 — exact threshold
+        assert!(fan_out_pays(200, 16)); // 3200
+        assert!(fan_out_pays(100, 64)); // 6400
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn fan_out_gate_does_not_overflow_on_extreme_dims() {
+        // `num_trees × D` must not wrap — AWS caps D at 10_000 but the
+        // saturating multiply keeps any caller-supplied pair sound.
+        assert!(fan_out_pays(usize::MAX, 2));
+        assert!(!fan_out_pays(0, usize::MAX));
+    }
+
+    /// Both arms of the fan-out gate must produce identical scores —
+    /// the threshold is a scheduling decision, never a numeric one.
+    #[test]
+    fn serial_and_parallel_arms_agree() {
+        // 60 trees × D=4 = 240 (serial arm) vs 60 trees × D=64 = 3840
+        // (parallel arm) exercise both sides of the gate; each forest
+        // is compared against an independently accumulated mean over
+        // the same trees, which is what the aggregate must return.
+        fn check<const D: usize>(num_trees: usize) {
+            let mut f = ForestBuilder::<D>::new()
+                .num_trees(num_trees)
+                .sample_size(64)
+                .seed(7)
+                .build()
+                .unwrap();
+            for i in 0..500u32 {
+                let mut p = [0.0_f64; D];
+                for (d, v) in p.iter_mut().enumerate() {
+                    *v = f64::from(i).mul_add(0.01, d as f64 * 0.1);
+                }
+                f.update(p).unwrap();
+            }
+            let probe = [3.0_f64; D];
+            let via_forest: f64 = f.score(&probe).unwrap().into();
+
+            let mut total = 0.0;
+            let mut count = 0usize;
+            for (tree, _, _) in f.trees() {
+                let Some(root) = tree.root() else { continue };
+                let mass = tree.store().view(root).unwrap().mass();
+                let s = tree
+                    .traverse(&probe, ScalarScoreVisitor::new(mass))
+                    .unwrap();
+                total += f64::from(s);
+                count += 1;
+            }
+            #[allow(clippy::cast_precision_loss)]
+            let expected = (total / count as f64).max(0.0);
+            assert!(
+                (via_forest - expected).abs() < 1e-12,
+                "D={D} trees={num_trees}: {via_forest} != {expected}"
+            );
+        }
+        check::<4>(60); // serial arm
+        check::<64>(60); // parallel arm
     }
 
     #[cfg(feature = "parallel")]

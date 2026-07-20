@@ -2,12 +2,15 @@
 //! latency-critical ingress paths (eBPF TC action, XDP, per-packet
 //! anomaly classifier).
 //!
-//! The bare [`anomstream_core::RandomCutForest::update`] takes ~23 µs at the
-//! AWS-default `(100 trees, 256 samples, D = 16)` config — an order
-//! of magnitude above the few-µs budget a TC action has per packet
-//! at 10 Gbps+. Making `update` faster hits diminishing returns; the
-//! architectural answer is to **decouple** the score-on-path from
-//! the update-off-path and shed low-value updates before they queue.
+//! The bare [`anomstream_core::RandomCutForest::update`] costs tens of
+//! microseconds at the AWS-default `(100 trees, 256 samples, D = 16)`
+//! config — an order of magnitude above the few-µs budget a TC action
+//! has per packet at 10 Gbps+. (See `docs/performance.md` for current
+//! figures; treat any absolute quoted here as indicative, since the
+//! ensemble cost scales with `num_trees × D`.) Making `update` faster
+//! hits diminishing returns; the architectural answer is to
+//! **decouple** the score-on-path from the update-off-path and shed
+//! low-value updates before they queue.
 //!
 //! This module ships two orthogonal building blocks:
 //!

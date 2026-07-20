@@ -60,6 +60,10 @@ Criterion HTML reports land in `target/criterion/`.
   25-30 % faster. Ratios are stable; absolutes are not.
 - **Parallel ceiling** — `score_many` plateaus at ~6× on 14 cores,
   memory-bandwidth-bound once the working set spills L3.
+- **Fan-out threshold** — single-probe ops below `num_trees × D = 2048`
+  run the ensemble serially even with the `parallel` feature on; see
+  [Ensemble fan-out threshold](#ensemble-fan-out-threshold). Absolute
+  single-probe numbers below predate that change.
 
 ---
 
@@ -95,6 +99,43 @@ Across shapes:
 | `(100, 256, 16)` | 34 µs           | 34 µs          | 45 µs                |
 | `(100, 256, 64)` | 104 µs          | 42 µs          | 88 µs                |
 | `(200, 512, 16)` | 55 µs           | 52 µs          | —                    |
+
+### Ensemble fan-out threshold
+
+Per-tree work is small — roughly `D × depth`, a few hundred nanoseconds
+at the AWS-default shape. That is below rayon's task-dispatch floor, so
+splitting a *single* ensemble walk across workers used to cost more than
+it saved. The fan-out is now gated on estimated work (`num_trees × D`,
+threshold `2048`, `PARALLEL_FANOUT_MIN_WORK` in
+`forest/random_cut_forest.rs`): below it the walk stays on the calling
+thread, at or above it rayon fans out as before.
+
+Measured back-to-back on one machine, `parallel` feature on in both
+columns, only the threshold flipped (`0` = always fan out, the old
+behaviour):
+
+| Config           | `trees × D` | `forest_update` | `forest_score` | Arm      |
+| ---------------- | ----------- | --------------- | -------------- | -------- |
+| `(100, 256, 4)`  | 400         | **2.5× faster** | **1.7×**       | serial   |
+| `(50, 128, 16)`  | 800         | **4.9× faster** | **2.9×**       | serial   |
+| `(100, 256, 16)` | 1600        | **1.7× faster** | **1.35×**      | serial   |
+| `(200, 512, 16)` | 3200        | unchanged       | unchanged      | parallel |
+| `(100, 256, 64)` | 6400        | unchanged       | unchanged      | parallel |
+
+The two `parallel`-arm rows run identical code in both columns and serve
+as the control group: they moved ≤ 8 %, which sets the noise floor for
+the ratios above.
+
+This affects only per-tree fan-out. Batch entry points (`score_many`,
+`attribution_many`, `score_codisp_stateless_many`) parallelise across
+*points* — each task is a whole ensemble walk, so the fan-out always
+pays and is never gated.
+
+Ratios above are trustworthy (same machine, back-to-back, control group
+included). The **absolute** µs figures in the tables on this page predate
+the gate and were taken in an earlier session; the serial-arm shapes are
+now faster than what they show. Re-stamp them from a quiet machine before
+quoting them as current.
 
 ### Batch scoring
 
@@ -139,12 +180,16 @@ Single probe, `score_early_term`:
 
 | Path                                    | Time    |
 | --------------------------------------- | ------- |
-| `score` (parallel ensemble)             | 33 µs   |
+| `score` (full ensemble)                 | 33 µs   |
 | threshold=0.02 (tight)                  | 36 µs   |
 | threshold=0.20 (loose, stops ~20 trees) | 4.99 µs |
 
 Loose threshold → **6.6×** on baseline-dominated traffic; a tight
-threshold rarely short-circuits and matches parallel `score`.
+threshold rarely short-circuits and matches a full `score`.
+
+> The `score` row was previously labelled "parallel ensemble". At this
+> shape the ensemble walk now runs serially — see
+> [Ensemble fan-out threshold](#ensemble-fan-out-threshold).
 
 ### Delete
 
