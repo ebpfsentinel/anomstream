@@ -3,7 +3,7 @@ name: Build
 # Reusable family workflow — cargo doc (strict intra-doc links),
 # bench compile, examples build.
 #
-# Called from `ci.yml` (weekly) and `release.yml` (per tag).
+# Called from `ci.yml` (weekly and on demand).
 # Standalone via `workflow_dispatch`.
 
 on:

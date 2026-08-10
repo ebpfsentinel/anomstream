@@ -4,7 +4,7 @@ name: Test
 # core/std test row, no_std build matrix, facade feature matrix,
 # and `-Z minimal-versions` regression guard.
 #
-# Called from `ci.yml` (weekly) and `release.yml` (per tag).
+# Called from `ci.yml` (weekly and on demand).
 # Standalone via `workflow_dispatch`.
 
 on:

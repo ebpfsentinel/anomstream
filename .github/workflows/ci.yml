@@ -10,9 +10,10 @@ name: CI
 # (yanked deps, fresh advisories) and `workflow_dispatch` is the
 # pre-tag manual run.
 #
-# `release.yml` reuses the same four family workflows (stamped
-# with the resolved version) and adds `publish-dry-run` + the
-# tag/GitHub-Release publish job on top.
+# There is no release workflow here: crates.io publication runs
+# from the ebpfsentinel-release repository, at the commit its
+# release manifest pins, and re-runs these same gates against the
+# version-stamped tree before it publishes.
 
 on:
   workflow_dispatch:

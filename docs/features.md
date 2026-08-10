@@ -1529,19 +1529,13 @@ CI is split across two workflows:
   `cargo machete`, CycloneDX SBOM. Does **not** fire per-commit —
   the weekly cadence catches supply-chain drift without burning
   runner minutes on noise.
-- `.github/workflows/release.yml` — fires on every `v*` tag push
-  and on `workflow_dispatch`. Enforces a stricter gate before
-  publication is considered ready:
-  1. Workspace version is not the `0.0.0-dev` development
-     sentinel.
-  2. Git tag matches `workspace.package.version` (`v<version>`).
-  3. Full fmt / clippy / tests / doc.
-  4. `cargo audit` + `cargo deny check` clean.
-  5. `cargo publish --dry-run` for every member in dependency
-     order (`core → triage → hotpath → anomstream`).
-
-The workflow gates readiness; `cargo publish` itself is still run
-manually by a maintainer with `CARGO_REGISTRY_TOKEN`.
+Publication happens elsewhere. The release repository builds every
+component of the product from one run, at the commits its release
+manifest pins, so this repository has no release workflow of its
+own. That run re-checks fmt / clippy / tests / audit / deny against
+the stamped tree, dry-runs the publish, then publishes the four
+members in dependency order (`core → triage → hotpath →
+anomstream`) and attests the packaged `.crate` files.
 
 ### Hot-path allocation scrub
 

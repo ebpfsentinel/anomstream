@@ -1,7 +1,7 @@
 name: Lint
 
 # Reusable family workflow — fmt + clippy (×2 feature scopes).
-# Called from `ci.yml` (weekly) and `release.yml` (per tag).
+# Called from `ci.yml` (weekly and on demand).
 # Standalone via `workflow_dispatch` for ad-hoc runs.
 
 on:

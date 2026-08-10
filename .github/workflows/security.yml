@@ -3,7 +3,7 @@ name: Security
 # Reusable family workflow — supply-chain checks: cargo audit,
 # cargo deny, cargo machete (unused deps), CycloneDX SBOM.
 #
-# Called from `ci.yml` (weekly) and `release.yml` (per tag).
+# Called from `ci.yml` (weekly and on demand).
 # Standalone via `workflow_dispatch`.
 
 on:
