@@ -1126,7 +1126,7 @@ mod tests {
 
         // Updater thread.
         let (ing, err) = consumer.try_drain(|p| forest.update(p));
-        assert!(err == 0);
+        assert_eq!(err, 0);
         // 0, 3, 6 accepted by accept_hash(keep_every_n=3): 3 points.
         assert_eq!(ing, 3);
     }
