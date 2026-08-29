@@ -303,9 +303,7 @@ impl ScoreHistogram {
 
     /// Drop every count, keeping the config.
     pub fn reset(&mut self) {
-        for b in &mut self.bins {
-            *b = 0;
-        }
+        self.bins.fill(0);
         self.underflow = 0;
         self.overflow = 0;
         self.non_finite = 0;

@@ -86,7 +86,7 @@ pub fn vus_pr_with_buffer(scores: &[f64], labels: &[bool], max_buffer: usize) ->
     // Trapezoidal integral over l, normalised to the interval width.
     let mut acc = 0.0_f64;
     for pair in per_l.windows(2) {
-        acc += (pair[0] + pair[1]) * 0.5;
+        acc += f64::midpoint(pair[0], pair[1]);
     }
     #[allow(clippy::cast_precision_loss)]
     let width = (per_l.len() - 1) as f64;
@@ -172,7 +172,7 @@ fn range_auc_pr_inner(scores: &[f64], labels: &[bool], buffer: usize) -> f64 {
         // Trapezoidal segment. Only non-zero when recall advances.
         let dr = recall - prev_recall;
         if dr > 0.0 {
-            auc += (prev_precision + precision) * 0.5 * dr;
+            auc += f64::midpoint(prev_precision, precision) * dr;
         }
         prev_recall = recall;
         prev_precision = precision;

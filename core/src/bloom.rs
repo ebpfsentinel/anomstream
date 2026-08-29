@@ -342,9 +342,7 @@ impl BloomFilter {
 
     /// Clear every bit. Capacity is preserved.
     pub fn reset(&mut self) {
-        for w in &mut self.bits {
-            *w = 0;
-        }
+        self.bits.fill(0);
         self.total_added = 0;
     }
 
