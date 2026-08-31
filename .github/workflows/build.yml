@@ -24,6 +24,7 @@ jobs:
   doc:
     name: cargo doc (workspace, strict)
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -37,6 +38,7 @@ jobs:
   bench-compile:
     name: cargo bench --no-run (workspace, --all-features)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -50,6 +52,7 @@ jobs:
   examples:
     name: cargo build --examples (workspace, --all-features)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''

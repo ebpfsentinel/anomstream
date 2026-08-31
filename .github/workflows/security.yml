@@ -23,6 +23,7 @@ jobs:
   audit:
     name: cargo audit
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -37,6 +38,7 @@ jobs:
   deny:
     name: cargo deny
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -51,6 +53,7 @@ jobs:
   machete:
     name: cargo machete (unused deps)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -62,6 +65,7 @@ jobs:
   sbom:
     name: CycloneDX SBOM (workspace)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''

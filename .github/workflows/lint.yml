@@ -22,6 +22,7 @@ jobs:
   fmt:
     name: rustfmt
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -36,6 +37,7 @@ jobs:
   clippy-all-features:
     name: clippy (--all-features)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -53,6 +55,7 @@ jobs:
   clippy-no-default:
     name: clippy (--no-default-features)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''

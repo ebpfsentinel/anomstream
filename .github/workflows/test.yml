@@ -30,6 +30,7 @@ jobs:
         os: [ubuntu-latest]
         rust: [stable, "1.98"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     env:
       RUSTUP_TOOLCHAIN: ${{ matrix.rust }}
     steps:
@@ -56,6 +57,7 @@ jobs:
   no-std-builds:
     name: no_std build (core, triage)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - if: inputs.version != ''
@@ -80,6 +82,7 @@ jobs:
   feature-matrix:
     name: meta facade feature matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +111,7 @@ jobs:
   minimal-versions:
     name: minimal-versions (nightly -Z minimal-versions)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       RUSTUP_TOOLCHAIN: nightly
     steps:
