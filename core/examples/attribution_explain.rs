@@ -49,14 +49,14 @@ fn main() -> Result<(), RcfError> {
 }
 
 /// Tiny linear-congruential RNG so the example has zero non-anomstream-core
-/// dependencies — produces uniform `f64` in `[0, 1)`.
+/// dependencies - produces uniform `f64` in `[0, 1)`.
 fn simple_lcg(seed: u64) -> impl FnMut() -> f64 {
     let mut state = seed;
     move || {
         state = state
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1);
-        // Pull 21 high bits of state into a `u32` and normalise — keeps
+        // Pull 21 high bits of state into a `u32` and normalise - keeps
         // the cast lossless and the distribution close to uniform.
         let frac = u32::try_from(state >> 32).unwrap_or(u32::MAX) >> 11;
         f64::from(frac) / f64::from(1_u32 << 21)

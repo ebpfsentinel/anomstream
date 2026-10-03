@@ -20,7 +20,7 @@ fn distribution_shift_flagged_then_normalised() {
         .num_trees(50)
         .sample_size(64)
         // Pin time_decay=0 so drift absorption is driven purely by
-        // reservoir refresh — the property this test exercises —
+        // reservoir refresh - the property this test exercises -
         // independent of the builder's AWS-style `0.1 / sample_size`
         // recency bias, which would change the deterministic
         // sampling trajectory for the seed below.
@@ -39,7 +39,7 @@ fn distribution_shift_flagged_then_normalised() {
     }
 
     // Score a fresh cluster-B sample BEFORE we feed any cluster-B
-    // points — cluster B should look anomalous to the forest now.
+    // points - cluster B should look anomalous to the forest now.
     let probe_b: [f64; 2] = [5.0, 5.0];
     let initial_b: f64 = forest.score(&probe_b).unwrap().into();
 
@@ -62,7 +62,7 @@ fn distribution_shift_flagged_then_normalised() {
         "drift not absorbed: initial_b={initial_b}, final_b={final_b}"
     );
 
-    // Cluster A is now the historical anomaly — verify it scores
+    // Cluster A is now the historical anomaly - verify it scores
     // higher than cluster B at the new equilibrium.
     let probe_a: [f64; 2] = [0.0, 0.0];
     let final_a: f64 = forest.score(&probe_a).unwrap().into();

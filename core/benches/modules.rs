@@ -30,7 +30,7 @@ use std::hint::black_box;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-/// `ShingledForest::update_scalar` + `score_scalar` — ring-buffer
+/// `ShingledForest::update_scalar` + `score_scalar` - ring-buffer
 /// push then forest score on the embedded shingle.
 fn bench_shingled(c: &mut Criterion) {
     let mut group = c.benchmark_group("shingled");
@@ -59,7 +59,7 @@ fn bench_shingled(c: &mut Criterion) {
     group.finish();
 }
 
-/// `TDigest::record` + `quantile` — streaming quantile primitive.
+/// `TDigest::record` + `quantile` - streaming quantile primitive.
 fn bench_tdigest(c: &mut Criterion) {
     let mut group = c.benchmark_group("tdigest");
 
@@ -88,7 +88,7 @@ fn bench_tdigest(c: &mut Criterion) {
     group.finish();
 }
 
-/// `ScoreHistogram::record` — fixed-bin streaming sketch. Cheap
+/// `ScoreHistogram::record` - fixed-bin streaming sketch. Cheap
 /// per-record, reads are trivial.
 fn bench_histogram(c: &mut Criterion) {
     let mut group = c.benchmark_group("score_histogram");
@@ -105,7 +105,7 @@ fn bench_histogram(c: &mut Criterion) {
     group.finish();
 }
 
-/// `FeatureDriftDetector::observe` + `psi` — per-dim PSI scan.
+/// `FeatureDriftDetector::observe` + `psi` - per-dim PSI scan.
 fn bench_feature_drift(c: &mut Criterion) {
     let mut group = c.benchmark_group("feature_drift");
 
@@ -162,7 +162,7 @@ fn bench_feature_drift(c: &mut Criterion) {
     group.finish();
 }
 
-/// `MetaDriftDetector::observe` — two-sided CUSUM update.
+/// `MetaDriftDetector::observe` - two-sided CUSUM update.
 fn bench_meta_drift(c: &mut Criterion) {
     let mut group = c.benchmark_group("meta_drift");
 
@@ -179,7 +179,7 @@ fn bench_meta_drift(c: &mut Criterion) {
     group.finish();
 }
 
-/// `AdwinDetector::update` — bounded ring + Hoeffding split scan
+/// `AdwinDetector::update` - bounded ring + Hoeffding split scan
 /// (O(N) per update).
 fn bench_adwin(c: &mut Criterion) {
     let mut group = c.benchmark_group("adwin");
@@ -201,7 +201,7 @@ fn bench_adwin(c: &mut Criterion) {
     group.finish();
 }
 
-/// `PotDetector::record` + `p_value` — SPOT/DSPOT streaming.
+/// `PotDetector::record` + `p_value` - SPOT/DSPOT streaming.
 fn bench_univariate_spot(c: &mut Criterion) {
     let mut group = c.benchmark_group("univariate_spot");
 
@@ -239,7 +239,7 @@ fn bench_univariate_spot(c: &mut Criterion) {
     group.finish();
 }
 
-/// `ensemble::fisher_combine` — Kahan-compensated χ² sum.
+/// `ensemble::fisher_combine` - Kahan-compensated χ² sum.
 fn bench_fisher(c: &mut Criterion) {
     let mut group = c.benchmark_group("fisher_combine");
 
@@ -257,7 +257,7 @@ fn bench_fisher(c: &mut Criterion) {
     group.finish();
 }
 
-/// `DynamicForest::update` — runtime-dim wrapper that zero-pads
+/// `DynamicForest::update` - runtime-dim wrapper that zero-pads
 /// into a `MAX_D` const-generic forest. Overhead vs the native
 /// const-generic path is the headline number.
 fn bench_dynamic_forest(c: &mut Criterion) {
@@ -290,7 +290,7 @@ fn bench_dynamic_forest(c: &mut Criterion) {
     group.finish();
 }
 
-/// `DriftAwareForest::update` — no shadow (baseline) vs. with
+/// `DriftAwareForest::update` - no shadow (baseline) vs. with
 /// active shadow (measures the shadow overhead).
 fn bench_drift_aware(c: &mut Criterion) {
     let mut group = c.benchmark_group("drift_aware");
@@ -355,7 +355,7 @@ fn bench_drift_aware(c: &mut Criterion) {
     group.finish();
 }
 
-/// `OnlineStats` — Welford streaming mean + variance. Target:
+/// `OnlineStats` - Welford streaming mean + variance. Target:
 /// per-sample `update()` cost and `variance()` read cost on a
 /// warmed accumulator.
 fn bench_online_stats(c: &mut Criterion) {
@@ -408,9 +408,9 @@ fn bench_online_stats(c: &mut Criterion) {
     group.finish();
 }
 
-/// `PerFeatureCusum<D>` — parallel two-sided CUSUM change-point
+/// `PerFeatureCusum<D>` - parallel two-sided CUSUM change-point
 /// detector. Target: per-observation cost at `D=16` in three
-/// regimes — below threshold (common), trip path (rare), and
+/// regimes - below threshold (common), trip path (rare), and
 /// stable after reference seeded.
 fn bench_per_feature_cusum(c: &mut Criterion) {
     let mut group = c.benchmark_group("per_feature_cusum");
@@ -458,8 +458,8 @@ fn bench_per_feature_cusum(c: &mut Criterion) {
     group.finish();
 }
 
-/// `PerFeatureEwma<D>` — parallel univariate EWMA z-score. Target:
-/// per-observation cost at `D=16` in two regimes — hot (warmed,
+/// `PerFeatureEwma<D>` - parallel univariate EWMA z-score. Target:
+/// per-observation cost at `D=16` in two regimes - hot (warmed,
 /// returning z-scores) and cold (warming, no z-score math).
 fn bench_per_feature_ewma(c: &mut Criterion) {
     let mut group = c.benchmark_group("per_feature_ewma");
@@ -521,7 +521,7 @@ fn bench_per_feature_ewma(c: &mut Criterion) {
         });
     });
 
-    // Standalone micro-fn benches — measure the per-call cost of
+    // Standalone micro-fn benches - measure the per-call cost of
     // `EwmaAccumulator::update` and `z_score` after the
     // cross-crate-boundary `#[inline]` hints. The values are tiny
     // (a few ns each) and are sensitive to inlining: regression
@@ -557,7 +557,7 @@ fn bench_per_feature_ewma(c: &mut Criterion) {
     group.finish();
 }
 
-/// `Normalizer<D>` — per-feature min-max / z-score transform.
+/// `Normalizer<D>` - per-feature min-max / z-score transform.
 /// Target: per-point transform cost at `D=16` (AWS-typical
 /// dim), plus the `fit` 2-pass cost on a 1024-sample batch.
 fn bench_normalize(c: &mut Criterion) {
@@ -606,7 +606,7 @@ fn bench_normalize(c: &mut Criterion) {
     group.finish();
 }
 
-/// `CountMinSketch` — probabilistic frequency sketch. Target:
+/// `CountMinSketch` - probabilistic frequency sketch. Target:
 /// per-call `increment` + `estimate` cost at AWS-typical size
 /// (`w=2048`, `d=4`), plus a saturation check so the hash-free
 /// accounting path stays in profile.
@@ -651,7 +651,7 @@ fn bench_count_min_sketch(c: &mut Criterion) {
     group.finish();
 }
 
-/// `FeatureGroups::group_scores` — per-group sum reduction over
+/// `FeatureGroups::group_scores` - per-group sum reduction over
 /// the per-dim `DiVector` with coverage calc. `D=16` split into
 /// three named groups mirroring the enterprise ML detection layer
 /// (rate / payload / cardinality).
@@ -689,7 +689,7 @@ fn bench_group_scores(c: &mut Criterion) {
     group.finish();
 }
 
-/// `AttributionStability::from_forest` — inter-tree dispersion
+/// `AttributionStability::from_forest` - inter-tree dispersion
 /// scan. `O(num_trees · D)` per probe. Target: cost relative to
 /// plain `attribution()`.
 fn bench_attribution_stability(c: &mut Criterion) {
@@ -722,7 +722,7 @@ fn bench_attribution_stability(c: &mut Criterion) {
     group.finish();
 }
 
-/// `RandomCutForest::score_with_confidence` — mean + stderr over
+/// `RandomCutForest::score_with_confidence` - mean + stderr over
 /// per-tree score dispersion. Always walks every tree (no early
 /// termination); dispersion is the whole point.
 fn bench_score_with_confidence(c: &mut Criterion) {
@@ -755,7 +755,7 @@ fn bench_score_with_confidence(c: &mut Criterion) {
     group.finish();
 }
 
-/// `RandomCutForest::bootstrap` — historical replay throughput.
+/// `RandomCutForest::bootstrap` - historical replay throughput.
 /// Measures the ingest rate when the forest is warm-filled from a
 /// pre-made batch (typical cold-start restart path).
 fn bench_bootstrap(c: &mut Criterion) {
@@ -787,7 +787,7 @@ fn bench_bootstrap(c: &mut Criterion) {
     group.finish();
 }
 
-/// Persistence — `to_bytes` / `from_bytes` roundtrip throughput
+/// Persistence - `to_bytes` / `from_bytes` roundtrip throughput
 /// via postcard. Measures serialization cost on a warm forest
 /// (AWS default config) independent of I/O.
 #[cfg(all(feature = "postcard", feature = "serde"))]
@@ -830,7 +830,7 @@ fn bench_persistence(c: &mut Criterion) {
 #[cfg(not(all(feature = "postcard", feature = "serde")))]
 fn bench_persistence(_: &mut Criterion) {}
 
-/// `HyperLogLog` — cardinality sketch. Target: per-sample `add`
+/// `HyperLogLog` - cardinality sketch. Target: per-sample `add`
 /// cost at `p=12` (4 096 registers, ~1.6 % std error), plus
 /// `estimate` read cost after warming and a shard-merge pass.
 fn bench_hyperloglog(c: &mut Criterion) {
@@ -885,11 +885,11 @@ fn bench_hyperloglog(c: &mut Criterion) {
     group.finish();
 }
 
-/// `MatrixProfile::compute` — STOMP batch discord / motif. Covers
+/// `MatrixProfile::compute` - STOMP batch discord / motif. Covers
 /// three `(n, m)` pairs spanning the working range: 1 K samples
 /// with a 32-long window (small forensic snapshot), 2 K / 64
 /// (typical beaconing window), 4 K / 128 (longer shape search).
-/// Complexity is `O(n²)` so the 4 K case dwarfs the others — kept
+/// Complexity is `O(n²)` so the 4 K case dwarfs the others - kept
 /// below the measurement cut-off by shrinking the warm-up.
 fn bench_matrix_profile(c: &mut Criterion) {
     let mut group = c.benchmark_group("matrix_profile");
@@ -942,7 +942,7 @@ fn bench_matrix_profile(c: &mut Criterion) {
     group.finish();
 }
 
-/// `BloomFilter` — IOC membership sketch. Covers the per-key
+/// `BloomFilter` - IOC membership sketch. Covers the per-key
 /// `insert`/`contains` paths at two load points (1 K / 100 K
 /// inserts, both sized at `fpr = 0.01`) plus the bitwise-OR
 /// `union` for cross-shard aggregation.
@@ -1001,7 +1001,7 @@ fn bench_bloom(c: &mut Criterion) {
     group.finish();
 }
 
-/// `SpaceSaving` — deterministic top-K heavy hitters. Covers the
+/// `SpaceSaving` - deterministic top-K heavy hitters. Covers the
 /// hot (tracked-key) path, the cold/evict path (linear `O(K)`
 /// scan), and the `top_k` ranking step after saturating the table
 /// with distinct noise keys.
@@ -1024,7 +1024,7 @@ fn bench_space_saving(c: &mut Criterion) {
 
     group.bench_function("observe_cold_k128", |b| {
         let mut ss: SpaceSaving<u64> = SpaceSaving::with_default_capacity().expect("ss build");
-        // Saturate with 128 distinct keys — every subsequent
+        // Saturate with 128 distinct keys - every subsequent
         // observation hits the evict path.
         for k in 0..128_u64 {
             ss.observe(k);

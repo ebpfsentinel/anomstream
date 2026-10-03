@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Attribution dispersion across trees — pick the driver dim whose
+//! Attribution dispersion across trees - pick the driver dim whose
 //! signal the forest is *confident* about, not just the one with the
 //! biggest mean contribution.
 //!

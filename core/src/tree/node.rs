@@ -12,7 +12,7 @@ use crate::domain::{BoundingBox, Cut};
 /// Packed reference to a tree node.
 ///
 /// The high bit discriminates internal (`0`) from leaf (`1`) so node
-/// identity is a single 4-byte field — useful for cache-friendly
+/// identity is a single 4-byte field - useful for cache-friendly
 /// storage in [`NodeStore`].
 ///
 /// [`NodeStore`]: crate::tree::NodeStore
@@ -101,7 +101,7 @@ impl NodeRef {
 }
 
 /// Raw internal-node record. Lives inline in the
-/// [`crate::NodeStore`] internal arena — one entry per live
+/// [`crate::NodeStore`] internal arena - one entry per live
 /// internal node. The bounding box is embedded inline so tree
 /// traversal stays cache-resident.
 #[derive(Debug, Clone, PartialEq)]
@@ -122,7 +122,7 @@ pub struct InternalData<const D: usize> {
 }
 
 /// Raw leaf-node record. Lives inline in the [`crate::NodeStore`]
-/// leaf arena — one entry per live leaf. Kept small (no bounding
+/// leaf arena - one entry per live leaf. Kept small (no bounding
 /// box, no cut) so the leaf arena fits many entries per cache line.
 /// Before the v4 split the leaf arena stored the full `Node<D>`
 /// enum with its internal-variant shape, wasting ~300 bytes per
@@ -140,7 +140,7 @@ pub struct LeafData {
 }
 
 /// Zero-copy immutable view of a tree node. Returned by
-/// [`crate::NodeStore::view`] — pattern-match to branch on
+/// [`crate::NodeStore::view`] - pattern-match to branch on
 /// internal-vs-leaf without cloning the underlying record.
 #[derive(Debug)]
 pub enum NodeView<'a, const D: usize> {

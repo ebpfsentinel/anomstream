@@ -1,6 +1,6 @@
 name: Test
 
-# Reusable family workflow — workspace tests across (os, rust),
+# Reusable family workflow - workspace tests across (os, rust),
 # core/std test row, no_std build matrix, facade feature matrix,
 # and `-Z minimal-versions` regression guard.
 #
@@ -47,7 +47,7 @@ jobs:
         with:
           scope: --workspace --all-features
       # `--workspace --no-default-features` would build every member
-      # with its features off — `anomstream-hotpath` is `#![cfg(feature
+      # with its features off - `anomstream-hotpath` is `#![cfg(feature
       # = "std")]` (whole crate empty) and the `anomstream` facade
       # loses its `core` re-exports. Scope to `anomstream-core` only.
       - uses: ./.github/actions/cargo-test
@@ -129,7 +129,7 @@ jobs:
       # flag.
       #
       # `-Z direct-minimal-versions` (not `-Z minimal-versions`) so
-      # transitive deps resolve normally — full transitive minimal
+      # transitive deps resolve normally - full transitive minimal
       # resolution explodes on ecosystem corners like `libc 0.1.1`
       # (2015, pre-1.0 Rust syntax) that no maintainer actually
       # supports.

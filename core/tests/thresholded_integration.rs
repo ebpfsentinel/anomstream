@@ -146,7 +146,7 @@ fn threshold_adapts_to_shifted_distribution() {
     }
     let threshold_phase1 = d.current_threshold();
 
-    // Phase 2: distribution shifts — now a wider cluster with more
+    // Phase 2: distribution shifts - now a wider cluster with more
     // variance. Some points will fire initially but the threshold
     // should climb to accommodate the new baseline.
     let mut fires_phase2 = 0_u32;
@@ -170,7 +170,7 @@ fn threshold_adapts_to_shifted_distribution() {
     );
     // After the drift has been absorbed, the tail of phase 2 should
     // fire much less often than the head. Not worth pinning a tight
-    // number — just confirm we did not sustain an alarm for the full
+    // number - just confirm we did not sustain an alarm for the full
     // run (which would indicate broken adaptation).
     assert!(
         fires_phase2 < 300,

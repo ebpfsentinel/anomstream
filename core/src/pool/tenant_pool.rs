@@ -1,6 +1,6 @@
 //! Per-tenant pool of [`ThresholdedForest`] detectors.
 //!
-//! A single forest shared across every tenant pollutes baselines —
+//! A single forest shared across every tenant pollutes baselines -
 //! tenant A's quiet traffic pushes tenant B's threshold down, and
 //! vice versa. [`TenantForestPool`] keeps one detector per tenant
 //! key, instantiated on demand, with an LRU eviction policy so the
@@ -12,7 +12,7 @@
 //! - **Construction**: [`TenantForestPool::new`] takes a `capacity`
 //!   (maximum simultaneous tenants) and a *factory* closure that
 //!   knows how to build a fresh detector. The factory is invoked
-//!   lazily — a tenant that never sends a point never allocates its
+//!   lazily - a tenant that never sends a point never allocates its
 //!   detector.
 //! - **Processing**: [`TenantForestPool::process`] looks up the
 //!   tenant, creating the detector with the factory if absent,
@@ -52,7 +52,7 @@ struct TenantSlot<const D: usize> {
     /// Monotonically increasing tick assigned by the pool on every
     /// access. The minimum tick identifies the LRU victim.
     last_access: u64,
-    /// Wall-clock timestamp of the last access — drives the
+    /// Wall-clock timestamp of the last access - drives the
     /// [`TenantForestPool::evict_idle`] TTL path. Independent from
     /// the `last_access` tick so monotonic-counter LRU and
     /// wall-clock TTL stay orthogonal (the tick can wrap under
@@ -61,7 +61,7 @@ struct TenantSlot<const D: usize> {
 }
 
 /// Bounded-heap entry used by [`TenantForestPool::most_similar`].
-/// Ordered only by similarity — `K` does not participate so the
+/// Ordered only by similarity - `K` does not participate so the
 /// heap works without requiring `K: Ord`. Ordering is inverted so
 /// a `BinaryHeap` (max-heap by default) behaves as a min-heap on
 /// similarity: `peek` returns the entry to evict when a better
@@ -97,7 +97,7 @@ impl<K: Clone> PartialOrd for MostSimilarHeapEntry<K> {
 /// - `ready` = resident tenants whose TRCF *is* warm
 ///   (`grade.ready()` true)
 /// - `capacity` = configured capacity ceiling
-/// - `tenants_created_lifetime` / `tenants_evicted_lifetime` —
+/// - `tenants_created_lifetime` / `tenants_evicted_lifetime` -
 ///   lifetime counters tracked internally so a liveness endpoint
 ///   doesn't need to plumb a [`crate::MetricsSink`].
 ///
@@ -122,8 +122,8 @@ pub struct ReadinessSummary {
 }
 
 impl ReadinessSummary {
-    /// Fraction of resident tenants that are warm (`ready / resident`)
-    /// — `1.0` when every tenant is ready, `0.0` when all are
+    /// Fraction of resident tenants that are warm (`ready / resident`) -
+    /// `1.0` when every tenant is ready, `0.0` when all are
     /// warming, `NaN` on an empty pool (caller decides UX: report
     /// `1.0` as "vacuously healthy" or surface the NaN).
     #[must_use]
@@ -139,7 +139,7 @@ impl ReadinessSummary {
     }
 
     /// Whether **every** resident tenant is ready. Vacuously `true`
-    /// on an empty pool — an empty pool has zero warming tenants.
+    /// on an empty pool - an empty pool has zero warming tenants.
     #[must_use]
     pub fn is_fully_ready(&self) -> bool {
         self.warming == 0
@@ -169,7 +169,7 @@ impl<K: Clone> Ord for MostSimilarHeapEntry<K> {
 /// `u64`, a small `enum`, or a newtype wrapping a UUID.
 ///
 /// `D` is the per-point dimensionality, identical across every
-/// tenant in the pool — mixed-dimension pools are not supported
+/// tenant in the pool - mixed-dimension pools are not supported
 /// because each tenant's `const D: usize` is baked into the forest's
 /// type.
 ///
@@ -201,7 +201,7 @@ where
     forests: HashMap<K, TenantSlot<D>>,
     /// Maximum number of tenants the pool holds at once.
     capacity: usize,
-    /// Monotonic access counter — bumped on every `process`,
+    /// Monotonic access counter - bumped on every `process`,
     /// `get`, `get_mut`, or `score_only` call.
     access_counter: u64,
     /// Lifetime total of pool-factory invocations (fresh tenants).
@@ -224,7 +224,7 @@ where
     K: Hash + Eq + Clone + core::fmt::Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // `factory` is a trait object without a Debug bound — emit
+        // `factory` is a trait object without a Debug bound - emit
         // its type-erased marker instead of the struct field.
         f.debug_struct("TenantForestPool")
             .field("capacity", &self.capacity)
@@ -245,7 +245,7 @@ where
 {
     /// Build a pool bounded at `capacity` tenants.
     ///
-    /// The factory is stored and invoked on every first-seen tenant —
+    /// The factory is stored and invoked on every first-seen tenant -
     /// it must be able to build a detector repeatedly, not just once.
     /// Seed the factory's builder deterministically (or from a
     /// per-tenant seed inside the closure) when reproducibility
@@ -300,7 +300,7 @@ where
         &self.metrics
     }
 
-    /// Refresh the `rcf_tenants_resident` gauge — called internally
+    /// Refresh the `rcf_tenants_resident` gauge - called internally
     /// after every op that mutates the resident set.
     fn emit_resident_gauge(&self) {
         #[allow(clippy::cast_precision_loss)]
@@ -343,7 +343,7 @@ where
         self.forests.get(key).map(|slot| slot.forest.as_ref())
     }
 
-    /// Read-only handle with an LRU touch — the tenant is treated as
+    /// Read-only handle with an LRU touch - the tenant is treated as
     /// freshly accessed.
     pub fn get(&mut self, key: &K) -> Option<&ThresholdedForest<D>> {
         let tick = self.bump_access();
@@ -388,7 +388,7 @@ where
     /// Score a point against the tenant's detector without mutating
     /// the underlying forest or its statistics. Creates the detector
     /// on first use just like [`Self::process`] so the very first
-    /// call for a tenant is not surprising — the detector exists
+    /// call for a tenant is not surprising - the detector exists
     /// but returns a warming-up verdict (no observations yet).
     ///
     /// # Errors
@@ -410,7 +410,7 @@ where
     }
 
     /// Bulk-score a batch of points through the tenant's detector
-    /// without creating the tenant on absence — retention-aware
+    /// without creating the tenant on absence - retention-aware
     /// read path. Returns `None` when the tenant is absent, or the
     /// batch of graded verdicts otherwise.
     ///
@@ -444,13 +444,13 @@ where
             .score_many_early_term(points, config)
     }
 
-    /// Cross-tenant what-if scoring — pipe the **same** `point`
+    /// Cross-tenant what-if scoring - pipe the **same** `point`
     /// through every resident tenant's detector and collect
     /// `(key, grade)` pairs sorted by descending grade.
     ///
     /// Primary use case: MSSP / threat-intel lateral scan.
     /// Analyst investigates an anomaly on tenant A, wants to see
-    /// which other tenants' baselines flag the same observation —
+    /// which other tenants' baselines flag the same observation -
     /// common pattern for supply-chain / shared-infra compromises.
     ///
     /// Tenants currently in the warming-up window
@@ -511,13 +511,13 @@ where
     /// Pairwise similarity between every tenant in the pool,
     /// computed on each tenant's anomaly-score EMA stats
     /// (`mean`, `stddev`). Tenants with fewer than
-    /// `min_observations` samples are skipped — their stats are
+    /// `min_observations` samples are skipped - their stats are
     /// too noisy to compare.
     ///
     /// Similarity is `exp(-sqrt(Δmean² + Δstddev²))` ∈ `(0, 1]`:
     /// identical distributions → `1.0`, unrelated → near `0`.
     /// Returns `(key_a, key_b, similarity)` triples with
-    /// `key_a < key_b` ordering not guaranteed — callers that care
+    /// `key_a < key_b` ordering not guaranteed - callers that care
     /// about a canonical order should sort their own slice.
     #[must_use]
     pub fn similarity_matrix(&self, min_observations: u64) -> Vec<(K, K, f64)>
@@ -540,7 +540,7 @@ where
         #[cfg(feature = "parallel")]
         {
             use rayon::prelude::*;
-            // Enumerate pairs sequentially (cheap — `n² / 2` usize
+            // Enumerate pairs sequentially (cheap - `n² / 2` usize
             // tuples), par-iterate the work. Keeps `tenants`
             // borrowed throughout instead of moving it into nested
             // closures.
@@ -600,7 +600,7 @@ where
 
         // Bounded min-heap: keep the `top_n` entries with the
         // *highest* similarity. `MostSimilarHeapEntry::cmp` is
-        // inverted so `peek` returns the lowest-similarity entry —
+        // inverted so `peek` returns the lowest-similarity entry -
         // the one to evict when a better candidate arrives.
         // O(N · log top_n) vs. the naive O(N · log N) sort path.
         let mut heap: BinaryHeap<MostSimilarHeapEntry<K>> = BinaryHeap::with_capacity(top_n + 1);
@@ -638,7 +638,7 @@ where
     }
 
     /// Per-tenant imputation-like forensic baseline. Returns `None`
-    /// when the tenant is absent — does not auto-create (forensic
+    /// when the tenant is absent - does not auto-create (forensic
     /// is a read path).
     ///
     /// # Errors
@@ -665,7 +665,7 @@ where
         self.touch_or_create(key)?.attribution_many(points)
     }
 
-    /// Timestamped variant of [`Self::process`] — tags the freshly
+    /// Timestamped variant of [`Self::process`] - tags the freshly
     /// inserted point with `timestamp` on the tenant's forest, so
     /// [`Self::delete_before`] can retract history by age.
     ///
@@ -683,7 +683,7 @@ where
 
     /// Retract every point older than `cutoff` from a tenant's
     /// detector. Returns `Ok(0)` (without creating the tenant) when
-    /// the tenant is absent — retention paths must never spin up a
+    /// the tenant is absent - retention paths must never spin up a
     /// fresh detector.
     ///
     /// # Errors
@@ -697,7 +697,7 @@ where
     }
 
     /// Early-termination scoring on a tenant's detector. Auto-
-    /// creates the tenant (like [`Self::process`]) — cold-start
+    /// creates the tenant (like [`Self::process`]) - cold-start
     /// returns `EmptyForest`, just like
     /// [`ThresholdedForest::score_early_term`].
     ///
@@ -716,7 +716,7 @@ where
 
     /// Retract a previously-observed point from a tenant's forest by
     /// its `point_idx`. Returns `Ok(false)` (and does not create the
-    /// tenant) when the tenant is absent — SOC retraction paths must
+    /// tenant) when the tenant is absent - SOC retraction paths must
     /// not silently spin up fresh detectors.
     ///
     /// # Errors
@@ -753,7 +753,7 @@ where
     /// per-tenant history from the upstream TSDB (`Prometheus`,
     /// `Loki`, `InfluxDB`, parquet dump…), hand it to this method per
     /// tenant, and the pool is hot before the live streaming pipeline
-    /// is switched back on — avoiding the per-tenant warmup coverage
+    /// is switched back on - avoiding the per-tenant warmup coverage
     /// hole.
     ///
     /// # Errors
@@ -768,7 +768,7 @@ where
     }
 
     /// Install a pre-built detector for `key`, replacing any
-    /// existing entry. Useful for warm reload — iterate a directory
+    /// existing entry. Useful for warm reload - iterate a directory
     /// of per-tenant snapshots and pump them back into a fresh pool.
     ///
     /// Returns the displaced detector if one was already resident.
@@ -811,14 +811,14 @@ where
         self.emit_resident_gauge();
     }
 
-    /// Iterate `(key, detector)` pairs in an unspecified order —
+    /// Iterate `(key, detector)` pairs in an unspecified order -
     /// use this for snapshot / migration.
     pub fn iter(&self) -> impl Iterator<Item = (&K, &ThresholdedForest<D>)> + '_ {
         self.forests.iter().map(|(k, slot)| (k, &*slot.forest))
     }
 
     /// Mutable iteration over `(key, detector)` pairs. Does not bump
-    /// any tenant's LRU tick — callers are assumed to be scanning
+    /// any tenant's LRU tick - callers are assumed to be scanning
     /// for bulk operations (save to disk, migrate, reset stats).
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut ThresholdedForest<D>)> + '_ {
         self.forests
@@ -832,7 +832,7 @@ where
         self.forests.keys().cloned().collect()
     }
 
-    /// Snapshot aggregate readiness of the pool — how many tenants
+    /// Snapshot aggregate readiness of the pool - how many tenants
     /// are warm vs warming, capacity headroom, and lifetime
     /// create/evict counters. Cheap `O(resident)` scan.
     ///
@@ -893,7 +893,7 @@ where
     /// Orthogonal to [`Self::evict_lru`]: LRU sheds on *capacity
     /// pressure*, `evict_idle` sheds on *wall-clock staleness*.
     /// Call on a schedule (e.g. every minute from a background
-    /// task) — the pool mutation takes `&mut self` so the caller
+    /// task) - the pool mutation takes `&mut self` so the caller
     /// owns the cadence.
     ///
     /// Bumps both the aggregate `rcf_tenant_evictions_total` counter
@@ -903,7 +903,7 @@ where
     pub fn evict_idle(&mut self, ttl: Duration) -> Vec<(K, ThresholdedForest<D>)> {
         let now = Instant::now();
         // Enumerate victims first so we do not iterate a map we
-        // are simultaneously mutating. Cheap — at most `capacity`
+        // are simultaneously mutating. Cheap - at most `capacity`
         // entries, keyed on clone.
         let victims: Vec<K> = self
             .forests
@@ -1001,7 +1001,7 @@ mod tests {
         let p = TenantForestPool::<String, 2>::new(1, factory_2d()).unwrap();
         assert_eq!(p.capacity(), 1);
         assert_eq!(p.len(), 0);
-        assert!(p.is_empty());
+        assert_eq!(p.len(), 0);
     }
 
     #[test]
@@ -1032,7 +1032,7 @@ mod tests {
         let mut p = TenantForestPool::<&'static str, 2>::new(2, factory_2d()).unwrap();
         p.process(&"old", [0.0, 0.0]).unwrap();
         p.process(&"new", [1.0, 1.0]).unwrap();
-        // peek `old` — should NOT prevent its eviction.
+        // peek `old` - should NOT prevent its eviction.
         let _ = p.peek(&"old");
         p.process(&"newer", [2.0, 2.0]).unwrap();
         assert!(!p.contains(&"old"), "peek should not refresh LRU");
@@ -1092,7 +1092,7 @@ mod tests {
         p.process(&"a", [0.0, 0.0]).unwrap();
         p.process(&"b", [1.0, 1.0]).unwrap();
         p.clear();
-        assert!(p.is_empty());
+        assert_eq!(p.len(), 0);
     }
 
     #[test]
@@ -1141,7 +1141,7 @@ mod tests {
     fn evict_idle_empty_pool_returns_empty() {
         let mut p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
         let evicted = p.evict_idle(std::time::Duration::from_secs(1));
-        assert!(evicted.is_empty());
+        assert_eq!(evicted.len(), 0);
     }
 
     #[test]
@@ -1167,7 +1167,7 @@ mod tests {
             let v = f64::from(i) * 0.01;
             p.process(&"a", [v, v]).unwrap();
         }
-        // "b" only 2 obs — warming.
+        // "b" only 2 obs - warming.
         p.process(&"b", [0.0, 0.0]).unwrap();
         p.process(&"b", [0.01, 0.01]).unwrap();
         let s = p.readiness_summary();
@@ -1200,7 +1200,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(5));
         let evicted = p.evict_idle(std::time::Duration::from_millis(0));
         assert_eq!(evicted.len(), 2);
-        assert!(p.is_empty());
+        assert_eq!(p.len(), 0);
     }
 
     #[test]
@@ -1258,13 +1258,13 @@ mod tests {
     fn score_across_tenants_empty_pool_returns_empty() {
         let p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
         let out = p.score_across_tenants(&[0.0, 0.0]).unwrap();
-        assert!(out.is_empty());
+        assert_eq!(out.len(), 0);
     }
 
     #[test]
     fn similarity_matrix_empty_pool_returns_empty() {
         let p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
-        assert!(p.similarity_matrix(0).is_empty());
+        assert_eq!(p.similarity_matrix(0).len(), 0);
     }
 
     #[test]
@@ -1275,7 +1275,7 @@ mod tests {
             let v = f64::from(i) * 0.01;
             p.process(&"a", [v, v]).unwrap();
         }
-        // Tenant B: very few observations — should be skipped with
+        // Tenant B: very few observations - should be skipped with
         // min_observations = 32.
         for i in 0_u32..8 {
             let v = f64::from(i) * 0.01;
@@ -1309,7 +1309,7 @@ mod tests {
     #[test]
     fn most_similar_absent_key_returns_empty() {
         let p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
-        assert!(p.most_similar(&"unknown", 3, 0).is_empty());
+        assert_eq!(p.most_similar(&"unknown", 3, 0).len(), 0);
     }
 
     #[test]

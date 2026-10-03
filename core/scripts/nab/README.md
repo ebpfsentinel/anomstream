@@ -1,4 +1,4 @@
-# NAB — detection-quality benchmark
+# NAB - detection-quality benchmark
 
 The Numenta Anomaly Benchmark (Apache 2.0) is the canonical
 public dataset for streaming anomaly detection.
@@ -6,9 +6,9 @@ public dataset for streaming anomaly detection.
 Three runners use identical protocol so their AUCs sit side by
 side:
 
-- `tests/nab.rs` — `#[ignore]` integration test, anomstream-core side.
-- `bench_rrcf_nab.py` — rrcf 0.4.4.
-- `RcfBenchNab.java` — AWS `randomcutforest-java` 4.4.0 (see
+- `tests/nab.rs` - `#[ignore]` integration test, anomstream-core side.
+- `bench_rrcf_nab.py` - rrcf 0.4.4.
+- `RcfBenchNab.java` - AWS `randomcutforest-java` 4.4.0 (see
   `../README.md` for the Maven Central
   jar).
 
@@ -49,11 +49,11 @@ java -cp "scripts/nab:$JAR" RcfBenchNab /opt/nab
   (`[v_{t-31}, … v_t]`) → `D = 32`. Longer context absorbs NAB's
   wide contextual-shift anomalies. RCF on raw scalars loses most
   of its value; lag features give the tree cuts meaningful axes.
-- **Per-dim z-score** against the warm-phase mean / stddev —
+- **Per-dim z-score** against the warm-phase mean / stddev -
   NAB series mix wildly different scales (CPU %, taxi counts,
   temperatures) and RCF cut sampling is range-weighted.
 - **Two-phase**: warm on the first 15 % of each series, then
-  score the rest against the frozen forest — no `update` on
+  score the rest against the frozen forest - no `update` on
   eval rows (NAB anomaly windows are days-wide; folding anomaly
   points back into the reservoir drags the baseline toward
   them and tanks recall).
@@ -90,9 +90,9 @@ Per-file breakdown:
 | `rogue_agent_key_updown` | 0.633 | **0.721** | 0.657 | 0.542 |
 
 anomstream-core ships two scoring APIs: the fast `score()` path
-(isolation depth, rayon-parallel, non-mutating — eBPF-hot-path
+(isolation depth, rayon-parallel, non-mutating - eBPF-hot-path
 friendly) and the heavier `score_codisp()` path (probe-based,
-mutating, sequential per tree — ~30× slower). rrcf + AWS Java
+mutating, sequential per tree - ~30× slower). rrcf + AWS Java
 use probe-based scoring by default; `score_codisp()` matches
 their semantic and leads the aggregate.
 

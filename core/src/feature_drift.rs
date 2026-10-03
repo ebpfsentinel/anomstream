@@ -1,4 +1,4 @@
-//! Input-feature drift detector — PSI + KL divergence over a
+//! Input-feature drift detector - PSI + KL divergence over a
 //! frozen baseline distribution.
 //!
 //! The bare [`crate::meta_drift::MetaDriftDetector`] watches the
@@ -17,7 +17,7 @@
 //!   `Σ (Q_i − P_i) · ln(Q_i / P_i)` per bin. Industry thresholds:
 //!   `< 0.1` stable, `0.1 .. 0.25` watch, `> 0.25` alert.
 //! - **KL divergence `D_KL(Q || P)`**: `Σ Q_i · ln(Q_i / P_i)`.
-//!   Asymmetric — use when the production distribution diverging
+//!   Asymmetric - use when the production distribution diverging
 //!   from baseline is the concern.
 //!
 //! Both are **per-dimension**: the detector reports one number per
@@ -29,7 +29,7 @@
 //!
 //! 1. Build with [`FeatureDriftDetector::new`] (supplying `num_bins`).
 //! 2. Feed the warm-up window via [`FeatureDriftDetector::observe`].
-//! 3. Call [`FeatureDriftDetector::freeze_baseline`] — pins the
+//! 3. Call [`FeatureDriftDetector::freeze_baseline`] - pins the
 //!    per-dim range and freezes the current histogram as the
 //!    reference.
 //! 4. Keep calling [`FeatureDriftDetector::observe`] with live
@@ -53,7 +53,7 @@ use crate::error::{RcfError, RcfResult};
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-/// Default bin count per dimension — 10 is the classical PSI
+/// Default bin count per dimension - 10 is the classical PSI
 /// choice, matches credit-risk industry practice.
 pub const DEFAULT_NUM_BINS: usize = 10;
 
@@ -72,11 +72,11 @@ pub const PSI_ALERT_THRESHOLD: f64 = 0.25;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum DriftLevel {
-    /// `PSI < 0.10` — distribution is stable vs. baseline.
+    /// `PSI < 0.10` - distribution is stable vs. baseline.
     Stable,
-    /// `0.10 ≤ PSI < 0.25` — worth monitoring, not yet alertable.
+    /// `0.10 ≤ PSI < 0.25` - worth monitoring, not yet alertable.
     Watch,
-    /// `PSI ≥ 0.25` — distribution has shifted materially.
+    /// `PSI ≥ 0.25` - distribution has shifted materially.
     Alert,
 }
 
@@ -108,18 +108,18 @@ pub struct FeatureDriftDetector<const D: usize> {
     /// Per-dim baseline bin counts. `None` until
     /// [`Self::freeze_baseline`] runs.
     baseline: Option<Vec<Vec<u64>>>,
-    /// Per-dim production bin counts — always allocated so
+    /// Per-dim production bin counts - always allocated so
     /// `observe` can run once the baseline is frozen.
     production: Vec<Vec<u64>>,
     /// Per-dim `(min, max)` range pinned at baseline time. `None`
     /// while the detector is still in the cold-start warm-up
     /// window.
     bin_edges: Option<[(f64, f64); D]>,
-    /// Cold-start sample buffer — every `observe` before
+    /// Cold-start sample buffer - every `observe` before
     /// `freeze_baseline` is stashed here so the baseline edges can
     /// be computed from the collected sample. Cleared at freeze.
     cold_samples: Vec<[f64; D]>,
-    /// Lifetime total of `observe` calls — surfaced through the
+    /// Lifetime total of `observe` calls - surfaced through the
     /// metrics sink so operators can separate warm-up from live
     /// traffic.
     observations_total: u64,
@@ -194,7 +194,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
         })
     }
 
-    /// Install a metrics sink — every `observe` / `psi` call emits
+    /// Install a metrics sink - every `observe` / `psi` call emits
     /// counters/gauges into it.
     #[cfg(feature = "std")]
     #[must_use]
@@ -228,7 +228,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
         self.num_bins
     }
 
-    /// Per-dim `(min, max)` range pinned at baseline time — `None`
+    /// Per-dim `(min, max)` range pinned at baseline time - `None`
     /// before [`Self::freeze_baseline`].
     #[must_use]
     pub fn bin_edges(&self) -> Option<&[(f64, f64); D]> {
@@ -242,7 +242,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
     ///
     /// - [`RcfError::NaNValue`] when `point` contains a non-finite
     ///   component.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, point: &[f64; D]) -> RcfResult<()> {
         if !point.iter().all(|v| v.is_finite()) {
             return Err(RcfError::NaNValue);
@@ -261,7 +261,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
                 self.production[d][bin] = self.production[d][bin].saturating_add(1);
             }
         } else {
-            // Cold-start accumulation — we do not have edges yet, so
+            // Cold-start accumulation - we do not have edges yet, so
             // stash raw values in production[0][0] as a single-bin
             // placeholder. `freeze_baseline` will rebuild the
             // histogram from scratch using the collected sample.
@@ -319,7 +319,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
 
         self.baseline = Some(baseline);
         self.bin_edges = Some(edges);
-        // Reset production — live traffic starts accruing from now.
+        // Reset production - live traffic starts accruing from now.
         self.production = vec![vec![0_u64; self.num_bins]; D];
         self.cold_samples.clear();
         Ok(())
@@ -339,7 +339,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
     ///
     /// Returns [`RcfError::EmptyForest`] when the baseline has not
     /// been frozen.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn psi(&self) -> RcfResult<Vec<f64>> {
         let baseline = self.baseline.as_ref().ok_or(RcfError::EmptyForest)?;
         let mut out = Vec::with_capacity(D);
@@ -358,7 +358,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
         Ok(out)
     }
 
-    /// Per-dim KL divergence `D_KL(Q || P)` against the baseline —
+    /// Per-dim KL divergence `D_KL(Q || P)` against the baseline -
     /// `Σ_i Q_i · ln(Q_i / P_i)`. Asymmetric; see module docs.
     ///
     /// # Errors
@@ -374,7 +374,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
         Ok(out)
     }
 
-    /// Maximum PSI across every dimension — the single number SOC
+    /// Maximum PSI across every dimension - the single number SOC
     /// dashboards usually alert on.
     ///
     /// # Errors
@@ -388,7 +388,7 @@ impl<const D: usize> FeatureDriftDetector<D> {
             .fold(0.0_f64, |a, b| if b > a { b } else { a }))
     }
 
-    /// Dim index with the largest PSI — useful for root-causing
+    /// Dim index with the largest PSI - useful for root-causing
     /// "which feature moved?".
     ///
     /// # Errors
@@ -538,7 +538,7 @@ mod tests {
             d.observe(&[v]).unwrap();
         }
         d.freeze_baseline().unwrap();
-        // Production: all near the max bin — massive drift.
+        // Production: all near the max bin - massive drift.
         for _ in 0..1000 {
             d.observe(&[0.95]).unwrap();
         }

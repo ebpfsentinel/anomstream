@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Minimal `anomstream-core` quickstart — build a forest, stream a few
+//! Minimal `anomstream-core` quickstart - build a forest, stream a few
 //! points, and score one. Run with `cargo run --example quickstart`.
 
 use anomstream_core::{AnomalyScore, ForestBuilder, RcfError};

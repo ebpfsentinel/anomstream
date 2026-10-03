@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! SOC alert dedup — cluster near-duplicate anomalies so the
+//! SOC alert dedup - cluster near-duplicate anomalies so the
 //! dashboard shows rolled-up incidents instead of raw event rows.
 //!
 //! Identical attribution profiles within the sliding window merge

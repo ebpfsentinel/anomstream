@@ -22,7 +22,7 @@ fn ttl_evicts_stale_and_retains_fresh() {
     p.process(&"stale", [0.0, 0.0]).unwrap();
     p.process(&"fresh", [1.0, 1.0]).unwrap();
     sleep(Duration::from_millis(40));
-    // Touch only `fresh` — stale has not been accessed in 40 ms.
+    // Touch only `fresh` - stale has not been accessed in 40 ms.
     p.process(&"fresh", [0.5, 0.5]).unwrap();
     let evicted = p.evict_idle(Duration::from_millis(20));
     let keys: Vec<_> = evicted.iter().map(|(k, _)| *k).collect();

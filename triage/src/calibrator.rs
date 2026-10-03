@@ -1,4 +1,4 @@
-//! Calibrated probability output — convert raw anomaly scores into
+//! Calibrated probability output - convert raw anomaly scores into
 //! a probability `P(anomaly | score) ∈ [0, 1]` via Platt scaling
 //! (sigmoid calibration). Implements the stable Newton-Raphson
 //! formulation of Lin, Lin, Weng (2007) as refined from Platt 1999.
@@ -6,7 +6,7 @@
 //! # Why calibration
 //!
 //! The raw [`anomstream_core::AnomalyScore`] is unbounded and its scale shifts
-//! with forest size, sample size, and point dimensionality — useful
+//! with forest size, sample size, and point dimensionality - useful
 //! for ranking, awkward for audit reporting. A sigmoid calibrator
 //! fit on a labelled history set maps the raw score to a
 //! defensible probability ("this traffic window is 87 % likely to
@@ -27,9 +27,9 @@
 //!
 //! # Usage
 //!
-//! Collect a labelled calibration set — tuples of
+//! Collect a labelled calibration set - tuples of
 //! `(raw_score, is_anomaly_bool)` from historical SOC-confirmed
-//! alerts and manually-labelled baseline windows — then call
+//! alerts and manually-labelled baseline windows - then call
 //! [`PlattCalibrator::fit`]. Persist the fitted calibrator with
 //! serde and reuse at inference time via
 //! [`PlattCalibrator::calibrate`].
@@ -43,15 +43,15 @@ use num_traits::Float;
 
 use anomstream_core::error::{RcfError, RcfResult};
 
-/// Default maximum Newton-Raphson iterations — well past the point
+/// Default maximum Newton-Raphson iterations - well past the point
 /// of diminishing returns on the 2-parameter fit.
 pub const DEFAULT_MAX_ITERS: usize = 100;
 /// Default gradient-norm convergence threshold.
 pub const DEFAULT_TOLERANCE: f64 = 1e-5;
-/// Default Levenberg-Marquardt damping — stabilises Newton steps
+/// Default Levenberg-Marquardt damping - stabilises Newton steps
 /// when the Hessian is near-singular on tiny calibration sets.
 pub const DEFAULT_MIN_STEP: f64 = 1e-10;
-/// Default smallest SIGMA for the line-search — aborts when the
+/// Default smallest SIGMA for the line-search - aborts when the
 /// Hessian stops being positive definite.
 pub const DEFAULT_SIGMA: f64 = 1e-12;
 
@@ -66,7 +66,7 @@ pub const DEFAULT_SKEW_THRESHOLD: f64 = 100.0;
 
 /// Number of SGD passes over the calibration set on the skew
 /// fallback path. 16 passes ≈ same number of gradient evaluations
-/// as a typical Newton fit (8–12 iters × 2 likelihood evals).
+/// as a typical Newton fit (8-12 iters × 2 likelihood evals).
 pub const DEFAULT_SKEW_SGD_EPOCHS: usize = 16;
 
 /// Learning rate for the SGD fallback. Conservative default; the
@@ -86,7 +86,7 @@ pub struct PlattFitConfig {
     /// Minimum line-search step size before giving up.
     pub min_step: f64,
     /// Minimum Hessian-diagonal damping (`σ` in the reference
-    /// paper) — added to `h11` / `h22` for numerical stability.
+    /// paper) - added to `h11` / `h22` for numerical stability.
     pub sigma: f64,
 }
 
@@ -134,7 +134,7 @@ impl PlattFitConfig {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlattCalibrator {
-    /// Slope parameter — typically negative when high score =
+    /// Slope parameter - typically negative when high score =
     /// anomaly.
     a: f64,
     /// Intercept parameter.
@@ -143,14 +143,14 @@ pub struct PlattCalibrator {
     /// converge. Useful for operator diagnostics ("did my fit
     /// terminate early?").
     iters: usize,
-    /// Whether the fit hit [`PlattFitConfig::tolerance`] — `false`
+    /// Whether the fit hit [`PlattFitConfig::tolerance`] - `false`
     /// means the solver exhausted [`PlattFitConfig::max_iters`]
     /// and the result is the best attempt available.
     converged: bool,
     /// `true` when the fit detected class skew above
     /// [`DEFAULT_SKEW_THRESHOLD`] and fell back to online-SGD
     /// from a prior-seeded initialisation. Callers should surface
-    /// this as a dashboard warning — a skewed calibration set is
+    /// this as a dashboard warning - a skewed calibration set is
     /// often an operational issue (mis-labelled benigns, under-
     /// reporting of confirmed alerts) that the fitter cannot fix
     /// on its own. Defaults to `false` for old serde snapshots.
@@ -173,8 +173,8 @@ impl PlattCalibrator {
         }
     }
 
-    /// Fit the sigmoid on `data` — a slice of `(score, is_anomaly)`
-    /// tuples — using the reference Platt / Lin-Lin-Weng iterative
+    /// Fit the sigmoid on `data` - a slice of `(score, is_anomaly)`
+    /// tuples - using the reference Platt / Lin-Lin-Weng iterative
     /// algorithm. Labels `false` / `true` are remapped to the
     /// smoothed targets `1/(N- + 2)` / `(N+ + 1)/(N+ + 2)` per the
     /// reference paper, so a label-homogeneous calibration set
@@ -334,7 +334,7 @@ impl PlattCalibrator {
             }
             let gd = g1 * da + g2 * db;
             // Bail out before line-searching if `gd` or the
-            // current objective is non-finite — both feed every
+            // current objective is non-finite - both feed every
             // Armijo comparison below and would silently corrupt
             // the (a, b) update path otherwise.
             let current = negative_log_likelihood(a, b);
@@ -348,7 +348,7 @@ impl PlattCalibrator {
                 let new_b = b + step_size * db;
                 let new_f = negative_log_likelihood(new_a, new_b);
                 // Reject any step that made the objective NaN /
-                // Inf — the next Armijo comparison would propagate
+                // Inf - the next Armijo comparison would propagate
                 // it and could even succeed by accident, locking
                 // (a, b) into a non-finite state. Treat it as a
                 // step-too-large signal and shrink instead.
@@ -371,7 +371,7 @@ impl PlattCalibrator {
                 // (~1e-308), where every further halve loses bits
                 // and ULP error explodes. Treat any subnormal step
                 // as "we've shrunk past usefulness" and bail with
-                // the best (a, b) so far — same outcome as hitting
+                // the best (a, b) so far - same outcome as hitting
                 // `min_step`, just earlier.
                 if step_size < config.min_step || step_size.is_subnormal() {
                     converged = true;
@@ -394,7 +394,7 @@ impl PlattCalibrator {
 
     /// `true` when the last fit detected class skew above
     /// [`DEFAULT_SKEW_THRESHOLD`] and landed on the SGD fallback
-    /// path. SOC dashboards should flag this — extreme imbalance
+    /// path. SOC dashboards should flag this - extreme imbalance
     /// usually points at a labelling pipeline regression that the
     /// calibrator cannot recover from on its own.
     #[must_use]
@@ -431,7 +431,7 @@ impl PlattCalibrator {
     /// Calibrate a raw score to `P(y = 1 | score) ∈ [0, 1]`.
     /// Non-finite inputs are mapped to `0.5` (maximum entropy,
     /// no-signal) rather than propagating NaN.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn calibrate(&self, score: f64) -> f64 {
         if !score.is_finite() {
             return 0.5;
@@ -452,7 +452,7 @@ impl PlattCalibrator {
         scores.iter().map(|s| self.calibrate(*s)).collect()
     }
 
-    /// Online update — one SGD step on the logistic loss for a
+    /// Online update - one SGD step on the logistic loss for a
     /// single labelled observation. Use to **refine** an existing
     /// calibrator as SOC feedback accumulates without re-fitting
     /// the full batch. `lr` is the learning rate (typical range
@@ -475,7 +475,7 @@ impl PlattCalibrator {
     /// `a ← a − lr · (y − p) · s`, `b ← b − lr · (y − p)`. On a
     /// well-fit calibrator, high score + `label = true` drives
     /// `a` more negative (since `s > 0`, `y − p > 0`), which is
-    /// exactly the direction the Platt convention needs — higher
+    /// exactly the direction the Platt convention needs - higher
     /// probability at higher score. Non-finite scores are silently
     /// dropped.
     ///
@@ -587,7 +587,7 @@ mod tests {
     #[test]
     fn fit_homogeneous_positive_stays_near_prior() {
         // Every label is positive. Smoothed target keeps the fit
-        // stable — probability at any score should be biased
+        // stable - probability at any score should be biased
         // upward but remain in [0, 1].
         let data: Vec<(f64, bool)> = (0..10).map(|i| (f64::from(i), true)).collect();
         let cal = PlattCalibrator::fit(&data, PlattFitConfig::default()).unwrap();

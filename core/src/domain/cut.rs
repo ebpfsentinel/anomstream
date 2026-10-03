@@ -8,8 +8,8 @@
 //! of the seed they own.
 //!
 //! When the bounding box is fully degenerate (every dimension has
-//! zero range) [`Cut::random_cut`] returns [`RcfError::EmptyBoundingBox`]
-//! — there is no meaningful cut.
+//! zero range) [`Cut::random_cut`] returns [`RcfError::EmptyBoundingBox`] -
+//! there is no meaningful cut.
 
 use rand::{Rng, RngExt};
 
@@ -40,8 +40,8 @@ type StoredValue = f32;
 /// The in-memory representation depends on the `packed-cut` feature:
 /// `{dim: usize, value: f64}` (16 B) by default, or `{dim: u8,
 /// value: f32}` (8 B) under `packed-cut`. The public API is identical
-/// either way — [`Cut::new`] takes `usize`/`f64` and [`Cut::dim`] /
-/// [`Cut::value`] return `usize`/`f64` — so callers never observe the
+/// either way - [`Cut::new`] takes `usize`/`f64` and [`Cut::dim`] /
+/// [`Cut::value`] return `usize`/`f64` - so callers never observe the
 /// narrowing beyond the `f32` quantisation of the stored coordinate.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -71,7 +71,7 @@ impl Cut {
                 u8::try_from(dim).is_ok(),
                 "packed-cut caps D at 256; got cut dim {dim}"
             );
-            // Deliberate narrowing — this *is* the packed-cut feature.
+            // Deliberate narrowing - this *is* the packed-cut feature.
             // `dim` is bounded by `D ≤ 256` (asserted above); the `f32`
             // coordinate quantisation is the documented, AUC-validated
             // trade-off the feature exists to make.
@@ -123,7 +123,7 @@ impl Cut {
     ///
     /// # Panics
     ///
-    /// Panics when `self.dim() >= point.len()` — call sites always
+    /// Panics when `self.dim() >= point.len()` - call sites always
     /// size-check the point first via
     /// [`crate::domain::ensure_dim`].
     #[must_use]

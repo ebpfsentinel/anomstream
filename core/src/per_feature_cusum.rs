@@ -2,7 +2,7 @@
 //!
 //! `D` parallel univariate CUSUMs track positive and negative
 //! cumulative sums of the deviation from a reference mean.
-//! Alerts when either side exceeds the threshold `h` — detects
+//! Alerts when either side exceeds the threshold `h` - detects
 //! *sustained* mean shifts that an `EWMA` adapts to and stops
 //! reporting (e.g. slow-ramp `DDoS`, gradual leak).
 //!
@@ -43,7 +43,7 @@ pub enum DriftDirection {
     Decrease,
 }
 
-/// One CUSUM alert — fired when a feature's positive or
+/// One CUSUM alert - fired when a feature's positive or
 /// negative cumulative sum exceeds the threshold.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -83,7 +83,7 @@ pub struct PerFeatureCusumAccumulator {
 /// Over-the-wire [`PerFeatureCusumAccumulator`] layout.
 /// Deserialization lands here first so [`TryFrom`] can reject
 /// `NaN` / `±inf` poisoning of the cumulative sums or the
-/// reference mean — fields that later feed the `update()`
+/// reference mean - fields that later feed the `update()`
 /// recurrence and would propagate non-finite state indefinitely.
 #[cfg(feature = "serde")]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -127,7 +127,7 @@ impl TryFrom<PerFeatureCusumAccumulatorShadow> for PerFeatureCusumAccumulator {
 }
 
 impl PerFeatureCusumAccumulator {
-    /// Fresh accumulator — zeroed, reference unset.
+    /// Fresh accumulator - zeroed, reference unset.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -144,7 +144,7 @@ impl PerFeatureCusumAccumulator {
         *self = Self::new();
     }
 
-    /// Current magnitude — `max(S+, S−)`. Used by the caller
+    /// Current magnitude - `max(S+, S−)`. Used by the caller
     /// to report a per-feature score even when no alert fired.
     #[must_use]
     pub fn magnitude(&self) -> f64 {
@@ -201,18 +201,18 @@ impl Default for PerFeatureCusumAccumulator {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "PerFeatureCusumConfigShadow"))]
 pub struct PerFeatureCusumConfig {
-    /// Slack `k` — allowable drift before accumulation starts.
+    /// Slack `k` - allowable drift before accumulation starts.
     /// Typical `0.5·σ` of the reference signal.
     pub slack: f64,
-    /// Threshold `h` — cumulative sum at which an alert fires.
+    /// Threshold `h` - cumulative sum at which an alert fires.
     /// Typical `4·σ` of the reference signal.
     pub threshold: f64,
 }
 
 /// Over-the-wire [`PerFeatureCusumConfig`] layout.
 /// Deserialization lands here first so [`TryFrom`] can enforce
-/// finite, non-negative `slack` and strictly-positive `threshold`
-/// — an attacker-supplied `threshold ≤ 0` would make every
+/// finite, non-negative `slack` and strictly-positive `threshold` -
+/// an attacker-supplied `threshold ≤ 0` would make every
 /// observation emit an alert.
 #[cfg(feature = "serde")]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -266,10 +266,10 @@ impl Default for PerFeatureCusumConfig {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PerFeatureCusumResult<const D: usize> {
     /// `max(S+, S−)` per feature at the moment the observation
-    /// returned — includes the current update.
+    /// returned - includes the current update.
     #[cfg_attr(feature = "serde", serde(with = "crate::serde_util::fixed_array_f64"))]
     pub per_feature_magnitude: [f64; D],
-    /// `max(per_feature_magnitude)` — single-number summary.
+    /// `max(per_feature_magnitude)` - single-number summary.
     pub max_magnitude: f64,
     /// Alerts fired this tick (one per feature that exceeded
     /// `threshold`).
@@ -356,7 +356,7 @@ impl<const D: usize> PerFeatureCusum<D> {
 
     /// Ingest `input`, returning per-feature magnitudes and any
     /// alerts that fired. Always updates the accumulators.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, input: &[f64; D]) -> PerFeatureCusumResult<D> {
         let mut per_feature_magnitude = [0.0_f64; D];
         let mut alerts: Vec<PerFeatureCusumAlert> = Vec::new();
@@ -397,7 +397,7 @@ impl<const D: usize> PerFeatureCusum<D> {
 
 #[cfg(feature = "serde")]
 mod serde_accumulators {
-    //! `serde` adapter for `[PerFeatureCusumAccumulator; D]` —
+    //! `serde` adapter for `[PerFeatureCusumAccumulator; D]` -
     //! derive macro does not cover arbitrary-`D` arrays.
     use super::PerFeatureCusumAccumulator;
     use alloc::vec::Vec;
@@ -442,7 +442,7 @@ mod tests {
             threshold: 5.0,
         });
         let out = det.observe(&[100.0]);
-        assert!(out.alerts.is_empty());
+        assert_eq!(out.alerts.len(), 0);
         assert!(det.accumulators()[0].reference_set);
         assert_eq!(det.accumulators()[0].reference, 100.0);
     }
@@ -455,7 +455,7 @@ mod tests {
         });
         for _ in 0..100 {
             let out = det.observe(&[100.0]);
-            assert!(out.alerts.is_empty());
+            assert_eq!(out.alerts.len(), 0);
         }
     }
 
@@ -509,7 +509,7 @@ mod tests {
             let _ = det.observe(&[105.0]);
         }
         assert!(det.accumulators()[0].drift_samples > 0);
-        // Return to reference — S+ decays by `slack` per tick.
+        // Return to reference - S+ decays by `slack` per tick.
         // 20 steps of +4.5 each ≈ S+=90 at trip; 200 steps of
         // −0.5 brings it back below threshold (5).
         for _ in 0..250 {
@@ -531,7 +531,7 @@ mod tests {
         // Feeding at the reference must not trigger alerts.
         for _ in 0..50 {
             let out = det.observe(&[50.0, 100.0]);
-            assert!(out.alerts.is_empty());
+            assert_eq!(out.alerts.len(), 0);
         }
     }
 

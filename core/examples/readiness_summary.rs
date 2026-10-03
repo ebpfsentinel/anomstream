@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Aggregate pool readiness — surface for `/healthz` / `/readyz`
+//! Aggregate pool readiness - surface for `/healthz` / `/readyz`
 //! health-check endpoints. `readiness_summary()` classifies every
 //! resident tenant as warming or ready and reports lifetime
 //! create/evict counters.

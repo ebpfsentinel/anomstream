@@ -1,4 +1,4 @@
-//! Count-Min Sketch — probabilistic frequency estimation in
+//! Count-Min Sketch - probabilistic frequency estimation in
 //! constant memory.
 //!
 //! `d` pairwise-independent hash rows over `w` counters. Each
@@ -9,7 +9,7 @@
 //! (1/e)^d` (Cormode & Muthukrishnan 2005).
 //!
 //! Default (`w=2048`, `d=4`): `ε ≈ 1.33·10⁻³`, `δ ≈ 1.83·10⁻²`,
-//! memory `~64 KB` — enough headroom for per-flow or per-source
+//! memory `~64 KB` - enough headroom for per-flow or per-source
 //! heavy-hitter counting over a multi-million-key stream.
 //!
 //! Gated behind `std` because the row hashes rely on
@@ -66,18 +66,18 @@ pub struct CountMinSketch {
     seeds: Vec<(u64, u64)>,
     /// Columns per row.
     width: usize,
-    /// Rows — one pairwise-independent hash per row.
+    /// Rows - one pairwise-independent hash per row.
     depth: usize,
     /// Sum of every `count` ever passed to `increment`.
     total: u64,
 }
 
-#[allow(clippy::missing_fields_in_debug)] // Bounded summary — see method docstring.
+#[allow(clippy::missing_fields_in_debug)] // Bounded summary - see method docstring.
 impl core::fmt::Debug for CountMinSketch {
     /// Prints a bounded summary (`width`, `depth`, `total`,
     /// memory footprint) instead of the full counter table.
     /// `{:?}` on the derived impl would emit up to `width × depth
-    /// × 8 B` of numbers — 32 MiB at the tightest cap — and drown
+    /// × 8 B` of numbers - 32 MiB at the tightest cap - and drown
     /// any downstream log.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("CountMinSketch")

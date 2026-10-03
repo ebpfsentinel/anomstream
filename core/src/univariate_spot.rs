@@ -1,5 +1,5 @@
 //! Streaming Peaks-Over-Threshold (SPOT / DSPOT) per-dimension
-//! anomaly detector — Siffer et al., *Anomaly Detection in
+//! anomaly detector - Siffer et al., *Anomaly Detection in
 //! Streams with Extreme Value Theory*, KDD 2017.
 //!
 //! For each feature dimension the detector maintains a streaming
@@ -25,7 +25,7 @@
 //!   pins `u` at the current warm-phase quantile. Classical
 //!   extreme-value-theory test with a fixed null.
 //! - **DSPOT** (drifting quantile): keep calling
-//!   [`PotDetector::record`] during live traffic — the `TDigest`
+//!   [`PotDetector::record`] during live traffic - the `TDigest`
 //!   tracks the moving quantile, the peak pile re-fits as drift
 //!   accumulates. Trades false-positive rate against recency.
 //!
@@ -46,12 +46,12 @@ use crate::metrics::{MetricsSink, default_sink, names};
 use crate::tdigest::{DEFAULT_COMPRESSION, TDigest};
 
 /// Default quantile threshold above which observations are treated
-/// as peaks for the GPD fit — `0.98` keeps the baseline 98 % of
+/// as peaks for the GPD fit - `0.98` keeps the baseline 98 % of
 /// values out of the peak pile, matches the DSPOT reference.
 pub const DEFAULT_QUANTILE: f64 = 0.98;
 
 /// Default alert threshold on the p-value emitted by
-/// [`PotDetector::p_value`] — `1e-3` fires on the 0.1 % tail.
+/// [`PotDetector::p_value`] - `1e-3` fires on the 0.1 % tail.
 pub const DEFAULT_ALERT_P: f64 = 1.0e-3;
 
 /// Minimum peak count before the GPD fit is trusted. Below this,
@@ -70,10 +70,10 @@ pub struct PotDetector {
     /// Running mean of `(x − u)` across peaks.
     peak_mean: f64,
     /// Running `M2` (sum of squared deviations) for Welford on
-    /// peaks — yields `variance = M2 / (n − 1)`.
+    /// peaks - yields `variance = M2 / (n − 1)`.
     peak_m2: f64,
     /// Pinned quantile threshold `u` once [`Self::freeze_baseline`]
-    /// is called. `None` until frozen — the DSPOT variant stays
+    /// is called. `None` until frozen - the DSPOT variant stays
     /// un-frozen and queries the digest's live quantile on each
     /// `p_value` call.
     frozen_u: Option<f64>,
@@ -81,7 +81,7 @@ pub struct PotDetector {
     q: f64,
     /// Lifetime count of `record` calls.
     total_seen: u64,
-    /// Observability sink — serde-skipped, restored to the noop
+    /// Observability sink - serde-skipped, restored to the noop
     /// sink on round-trip.
     #[cfg_attr(
         feature = "serde",
@@ -92,7 +92,7 @@ pub struct PotDetector {
 
 impl PotDetector {
     /// Build a detector with a caller-chosen quantile target
-    /// `q ∈ (0, 1)` — observations above the running `q`-quantile
+    /// `q ∈ (0, 1)` - observations above the running `q`-quantile
     /// are peaks.
     ///
     /// # Errors
@@ -133,7 +133,7 @@ impl PotDetector {
         }
     }
 
-    /// Install a metrics sink — every `record` emits an
+    /// Install a metrics sink - every `record` emits an
     /// observations counter, every peak bumps a peaks counter.
     #[must_use]
     pub fn with_metrics_sink(mut self, sink: Arc<dyn MetricsSink>) -> Self {
@@ -176,7 +176,7 @@ impl PotDetector {
     /// frozen or live quantile threshold `u`) also fold into the
     /// Welford running statistics used by the GPD fit.
     ///
-    /// Non-finite values are silently ignored — matches the
+    /// Non-finite values are silently ignored - matches the
     /// fail-open behaviour of [`TDigest::record`].
     pub fn record(&mut self, value: f64) {
         if !value.is_finite() {
@@ -202,7 +202,7 @@ impl PotDetector {
     }
 
     /// Pin the current `q`-quantile as the frozen threshold `u`.
-    /// Classical SPOT mode — the quantile no longer drifts.
+    /// Classical SPOT mode - the quantile no longer drifts.
     /// Subsequent [`Self::record`] calls still update the digest
     /// (for diagnostics) but the peak pile is evaluated against the
     /// frozen `u`.
@@ -216,8 +216,8 @@ impl PotDetector {
             return Err(RcfError::EmptyForest);
         };
         self.frozen_u = Some(u);
-        // Rebuild the peak pile from scratch against the new `u`
-        // — before freeze, peaks were accumulating against the
+        // Rebuild the peak pile from scratch against the new `u` -
+        // before freeze, peaks were accumulating against the
         // rolling quantile, which differs from `u`.
         self.peak_count = 0;
         self.peak_mean = 0.0;
@@ -258,7 +258,7 @@ impl PotDetector {
         // Method-of-moments GPD fit over the peak excess stream.
         let (gamma, sigma) = self.gpd_mom();
         if sigma <= 0.0 || !sigma.is_finite() || !gamma.is_finite() {
-            // Degenerate fit — fall back to the calling tail prob.
+            // Degenerate fit - fall back to the calling tail prob.
             return tail_prob.clamp(0.0, 1.0);
         }
         let cond = if gamma.abs() < 1.0e-9 {
@@ -267,7 +267,7 @@ impl PotDetector {
         } else {
             let inner = 1.0 + gamma * (excess / sigma);
             if inner <= 0.0 {
-                // Past the GPD support — treat as vanishing
+                // Past the GPD support - treat as vanishing
                 // survival (clamp to 1 / total_seen floor).
                 0.0
             } else {
@@ -289,7 +289,7 @@ impl PotDetector {
         self.p_value(value) < alert_p
     }
 
-    /// Current threshold `u` — the frozen value if
+    /// Current threshold `u` - the frozen value if
     /// [`Self::freeze_baseline`] was called, else the live
     /// quantile from the digest.
     fn current_u(&self) -> Option<f64> {
@@ -304,7 +304,7 @@ impl PotDetector {
         scratch.quantile(self.q)
     }
 
-    /// Method-of-moments GPD fit — `γ = 0.5 · (1 − μ² / σ²)`,
+    /// Method-of-moments GPD fit - `γ = 0.5 · (1 − μ² / σ²)`,
     /// `σ_fit = μ · (1 + γ)`. Requires `peak_count ≥ 2` for a
     /// valid variance; [`Self::p_value`] gates the call.
     fn gpd_mom(&self) -> (f64, f64) {
@@ -415,7 +415,7 @@ mod tests {
         for i in 0..200 {
             d.record(0.95 + i as f64 * 0.0005);
         }
-        // 0.5 quite likely under baseline — not anomalous at 1e-3.
+        // 0.5 quite likely under baseline - not anomalous at 1e-3.
         assert!(!d.is_anomaly(0.5, 1.0e-3));
     }
 }

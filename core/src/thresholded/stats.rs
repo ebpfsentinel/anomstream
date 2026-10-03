@@ -12,7 +12,7 @@
 //!
 //! which is the standard exponentially-weighted Welford update:
 //! `mean'` is the biased EMA and `var'` is the EMA of the squared
-//! deviation *about the previous mean* — the correct estimator under
+//! deviation *about the previous mean* - the correct estimator under
 //! exponential weighting (West 1979).
 //!
 //! The decay factor controls the effective memory window: with
@@ -73,7 +73,7 @@ impl EmaStats {
 
     /// Fold a new observation into the running statistics.
     ///
-    /// Non-finite inputs are silently ignored — callers should reject
+    /// Non-finite inputs are silently ignored - callers should reject
     /// or sanitise `NaN`/`±∞` before feeding them in. The observation
     /// counter is still incremented only on accepted inputs so that
     /// [`EmaStats::observations`] reflects the size of the sample the

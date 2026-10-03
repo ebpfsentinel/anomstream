@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Cross-tenant what-if — score the SAME point against every
+//! Cross-tenant what-if - score the SAME point against every
 //! resident tenant's detector. MSSP threat-intel pattern: a suspect
 //! IOC lands in tenant A, we want to know which other tenants'
 //! baselines also flag it.
@@ -26,7 +26,7 @@ fn main() -> Result<(), RcfError> {
     //   quiet-web : [0.0, 0.0] ish (low traffic)
     //   noisy-api : [5.0, 5.0] ish (moderate)
     //   bulk-ingest: [50.0, 50.0] ish (high)
-    //   warming   : only 4 samples — will be filtered out
+    //   warming   : only 4 samples - will be filtered out
     for _ in 0..128 {
         pool.process(
             &"quiet-web",
@@ -59,7 +59,7 @@ fn main() -> Result<(), RcfError> {
         );
     }
     println!();
-    println!("(warming tenant filtered out — not-ready verdicts excluded)");
+    println!("(warming tenant filtered out - not-ready verdicts excluded)");
 
     Ok(())
 }

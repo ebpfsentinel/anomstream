@@ -1,13 +1,13 @@
-//! LSH-based alert clustering — buckets near-duplicate alerts via
+//! LSH-based alert clustering - buckets near-duplicate alerts via
 //! a locality-sensitive hash on the attribution `DiVector`.
 //!
 //! `AlertClusterer` (the cosine-similarity variant in
-//! `src/alert_cluster.rs`) groups by pairwise similarity — O(N)
+//! `src/alert_cluster.rs`) groups by pairwise similarity - O(N)
 //! comparisons per new alert. For MSSP-scale volumes (tens of
 //! thousands of alerts per tenant per day) the linear scan
 //! dominates. `LshAlertClusterer` quantises each per-dim
 //! attribution into a 4-bit symbol and uses the concatenated hex
-//! string as the bucket key — O(1) lookup, collision-safe under
+//! string as the bucket key - O(1) lookup, collision-safe under
 //! attribution similarity.
 //!
 //! The hash mirrors the TLSH spirit (Oliver et al. 2013) without
@@ -26,7 +26,7 @@
 //! ([`LshAlertClusterer::new`] / [`LshAlertClusterer::default_lsh`]) so an
 //! attacker who only sees a black-box clusterer cannot trivially
 //! craft attribution vectors that collide and collapse distinct
-//! alerts into a single bucket — the seed rotates each instance,
+//! alerts into a single bucket - the seed rotates each instance,
 //! so collision-collision attacks cooked offline against a fixed
 //! seed do not transfer. For deterministic / reproducible test
 //! suites use [`LshAlertClusterer::with_seed`]. For deployments
@@ -49,7 +49,7 @@ use anomstream_core::metrics::{MetricsSink, default_sink, names};
 /// 16 buckets → 4 bits per dim, packed into the hash string.
 pub const DEFAULT_BUCKETS_PER_DIM: usize = 16;
 
-/// Default attribution-magnitude cap used by the quantiser —
+/// Default attribution-magnitude cap used by the quantiser -
 /// matches the typical post-normaliser range of `DiVector::total`.
 pub const DEFAULT_ATTR_CAP: f64 = 8.0;
 
@@ -57,7 +57,7 @@ pub const DEFAULT_ATTR_CAP: f64 = 8.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum LshClusterDecision {
-    /// No bucket held a prior alert with this hash — new cluster
+    /// No bucket held a prior alert with this hash - new cluster
     /// opened at the returned hash.
     NewCluster,
     /// A prior alert in the same bucket was found; the new alert
@@ -66,7 +66,7 @@ pub enum LshClusterDecision {
 }
 
 /// Quantise-and-bucket alert clusterer. Thread-`Send` / `Sync`
-/// friendly — holds a `HashMap<u128, u64>` counter keyed by the
+/// friendly - holds a `HashMap<u128, u64>` counter keyed by the
 /// quantised hash. The per-alert hash key is a packed integer,
 /// not a heap-allocated string: at MSSP volumes the `format!` of
 /// a per-dim hex string was a measurable per-observe heap trip,
@@ -82,7 +82,7 @@ pub struct LshAlertClusterer {
     attr_cap: f64,
     /// Per-instance random seed mixed into the FNV hash so two
     /// clusterers built with the same parameters produce different
-    /// keys for the same input — defeats trivial offline collision
+    /// keys for the same input - defeats trivial offline collision
     /// crafting. See module-level "Adversarial-resistance
     /// disclaimer" for the precise threat model.
     seed: u128,
@@ -136,7 +136,7 @@ impl LshAlertClusterer {
         Self::with_seed(buckets_per_dim, attr_cap, random_seed())
     }
 
-    /// Build with caller-supplied hash seed — use for reproducible
+    /// Build with caller-supplied hash seed - use for reproducible
     /// test fixtures and snapshot diffing. **Do not** hard-code a
     /// constant seed in production: that voids the per-instance
     /// rotation that defends against offline collision crafting.
@@ -171,7 +171,7 @@ impl LshAlertClusterer {
         })
     }
 
-    /// Per-instance hash seed — exposed so callers can persist /
+    /// Per-instance hash seed - exposed so callers can persist /
     /// re-load it across restarts when they need the same
     /// `(seed, params) → hash` mapping for snapshot continuity.
     #[must_use]
@@ -179,7 +179,7 @@ impl LshAlertClusterer {
         self.seed
     }
 
-    /// Install a metrics sink — every `observe` call emits
+    /// Install a metrics sink - every `observe` call emits
     /// observed/new/joined counters + an active-clusters gauge.
     #[must_use]
     pub fn with_metrics_sink(mut self, sink: Arc<dyn MetricsSink>) -> Self {
@@ -193,12 +193,12 @@ impl LshAlertClusterer {
         &self.metrics
     }
 
-    /// Convenience constructor — [`DEFAULT_BUCKETS_PER_DIM`] /
+    /// Convenience constructor - [`DEFAULT_BUCKETS_PER_DIM`] /
     /// [`DEFAULT_ATTR_CAP`].
     ///
     /// # Panics
     ///
-    /// Never — the defaults pass [`Self::new`]'s validation.
+    /// Never - the defaults pass [`Self::new`]'s validation.
     #[must_use]
     pub fn default_lsh() -> Self {
         Self::new(DEFAULT_BUCKETS_PER_DIM, DEFAULT_ATTR_CAP).expect("defaults valid")
@@ -207,7 +207,7 @@ impl LshAlertClusterer {
     /// Observe an alert. Hashes its attribution via
     /// [`Self::hash_divector`], increments the bucket counter,
     /// returns the bucket hash + the cluster decision.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn observe<K, const D: usize>(
         &mut self,
         record: &AlertRecord<K, D>,
@@ -248,7 +248,7 @@ impl LshAlertClusterer {
     /// Switched from a per-dim hex `String` to a fixed-size
     /// integer key to drop the per-observe heap allocation.
     /// The seed mix prevents a black-box attacker from porting an
-    /// offline-precomputed collision set across clusterers — see
+    /// offline-precomputed collision set across clusterers - see
     /// the module-level "Adversarial-resistance disclaimer".
     #[must_use]
     pub fn hash_divector(&self, di: &DiVector) -> u128 {
@@ -435,7 +435,7 @@ mod tests {
     #[test]
     fn seed_rotates_per_instance() {
         // Two clusterers built with identical params must hash the
-        // same input to different keys — defends against offline
+        // same input to different keys - defends against offline
         // collision crafting on a fixed seed.
         let c1 = LshAlertClusterer::new(16, 4.0).unwrap();
         let c2 = LshAlertClusterer::new(16, 4.0).unwrap();

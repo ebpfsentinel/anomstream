@@ -4,11 +4,11 @@
 //!
 //! Runs three phases:
 //!
-//! 1. Baseline — tight noisy cluster around the origin. No CUSUM fire.
-//! 2. Drift  — distribution shifts wider. CUSUM fires Upward on the
+//! 1. Baseline - tight noisy cluster around the origin. No CUSUM fire.
+//! 2. Drift - distribution shifts wider. CUSUM fires Upward on the
 //!    sustained score-mean climb, *before* individual points would
 //!    trigger the TRCF 3σ gate.
-//! 3. Recovery — we reset the CUSUM, feed baseline again, and show
+//! 3. Recovery - we reset the CUSUM, feed baseline again, and show
 //!    the detector is ready to catch the next shift cleanly.
 //!
 //! Run with `cargo run --example meta_drift`.
@@ -56,7 +56,7 @@ fn main() -> Result<(), RcfError> {
     })?;
     let mut rng = ChaCha8Rng::seed_from_u64(7);
 
-    // Warm the forest WITHOUT attaching CUSUM — a real agent would
+    // Warm the forest WITHOUT attaching CUSUM - a real agent would
     // either bootstrap from a TSDB or resume from a snapshot, so the
     // meta-drift detector never sees the cold-start spike train.
     for _ in 0..512 {

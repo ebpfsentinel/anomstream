@@ -4,7 +4,7 @@
 //! Mimics the restart path of a long-running streaming agent: pull
 //! the last few hours of feature vectors from the upstream time-series
 //! store, hand them to `ThresholdedForest::bootstrap`, and the
-//! detector is immediately ready for live traffic — no warmup gap.
+//! detector is immediately ready for live traffic - no warmup gap.
 //!
 //! Run with `cargo run --example bootstrap`.
 

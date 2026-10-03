@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Demonstrates pinning [`mimalloc`] as the global allocator —
+//! Demonstrates pinning [`mimalloc`] as the global allocator -
 //! a one-line change in the caller's `main.rs` that frees a few
 //! per cent on every `update`/`score` (most visible on
 //! `attribution`, where the per-tree allocations dominate).
@@ -15,7 +15,7 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() -> Result<(), RcfError> {
-    // Same shape as `examples/quickstart.rs` — only the global
+    // Same shape as `examples/quickstart.rs` - only the global
     // allocator differs.
     let mut forest = ForestBuilder::<4>::new()
         .num_trees(50)

@@ -95,7 +95,7 @@ fn score_many_matches_individual_calls() {
         let individual: f64 = f.score(p).unwrap().into();
         let from_bulk: f64 = bulk[i].into();
         // Under rayon, parallel scoring may reorder floating
-        // accumulations by a ULP — match the tolerance used by
+        // accumulations by a ULP - match the tolerance used by
         // `attribution_many_output_matches_per_point`.
         let delta = (individual - from_bulk).abs();
         assert!(
@@ -115,7 +115,7 @@ fn attribution_many_output_matches_per_point() {
         assert_eq!(di.dim(), 4);
         let single = f.attribution(&probes[i]).unwrap();
         // Under rayon, parallel attribution may reorder floating
-        // accumulations by a ULP — 1e-10 is orders of magnitude
+        // accumulations by a ULP - 1e-10 is orders of magnitude
         // below any observable signal.
         for d in 0..4 {
             let delta = (di.per_dim_total(d) - single.per_dim_total(d)).abs();
@@ -147,7 +147,7 @@ fn score_many_early_term_returns_early_term_scores() {
 fn score_many_empty_batch() {
     let f = trained();
     let out = f.score_many(&[]).unwrap();
-    assert!(out.is_empty());
+    assert_eq!(out.len(), 0);
 }
 
 #[test]

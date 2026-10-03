@@ -3,9 +3,9 @@
 //!
 //! Asserts:
 //!
-//! 1. Clearly-in-baseline point triggers early stop — `early_stopped`
+//! 1. Clearly-in-baseline point triggers early stop - `early_stopped`
 //!    `true` and `trees_evaluated < trees_available`.
-//! 2. Clearly-anomalous point also triggers early stop — the
+//! 2. Clearly-anomalous point also triggers early stop - the
 //!    per-tree scores concentrate tightly above the baseline.
 //! 3. Early-term result is close to the full-ensemble answer on
 //!    obvious points (relative error under `confidence_threshold`).
@@ -45,7 +45,7 @@ fn train() -> anomstream_core::RandomCutForest<4> {
 fn baseline_point_stops_early_with_loose_threshold() {
     // A relaxed 10% relative-stderr threshold stops early on the
     // obvious baseline case. The default 5% threshold may need the
-    // full ensemble on forests with higher per-tree variance — that
+    // full ensemble on forests with higher per-tree variance - that
     // is the correct behaviour; this test exercises the mechanism.
     let f = train();
     let cfg = EarlyTermConfig {

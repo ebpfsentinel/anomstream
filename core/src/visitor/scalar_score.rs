@@ -1,4 +1,4 @@
-//! Scalar anomaly score visitor — collusive displacement per Guha
+//! Scalar anomaly score visitor - collusive displacement per Guha
 //! et al. (2016) §3.
 //!
 //! Walks the path from the root to the leaf matching the queried
@@ -24,7 +24,7 @@ use crate::visitor::scoring::{damp, normalizer, score_seen, score_unseen};
 /// Visitor that produces a non-negative scalar [`AnomalyScore`].
 ///
 /// `total_mass` is the number of points the *whole tree* holds (the
-/// root's mass) — the [`crate::RandomCutForest`] reads it from its
+/// root's mass) - the [`crate::RandomCutForest`] reads it from its
 /// trees and forwards it to every per-tree visitor.
 ///
 /// # Examples
@@ -92,7 +92,7 @@ impl<const D: usize> Visitor<D> for ScalarScoreVisitor {
 
     #[inline]
     fn accept_leaf(&mut self, depth: usize, mass: u64, _point_idx: usize) {
-        // The queried point matched this leaf — contribute as a
+        // The queried point matched this leaf - contribute as a
         // "seen" point (no isolation probability at the leaf).
         self.accumulated += score_seen(depth, mass) * damp(mass, self.total_mass);
     }

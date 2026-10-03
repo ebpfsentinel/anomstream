@@ -6,7 +6,7 @@
 //! `1.5` (caller may override via the first CLI argument).
 //!
 //! Dimensionality is fixed at compile time via the [`DIM`] constant
-//! (default `4`) — every input row must contain exactly `DIM`
+//! (default `4`) - every input row must contain exactly `DIM`
 //! comma-separated floats. Edit the constant and rebuild to ingest
 //! a different feature width; the const-generic [`ForestBuilder`]
 //! pins it at the type level so there is no runtime dim parameter.

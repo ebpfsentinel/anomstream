@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::cast_precision_loss)]
-//! Integration coverage for shadow-forest drift recovery — pins
+//! Integration coverage for shadow-forest drift recovery - pins
 //! the lifecycle: trigger → shadow spawn → warmup → atomic swap →
 //! back to idle. Paired with the unit tests in
 //! `src/drift_aware.rs` which exercise the state machine in
@@ -31,12 +31,12 @@ fn shadow_lifecycle_on_explicit_drift_trigger() {
     }
     assert!(!detector.is_recovering());
 
-    // Fire drift trigger — shadow spawns.
+    // Fire drift trigger - shadow spawns.
     assert!(detector.on_drift().unwrap());
     assert!(detector.is_recovering());
     assert_eq!(detector.shadow_progress(), 0);
 
-    // Feed warmup-sized stream past the threshold — swap must
+    // Feed warmup-sized stream past the threshold - swap must
     // land and the shadow slot must go back to empty.
     for i in 0..70 {
         let v = f64::from(i) * 0.01;
@@ -59,7 +59,7 @@ fn repeated_on_drift_calls_during_recovery_are_nop() {
     }
     assert!(detector.on_drift().unwrap());
     // Subsequent triggers while a shadow is still warming must
-    // not spawn a new shadow — they return false.
+    // not spawn a new shadow - they return false.
     for _ in 0..5 {
         assert!(!detector.on_drift().unwrap());
     }
@@ -97,7 +97,7 @@ fn abort_shadow_preserves_primary() {
 #[test]
 fn adwin_triggered_end_to_end_pipeline() {
     // End-to-end: ADWIN on the score stream decides when to
-    // trigger `on_drift`. Verifies the public API composes — not
+    // trigger `on_drift`. Verifies the public API composes - not
     // a quality claim on ADWIN's detection accuracy.
     let cfg = DriftRecoveryConfig {
         shadow_warmup: 64,
@@ -113,7 +113,7 @@ fn adwin_triggered_end_to_end_pipeline() {
         let s = detector.score(&p).unwrap();
         let _ = adwin.update(f64::from(s));
     }
-    // Regime shift — trigger explicitly on the first post-shift
+    // Regime shift - trigger explicitly on the first post-shift
     // score (prod would route ADWIN's fire here; the test pins
     // the wrapper's contract regardless of ADWIN's per-seed
     // sensitivity on tiny synthetic streams).

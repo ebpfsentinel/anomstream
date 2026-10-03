@@ -1,4 +1,4 @@
-//! Space-Saving — deterministic top-K heavy hitters in `O(K)`
+//! Space-Saving - deterministic top-K heavy hitters in `O(K)`
 //! memory.
 //!
 //! Maintains at most `K` monitored keys with `(estimate, error)`
@@ -17,9 +17,9 @@
 //! - Every key with true frequency `> N/K` is retained.
 //! - `estimate(x) − error(x) ≤ true_count(x) ≤ estimate(x)`.
 //!
-//! Memory is `O(K)` — typical `K = 128` costs ≈ 4 KiB for
+//! Memory is `O(K)` - typical `K = 128` costs ≈ 4 KiB for
 //! 16-byte keys (IPv6 addresses / flow-hash tuples). Complements
-//! [`crate::CountMinSketch`] — where CMS is probabilistic per-key
+//! [`crate::CountMinSketch`] - where CMS is probabilistic per-key
 //! frequency, Space-Saving is deterministic top-K under a fixed
 //! memory cap.
 //!
@@ -45,7 +45,7 @@ use std::collections::HashMap;
 
 use crate::error::{RcfError, RcfResult};
 
-/// Default capacity — tracks 128 heavy hitters, ~4 KiB for
+/// Default capacity - tracks 128 heavy hitters, ~4 KiB for
 /// 16-byte keys.
 pub const DEFAULT_CAPACITY: usize = 128;
 
@@ -104,11 +104,11 @@ pub struct SpaceSaving<K>
 where
     K: Hash + Eq + Clone,
 {
-    /// Bounded table — at most `capacity` entries.
+    /// Bounded table - at most `capacity` entries.
     counts: HashMap<K, HeavyHitterEntry>,
     /// Maximum `counts` length.
     capacity: usize,
-    /// Total observations — ops signal, also the divisor of the
+    /// Total observations - ops signal, also the divisor of the
     /// `N/K` frequency guarantee.
     total: u64,
 }
@@ -135,11 +135,11 @@ where
         })
     }
 
-    /// Default tracker — `capacity = 128`.
+    /// Default tracker - `capacity = 128`.
     ///
     /// # Errors
     ///
-    /// Never in practice — [`DEFAULT_CAPACITY`] is a positive
+    /// Never in practice - [`DEFAULT_CAPACITY`] is a positive
     /// compile-time constant.
     pub fn with_default_capacity() -> RcfResult<Self> {
         Self::new(DEFAULT_CAPACITY)
@@ -163,7 +163,7 @@ where
         self.counts.is_empty()
     }
 
-    /// Total observations — sum of every [`Self::observe`] weight.
+    /// Total observations - sum of every [`Self::observe`] weight.
     #[must_use]
     pub fn total(&self) -> u64 {
         self.total
@@ -185,7 +185,7 @@ where
         self.observe_weighted(key, 1);
     }
 
-    /// Ingest `key` with caller-supplied `weight` — byte-count
+    /// Ingest `key` with caller-supplied `weight` - byte-count
     /// heavy hitters in network-security workloads (per-packet bytes, not
     /// just packet counts).
     #[inline]
@@ -211,7 +211,7 @@ where
             return;
         }
 
-        // Table full — evict current minimum, reinsert `key` with
+        // Table full - evict current minimum, reinsert `key` with
         // `estimate = min.estimate + weight` and `error = min.estimate`.
         if let Some((min_key, min_entry)) = self.find_min() {
             self.counts.remove(&min_key);
@@ -231,7 +231,7 @@ where
         self.counts.get(key).copied()
     }
 
-    /// Ranked top-`n` snapshot — sorted by descending estimate.
+    /// Ranked top-`n` snapshot - sorted by descending estimate.
     /// `n` is clamped to [`Self::len`].
     #[must_use]
     pub fn top_k(&self, n: usize) -> Vec<HeavyHitter<K>> {
@@ -265,7 +265,7 @@ where
     }
 
     /// `O(K)` linear scan for the minimum-estimate entry. Returns
-    /// `None` when the table is empty — callers on the evict path
+    /// `None` when the table is empty - callers on the evict path
     /// have already confirmed non-emptiness, so `None` is treated
     /// as a no-op insert.
     fn find_min(&self) -> Option<(K, HeavyHitterEntry)> {

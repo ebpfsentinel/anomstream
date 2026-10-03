@@ -18,7 +18,7 @@ fn main() -> Result<(), RcfError> {
         .seed(2026)
         .build()?;
 
-    // Warm phase — a clean periodic baseline (period 16 samples).
+    // Warm phase - a clean periodic baseline (period 16 samples).
     let mut t = 0.0_f64;
     for _ in 0..WARM {
         let v = (t * 0.4).sin();
@@ -26,7 +26,7 @@ fn main() -> Result<(), RcfError> {
         t += 1.0;
     }
 
-    // Eval phase — same baseline with three injected anomalies at
+    // Eval phase - same baseline with three injected anomalies at
     // known positions. For each position we score the value that
     // *would* land there next, so the report shows the contextual
     // score without mutating the forest.

@@ -1,9 +1,9 @@
-//! Shadow-forest drift recovery — wraps a live
+//! Shadow-forest drift recovery - wraps a live
 //! [`crate::RandomCutForest`] plus an optional shadow that warms
 //! on the post-drift stream, then atomically replaces the primary
 //! once the shadow has seen enough observations.
 //!
-//! Pairs with any upstream drift trigger — [`crate::AdwinDetector`]
+//! Pairs with any upstream drift trigger - [`crate::AdwinDetector`]
 //! on the score stream, [`crate::FeatureDriftDetector`] PSI alert
 //! level, or [`crate::MetaDriftDetector`] CUSUM fire. The trigger
 //! logic lives outside this type; callers call
@@ -65,7 +65,7 @@ impl Default for DriftRecoveryConfig {
     }
 }
 
-/// Stateful shadow forest — accumulates post-drift observations
+/// Stateful shadow forest - accumulates post-drift observations
 /// alongside the primary, then replaces it on warmup completion.
 #[derive(Debug)]
 struct ShadowState<const D: usize> {
@@ -77,16 +77,16 @@ struct ShadowState<const D: usize> {
 
 /// Forest wrapper that handles drift recovery via a shadow swap.
 ///
-/// The primary forest handles every `score` / `score_many` call —
+/// The primary forest handles every `score` / `score_many` call -
 /// this type is a drop-in facade for the hot-path. Drift recovery
 /// is entirely opt-in through [`Self::on_drift`]; without a
 /// trigger call the wrapper behaves exactly like a bare
 /// [`RandomCutForest`].
 #[derive(Debug)]
 pub struct DriftAwareForest<const D: usize> {
-    /// Live forest — every `score` reads from here.
+    /// Live forest - every `score` reads from here.
     primary: RandomCutForest<D>,
-    /// Optional shadow — `Some` between `on_drift` and the swap.
+    /// Optional shadow - `Some` between `on_drift` and the swap.
     shadow: Option<ShadowState<D>>,
     /// Observations the current primary has ingested.
     primary_age: u64,
@@ -94,7 +94,7 @@ pub struct DriftAwareForest<const D: usize> {
     builder: ForestBuilder<D>,
     /// Recovery policy.
     config: DriftRecoveryConfig,
-    /// Lifetime count of completed shadow swaps — observability.
+    /// Lifetime count of completed shadow swaps - observability.
     swaps: u64,
     /// Observability sink.
     metrics: Arc<dyn MetricsSink>,
@@ -121,7 +121,7 @@ impl<const D: usize> DriftAwareForest<D> {
         })
     }
 
-    /// Install a metrics sink — `on_drift` / swap emit counters,
+    /// Install a metrics sink - `on_drift` / swap emit counters,
     /// shadow activity emits a gauge.
     #[must_use]
     pub fn with_metrics_sink(mut self, sink: Arc<dyn MetricsSink>) -> Self {
@@ -192,7 +192,7 @@ impl<const D: usize> DriftAwareForest<D> {
                     shadow.seen = shadow.seen.saturating_add(1);
                 }
                 Err(e) => {
-                    // Drop the shadow — primary path must stay
+                    // Drop the shadow - primary path must stay
                     // clean. The caller can re-arm via on_drift.
                     self.shadow = None;
                     self.metrics
@@ -211,8 +211,8 @@ impl<const D: usize> DriftAwareForest<D> {
         Ok(())
     }
 
-    /// Score `point` against the primary. Shadow is not consulted
-    /// — scoring stays on the stable baseline until the swap lands.
+    /// Score `point` against the primary. Shadow is not consulted -
+    /// scoring stays on the stable baseline until the swap lands.
     ///
     /// # Errors
     ///
@@ -267,7 +267,7 @@ impl<const D: usize> DriftAwareForest<D> {
     }
 
     /// Promote shadow → primary. Callers never invoke this
-    /// directly — [`Self::update`] handles the swap once the
+    /// directly - [`Self::update`] handles the swap once the
     /// shadow reaches `shadow_warmup`.
     fn swap_shadow_into_primary(&mut self) {
         if let Some(shadow) = self.shadow.take() {
@@ -316,7 +316,7 @@ mod tests {
             },
         )
         .unwrap();
-        // Only a handful of updates — below min_primary_age → no-op.
+        // Only a handful of updates - below min_primary_age → no-op.
         for _ in 0..10 {
             d.update([0.1, 0.2]).unwrap();
         }

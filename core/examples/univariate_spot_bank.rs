@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::cast_precision_loss)]
-//! Demo of the univariate SPOT detector bank + Fisher's method —
+//! Demo of the univariate SPOT detector bank + Fisher's method -
 //! Siffer KDD 2017. Fits one [`PotDetector`] per feature dim on a
 //! warm-phase corpus, freezes the baseline, then scores eval
 //! points through the bank and combines the per-dim p-values into
@@ -19,7 +19,7 @@ fn main() {
     // Build one detector per feature dim.
     let mut bank: Vec<PotDetector> = (0..DIM).map(|_| PotDetector::default_spot()).collect();
 
-    // Warm phase — each dim draws from its own distribution.
+    // Warm phase - each dim draws from its own distribution.
     let mut rng = simple_lcg(0x_C0DE_CAFE);
     for _ in 0..2_000 {
         let values = sample(&mut rng);
@@ -31,7 +31,7 @@ fn main() {
         d.freeze_baseline().unwrap();
     }
     // Continue feeding baseline points past freeze so peaks
-    // accumulate against the frozen `u` — enough for the GPD MoM
+    // accumulate against the frozen `u` - enough for the GPD MoM
     // fit to kick in (MIN_PEAKS_FOR_FIT = 16 peaks → with q=0.98
     // need ≈ 800 post-freeze samples per dim on average).
     for _ in 0..2_000 {

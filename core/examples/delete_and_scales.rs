@@ -47,7 +47,7 @@ fn main() -> Result<(), RcfError> {
     println!("== retraction via delete(idx) ==");
     println!("  removed_from_any_tree = {removed}");
 
-    // Same probe should score roughly as before the insert —
+    // Same probe should score roughly as before the insert -
     // retraction undid the contribution of that single point.
     let after = detector.score_only(&[50_000.0, 0.5, 4.0])?;
     println!("  post-delete probe grade = {:.3}", after.grade());

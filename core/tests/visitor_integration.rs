@@ -65,7 +65,7 @@ fn uniform_dataset_yields_low_scores() {
     );
 }
 
-/// Clustered dataset — a far outlier *not* in the tree scores
+/// Clustered dataset - a far outlier *not* in the tree scores
 /// significantly higher than cluster members.
 #[test]
 fn outlier_scores_above_cluster_mean() {
@@ -92,7 +92,7 @@ fn outlier_scores_above_cluster_mean() {
     );
 }
 
-/// 16-dim dataset with anomaly only on dim 5 — attribution argmax
+/// 16-dim dataset with anomaly only on dim 5 - attribution argmax
 /// should pick dim 5.
 #[test]
 fn single_dim_anomaly_attribution_argmax() {
@@ -124,7 +124,7 @@ fn single_dim_anomaly_attribution_argmax() {
 }
 
 /// Sanity: the [`PointAccessor`] impl on `Vec<[f64; D]>` is what we
-/// actually use throughout these tests — make sure the public API
+/// actually use throughout these tests - make sure the public API
 /// surface lines up.
 #[test]
 fn point_accessor_impl_is_visible() {

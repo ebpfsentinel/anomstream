@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Tenant similarity index — identify tenants whose TRCF score
+//! Tenant similarity index - identify tenants whose TRCF score
 //! distributions overlap. Useful for `SaaS` deployments with many
 //! tenants: group similar ones for tiered alerting policies or
 //! shared calibration.
@@ -21,7 +21,7 @@ fn main() -> Result<(), RcfError> {
     })?;
     let mut rng = ChaCha8Rng::seed_from_u64(2026);
 
-    // Cluster 1: web front-ends — low packet rate, low entropy.
+    // Cluster 1: web front-ends - low packet rate, low entropy.
     for tenant in ["web-a", "web-b", "web-c"] {
         for _ in 0..128 {
             pool.process(
@@ -30,7 +30,7 @@ fn main() -> Result<(), RcfError> {
             )?;
         }
     }
-    // Cluster 2: log shippers — high packet rate, high entropy.
+    // Cluster 2: log shippers - high packet rate, high entropy.
     for tenant in ["log-x", "log-y"] {
         for _ in 0..128 {
             pool.process(

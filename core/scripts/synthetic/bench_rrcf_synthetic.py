@@ -3,11 +3,11 @@
 
 Reports:
 
-- `updates_per_s`  — forest-insert throughput
-- `scores_per_s`   — scoring throughput (`codisp` output)
-- `auc`            — ROC-AUC on the `label` column vs codisp score
+- `updates_per_s` - forest-insert throughput
+- `scores_per_s` - scoring throughput (`codisp` output)
+- `auc` - ROC-AUC on the `label` column vs codisp score
 
-Not benchmark-grade — best-effort single-process wall-clock timing.
+Not benchmark-grade - best-effort single-process wall-clock timing.
 Use `time.perf_counter_ns()` so the resolution is well below the
 per-op cost.
 

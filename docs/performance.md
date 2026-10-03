@@ -6,16 +6,16 @@ numbers come from the NAB / TSB-AD-M test corpora.
 
 ## Contents
 
-1. [Methodology](#methodology) — harnesses, hardware, caveats
-2. [Forest hot path](#forest-hot-path) — single-probe, batch, early-term, delete
-3. [Forest design decisions](#forest-design-decisions) — explored / shipped optimisations
-4. [Forest variants](#forest-variants) — dynamic-dim, drift-aware, shingled, thresholded
-5. [Explainability](#explainability) — attribution, confidence, SAGE, persistence
-6. [Companion primitives](#companion-primitives) — sketches, quantiles, per-feature, drift
-7. [SOC / triage layer](#soc--triage-layer) — clustering, calibration, tenant pool
-8. [Hot-path ingress](#hot-path-ingress) — sampler, rate cap, channel
+1. [Methodology](#methodology) - harnesses, hardware, caveats
+2. [Forest hot path](#forest-hot-path) - single-probe, batch, early-term, delete
+3. [Forest design decisions](#forest-design-decisions) - explored / shipped optimisations
+4. [Forest variants](#forest-variants) - dynamic-dim, drift-aware, shingled, thresholded
+5. [Explainability](#explainability) - attribution, confidence, SAGE, persistence
+6. [Companion primitives](#companion-primitives) - sketches, quantiles, per-feature, drift
+7. [SOC / triage layer](#soc--triage-layer) - clustering, calibration, tenant pool
+8. [Hot-path ingress](#hot-path-ingress) - sampler, rate cap, channel
 9. [Matrix profile](#matrix-profile)
-10. [Detection quality](#detection-quality) — NAB, TSB-AD-M, external baselines
+10. [Detection quality](#detection-quality) - NAB, TSB-AD-M, external baselines
 
 ---
 
@@ -52,15 +52,15 @@ Criterion HTML reports land in `target/criterion/`.
 
 ### Caveats
 
-- **Cross-group variance** — `b.iter()` mutates a persistent forest and
+- **Cross-group variance** - `b.iter()` mutates a persistent forest and
   Criterion picks batch sizes per-op, so reservoir state drifts across
   groups. Trust ratios _within_ a group.
-- **Cross-session variance** — numbers here are warm-CPU (`performance`
+- **Cross-session variance** - numbers here are warm-CPU (`performance`
   governor). A cool / powersave session ran the single-probe hot path
   25-30 % faster. Ratios are stable; absolutes are not.
-- **Parallel ceiling** — `score_many` plateaus at ~6× on 14 cores,
+- **Parallel ceiling** - `score_many` plateaus at ~6× on 14 cores,
   memory-bandwidth-bound once the working set spills L3.
-- **Fan-out threshold** — single-probe ops below `num_trees × D = 2048`
+- **Fan-out threshold** - single-probe ops below `num_trees × D = 2048`
   run the ensemble serially even with the `parallel` feature on; see
   [Ensemble fan-out threshold](#ensemble-fan-out-threshold). Absolute
   single-probe numbers below predate that change.
@@ -94,15 +94,15 @@ Across shapes:
 
 | Config           | `forest_update` | `forest_score` | `forest_attribution` |
 | ---------------- | --------------- | -------------- | -------------------- |
-| `(50, 128, 16)`  | 29 µs           | 25 µs          | —                    |
+| `(50, 128, 16)`  | 29 µs           | 25 µs          | - |
 | `(100, 256, 4)`  | 29 µs           | 30 µs          | 35 µs                |
 | `(100, 256, 16)` | 34 µs           | 34 µs          | 45 µs                |
 | `(100, 256, 64)` | 104 µs          | 42 µs          | 88 µs                |
-| `(200, 512, 16)` | 55 µs           | 52 µs          | —                    |
+| `(200, 512, 16)` | 55 µs           | 52 µs          | - |
 
 ### Ensemble fan-out threshold
 
-Per-tree work is small — roughly `D × depth`, a few hundred nanoseconds
+Per-tree work is small - roughly `D × depth`, a few hundred nanoseconds
 at the AWS-default shape. That is below rayon's task-dispatch floor, so
 splitting a *single* ensemble walk across workers used to cost more than
 it saved. The fan-out is now gated on estimated work (`num_trees × D`,
@@ -126,15 +126,15 @@ The two `parallel`-arm rows run identical code in both columns and serve
 as the control group: they moved ≤ 8 %, which sets the noise floor for
 the ratios above.
 
-**Consumer shape** — the eBPFsentinel Enterprise RCF detector runs
+**Consumer shape** - the eBPFsentinel Enterprise RCF detector runs
 `D = 14` at the default 100 trees / 256 samples = 1400 units, so it takes
 the serial arm and picks up the win without any config change. It calls
 only single-probe `score` / `update` (no batch entry point), and keeps
 the `parallel` feature enabled so that raising `num_trees` past the
-threshold restores the fan-out — which a compile-time feature flip could
+threshold restores the fan-out - which a compile-time feature flip could
 not do.
 
-**Open calibration** — nothing is measured between 1600 and 3200 units,
+**Open calibration** - nothing is measured between 1600 and 3200 units,
 so `2048` is a midpoint choice rather than a measured optimum; shapes
 landing in that band (150 trees at `D = 14` = 2100) may pick the slower
 arm by a small margin. The historical 3200 sample also varies
@@ -145,7 +145,7 @@ machine to be meaningful.
 
 This affects only per-tree fan-out. Batch entry points (`score_many`,
 `attribution_many`, `score_codisp_stateless_many`) parallelise across
-*points* — each task is a whole ensemble walk, so the fan-out always
+*points* - each task is a whole ensemble walk, so the fan-out always
 pays and is never gated.
 
 Ratios above are trustworthy (same machine, back-to-back, control group
@@ -164,10 +164,10 @@ Parallel `score_many` vs serial loop (`D=16`):
 | 512   | 3.73 ms      | 17.1 ms | 4.6×    |
 | 4096  | 28.6 ms      | 137 ms  | 4.8×    |
 
-Caps at ~6× rayon speedup — past L3 the per-probe working set thrashes
+Caps at ~6× rayon speedup - past L3 the per-probe working set thrashes
 L1/L2 and workers contend on the LLC→DRAM channel.
 
-**Codisp variants** — probe-based (`score_codisp_many`) pre-inserts
+**Codisp variants** - probe-based (`score_codisp_many`) pre-inserts
 probes, shares the leaf→root walk, fans out across trees:
 
 | Batch K | `score_codisp_many` | `score_codisp` loop | Speedup |
@@ -175,7 +175,7 @@ probes, shares the leaf→root walk, fans out across trees:
 | 16      | 1.76 ms             | 2.39 ms             | 1.4×    |
 | 64      | 6.59 ms             | 9.58 ms             | 1.5×    |
 
-Gain caps at ~1.5× — insert/delete mutation still scales `K × trees`.
+Gain caps at ~1.5× - insert/delete mutation still scales `K × trees`.
 For frozen-baseline batches at any size prefer **`score_codisp_stateless_many`**
 (no reservoir mutation, no `O(K)` saturation):
 
@@ -188,7 +188,7 @@ For frozen-baseline batches at any size prefer **`score_codisp_stateless_many`**
 
 Stateless is ~1.1× faster than non-mutating `score()` single-probe (skips
 EMA/reservoir update) and **~21× faster than mutating batched codisp**
-(312 µs vs 6.59 ms @ k=64) — which is why NAB eval dropped 12.6 s → 1.09 s
+(312 µs vs 6.59 ms @ k=64) - which is why NAB eval dropped 12.6 s → 1.09 s
 after the switch.
 
 ### Early termination
@@ -205,7 +205,7 @@ Loose threshold → **6.6×** on baseline-dominated traffic; a tight
 threshold rarely short-circuits and matches a full `score`.
 
 > The `score` row was previously labelled "parallel ensemble". At this
-> shape the ensemble walk now runs serially — see
+> shape the ensemble walk now runs serially - see
 > [Ensemble fan-out threshold](#ensemble-fan-out-threshold).
 
 ### Delete
@@ -214,7 +214,7 @@ threshold rarely short-circuits and matches a full `score`.
 | ------------------------------------------ | ------ |
 | `update_indexed + delete` `(100, 256, 16)` | 115 µs |
 
-~3.4× an update — bbox recompute up the path + arena slot release.
+~3.4× an update - bbox recompute up the path + arena slot release.
 Pair with `update_indexed` for probe workflows; otherwise rely on the
 reservoir's cheaper amortised eviction.
 
@@ -224,26 +224,26 @@ reservoir's cheaper amortised eviction.
 
 Optimisations explored against the ~6× memory-bandwidth plateau.
 
-### Cache-aware probe reordering — reverted
+### Cache-aware probe reordering - reverted
 
 A `score_many_locality_sorted` variant quantised leading dims into a
 Morton-lite key and sorted batches before dispatch. At `k=1024, D=16`
-(correlated cluster): plain 5.10 ms vs sorted 5.69 ms — the `O(N log N)`
+(correlated cluster): plain 5.10 ms vs sorted 5.69 ms - the `O(N log N)`
 sort + double-gather beat the locality gain on uniform batches. Reverted;
 callers can re-order their own batches if their workload benefits.
 
-### Packed cut (`u8` dim + `f32` value) — shipped, opt-in
+### Packed cut (`u8` dim + `f32` value) - shipped, opt-in
 
 Feature `packed-cut` (off by default) halves the per-internal-node cut
 footprint (16 B → 8 B) for tighter L1 fit; caps `D ≤ 256` and quantises
 the cut coordinate to `f32`.
 
 - `f32` rounding can push a value sampled in `[lo, hi)` onto `hi` and
-  leave the augmented point un-isolated — the sampler pins it back inside
+  leave the augmented point un-isolated - the sampler pins it back inside
   `[lo, hi)` (`bounding_box::narrow_into_range`).
 - Points closer than an `f32` ULP on every dim (un-isolable at the stored
   resolution) collapse onto one leaf as duplicates.
-- Snapshots are wire-incompatible with default builds — a version-prefix
+- Snapshots are wire-incompatible with default builds - a version-prefix
   flag makes either build reject the other's payload.
 
 **AUC regression** (real datasets, default `f64` vs packed `f32`,
@@ -255,7 +255,7 @@ identical seeds):
 | TSB-AD-M (`dim ≤ 128`)                     | 113 files | **0.0015** | 0.012     | 89/113 (79 %) |
 
 Deltas are two-signed and the worst single-file swing (0.012 VUS-PR) sits
-inside the metric's own run-to-run variance — packed-cut is
+inside the metric's own run-to-run variance - packed-cut is
 **AUC-neutral**. Enable with `--features packed-cut` (or
 `anomstream/packed-cut` via the façade) when cut-arena L1 footprint
 matters more than exact `f64` parity.
@@ -287,7 +287,7 @@ ops on the embedded vector.
 
 ### Thresholded (TRCF pipeline)
 
-`ThresholdedForest::process` — update + score + EMA + verdict per point:
+`ThresholdedForest::process` - update + score + EMA + verdict per point:
 
 | Workload                               | Time  |
 | -------------------------------------- | ----- |
@@ -311,11 +311,11 @@ ops on the embedded vector.
 | `score_with_confidence` D=16                 | 58.4 µs  |
 | `bootstrap` 4096 pts, `(50, 128)`            | 187.8 ms |
 
-- `forensic_baseline` ≈ `O(live_points × D)` Welford sweep — linear in
+- `forensic_baseline` ≈ `O(live_points × D)` Welford sweep - linear in
   `sample_size`, ~1.3× over D 4→16.
 - `group_scores` ≈ attribution + O(D) post-reduce.
 - `attribution_stability` ≈ 1.2× attribution; `score_with_confidence`
-  ≈ 1.7× score (non-parallel — needs per-tree outputs in order).
+  ≈ 1.7× score (non-parallel - needs per-tree outputs in order).
 - `bootstrap` ~22 k pts/s on the reduced forest, linear in point count.
 
 ### SAGE Shapley attribution
@@ -324,7 +324,7 @@ ops on the embedded vector.
 | ------------------------------------------------ | ------- |
 | `SageEstimator::explain` D=16, K=64, `(50, 128)` | 40.3 ms |
 
-`K · D × forest_score` — SOC triage / forensic replay, not per-alert.
+`K · D × forest_score` - SOC triage / forensic replay, not per-alert.
 
 ### Persistence roundtrip
 
@@ -403,7 +403,7 @@ ScoreHistogram is a bin-index + increment.
 | `FeatureDriftDetector::psi()` D=16/10bin   | 1.17 µs | query-only |
 | `AdwinDetector::update` cap=4096           | 26.3 µs | ~38 k/s    |
 
-ADWIN's `O(N)` prefix-sum dominates at cap=4096 — **not** per-packet
+ADWIN's `O(N)` prefix-sum dominates at cap=4096 - **not** per-packet
 material. Run it on the score stream (one update per alert) or use
 `MetaDriftDetector` (8 ns) instead.
 
@@ -428,7 +428,7 @@ material. Run it on the score stream (one update per alert) or use
 | `verify_audit_chain` 256 entries D=4              | 121 µs            | ~470 ns/entry       |
 
 - LSH `observe` (95 ns, zero-alloc) is ~8× faster than cosine
-  `AlertClusterer` at window=32 — prefer LSH at MSSP volume (>10k/min).
+  `AlertClusterer` at window=32 - prefer LSH at MSSP volume (>10k/min).
 - SPOT `p_value` ~5× faster than `record` (closed-form GPD survival on
   cached γ, σ); Platt `calibrate` is two floats + a σ.
 - `fisher_combine` ~5 ns/p-value (Kahan sum + χ² tail).
@@ -446,7 +446,7 @@ Each tenant `D=4` / `(50, 64)`, warmed 128 samples:
 
 `N=32→512` (16×): `similarity_matrix` (O(N²) parallel) ~16×,
 `score_across_tenants` (O(N)) 21×, `most_similar_top5` (O(N·log k)) 17×
-— rayon hides the quadratic until core saturation.
+- rayon hides the quadratic until core saturation.
 
 ---
 
@@ -476,7 +476,7 @@ Per-call overhead on the classifier hot path:
 
 ## Matrix profile
 
-`MatrixProfile::compute` — exact STOMP discord/motif, `O(n²)` time,
+`MatrixProfile::compute` - exact STOMP discord/motif, `O(n²)` time,
 `O(n)` memory:
 
 | Workload                                   | Time    |
@@ -487,7 +487,7 @@ Per-call overhead on the classifier hot path:
 | `discord_topk(5)` cached n=2048, window=64 | 27.8 µs |
 
 Scaling matches `O(n²)` (doubling n ≈ 4× cost); window affects only the
-seed column. `discord_topk` is trivial once cached — reuse the profile.
+seed column. `discord_topk` is trivial once cached - reuse the profile.
 Use as a forensic complement to `ShingledForest`: the online path flags a
 region, STOMP gives the exact discord inside it.
 
@@ -532,7 +532,7 @@ stateless (0.763) preserves the frozen baseline and runs 12× faster.
 - Longer embedding (+0.050) and warm-phase z-score (+0.018) help; RCF cuts
   are range-weighted, so un-normalised dims let one channel dominate.
 - EMA smoothing (α≈0.02, half-life ~35) cuts noise (+0.036).
-- Differencing regresses — NAB's signal is in absolute values.
+- Differencing regresses - NAB's signal is in absolute values.
 - TRCF-online collapses (0.72 → 0.32): the EMA threshold adapts up during
   multi-day windows. Frozen baseline is correct for NAB.
 - The naive `update→score→delete` hack (0.330) ranks the just-inserted
@@ -562,20 +562,20 @@ weighted by positive count:
 | Daphnet                | 1                 | 0.309     | 0.885            | **0.926**       | 0.944     |
 | GECCO                  | 1                 | 0.412     | 0.523            | **0.753**       | 0.594     |
 | GHL                    | 25                | 0.454     | 0.461            | **0.570**       | 0.419     |
-| OPPORTUNITY            | 8 (skipped D=248) | —         | —                | —               | 0.298     |
+| OPPORTUNITY            | 8 (skipped D=248) | - | - | - | 0.298     |
 | SWaT                   | 2                 | 0.282     | **0.825**        | 0.715           | 0.825     |
 | TAO                    | 13                | 0.451     | 0.453            | **0.487**       | 0.471     |
 | **aggregate weighted** | **192 / 200**     | 0.583     | **0.768**        | 0.751           | 0.753     |
 
-- `score()` — isolation depth, rayon-parallel, full scan; the hot-path
+- `score()` - isolation depth, rayon-parallel, full scan; the hot-path
   API. Floor pinned at 0.55 (regression guard, not a quality claim).
-- `score_codisp()` — probe-based, stride-capped to 50 k eval rows/file;
+- `score_codisp()` - probe-based, stride-capped to 50 k eval rows/file;
   leads aggregate **0.768** vs AWS Java 0.753.
-- `score_codisp_stateless()` — no mutation, full eval stream, preserves
+- `score_codisp_stateless()` - no mutation, full eval stream, preserves
   the frozen baseline at scale; **0.751**, within noise of AWS Java.
 
 Caveats: this is point-wise ROC-AUC; the official leaderboard ranks on
-**VUS-PR** (now in-crate, `examples/tsb_ad_m_eval.rs`). RCF is classical —
+**VUS-PR** (now in-crate, `examples/tsb_ad_m_eval.rs`). RCF is classical -
 transformer SOTA wins on heavy-physics datasets (SWaT, Daphnet, GECCO)
 where the signature is higher-order cross-channel; RCF stays competitive
 where per-dim statistical drift dominates (Genesis/SMAP/MSL/SVDB), closer
@@ -584,12 +584,12 @@ to eBPFsentinel's production feature mix.
 ### External baselines (synthetic)
 
 10k points, `D=16`, 1 % outliers, 30 % warm / 70 % eval, frozen baseline,
-5-seed variance (2026–2030), mean ± stddev (CV in parens):
+5-seed variance (2026-2030), mean ± stddev (CV in parens):
 
 | Impl                                        | Backend             | Updates/s            | Scores/s                | AUC       |
 | ------------------------------------------- | ------------------- | -------------------- | ----------------------- | --------- |
 | `anomstream-core` `score()` (1 seed)        | Rust, rayon         | **31 500**           | **197 900**             | 1.000     |
-| `anomstream-core` `score_codisp()` (1 seed) | Rust, parallel walk | —                    | 8 150                   | 1.000     |
+| `anomstream-core` `score_codisp()` (1 seed) | Rust, parallel walk | - | 8 150                   | 1.000     |
 | `anomstream-core` `score()` (5-seed)        | Rust, rayon         | 17 500 ± 1 240 (7 %) | 125 900 ± 1 840 (1.5 %) | 1.000 ± 0 |
 | `randomcutforest-java` 4.4.0                | JVM 26, cold        | 2 090 ± 134 (6 %)    | 8 870 ± 415 (5 %)       | 1.000 ± 0 |
 | `rrcf` 0.4.4                                | Python + NumPy      | 73 ± 3 (4 %)         | 94 150 ± 4 840 (5 %)    | 0.992 ± 0 |
@@ -600,7 +600,7 @@ to eBPFsentinel's production feature mix.
 - **Scores (fast path)**: sklearn edges `score()` by 8 % (~3σ); rrcf
   trails ~25 %, AWS Java ~14×.
 - **Scores (codisp)**: mutating per probe → ~8 k/s, ~25× slower than
-  `score()`; matches AWS Java / rrcf semantics — SOC triage, not hot path.
+  `score()`; matches AWS Java / rrcf semantics - SOC triage, not hot path.
 - **AUC**: identical within precision (0.992 rrcf, 1.000 others).
 
 Ratios are portable; absolute numbers vary with thermal state (an earlier

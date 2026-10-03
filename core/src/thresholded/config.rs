@@ -8,7 +8,7 @@
 //! | `z_factor` | Multiplier on the score stddev used to derive the threshold (`mean + z · stddev`). | `3.0` |
 //! | `score_decay` | EMA smoothing factor for the running mean/variance of the anomaly scores. | `0.01` |
 //! | `min_observations` | Samples required before the detector emits a non-warmup verdict. | `32` |
-//! | `min_threshold` | Absolute floor on the adaptive threshold — prevents a near-zero stddev from firing on trivial jitter. | `1.0` |
+//! | `min_threshold` | Absolute floor on the adaptive threshold - prevents a near-zero stddev from firing on trivial jitter. | `1.0` |
 //!
 //! The builder mirrors [`crate::ForestBuilder`] so forest and threshold
 //! parameters can be tuned side-by-side in one fluent chain.
@@ -19,14 +19,14 @@ use crate::config::ForestBuilder;
 use crate::error::{RcfError, RcfResult};
 use crate::thresholded::detector::ThresholdedForest;
 
-/// Default `z_factor` — 3 standard deviations above the running mean,
+/// Default `z_factor` - 3 standard deviations above the running mean,
 /// matching the AWS `SageMaker` RCF guidance ("scores beyond 3σ are
 /// considered anomalous"). Only meaningful under
 /// [`ThresholdMode::ZSigma`].
 pub const DEFAULT_Z_FACTOR: f64 = 3.0;
 
 /// Default streaming quantile used when
-/// [`ThresholdMode::Quantile`] is selected — `0.99` lets 1 % of
+/// [`ThresholdMode::Quantile`] is selected - `0.99` lets 1 % of
 /// scores cross the threshold in steady state, matching the typical
 /// SOC alert-rate budget.
 pub const DEFAULT_QUANTILE: f64 = 0.99;
@@ -47,7 +47,7 @@ pub const DEFAULT_MIN_THRESHOLD: f64 = 1.0;
 /// `μ + z·σ` form systematically over-flags during baseline calm
 /// periods and under-flags during drift. [`ThresholdMode::Quantile`]
 /// uses a streaming `TDigest` of the score distribution and thresholds
-/// on the chosen tail percentile — closer to the caller's actual
+/// on the chosen tail percentile - closer to the caller's actual
 /// alert-rate budget (e.g. `p = 0.99` ≈ 1 % firing rate).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -60,7 +60,7 @@ pub enum ThresholdMode {
         /// Multiplier on the EMA stddev.
         z_factor: f64,
     },
-    /// Streaming quantile threshold — `threshold = TDigest.quantile(p)`
+    /// Streaming quantile threshold - `threshold = TDigest.quantile(p)`
     /// of observed scores. Robust to the isolation-depth right-skew;
     /// calibrates directly on the caller's alert-rate budget. `p`
     /// must be in `(0, 1)`; typical values are `0.99` / `0.999`.
@@ -86,7 +86,7 @@ pub struct ThresholdedConfig {
     /// Multiplier on the score stddev used to derive the adaptive
     /// threshold when [`Self::threshold_mode`] is
     /// [`ThresholdMode::ZSigma`]. Kept as a top-level field for
-    /// back-compat — callers constructing via struct literal get
+    /// back-compat - callers constructing via struct literal get
     /// the legacy behaviour without opt-in. Ignored under
     /// [`ThresholdMode::Quantile`].
     pub z_factor: f64,
@@ -272,7 +272,7 @@ impl<const D: usize> ThresholdedForestBuilder<D> {
     }
 
     /// Override the threshold's z-factor. Implies
-    /// [`ThresholdMode::ZSigma`] — mutually exclusive with
+    /// [`ThresholdMode::ZSigma`] - mutually exclusive with
     /// [`Self::quantile_threshold`]; the last call wins.
     #[must_use]
     pub fn z_factor(mut self, z: f64) -> Self {
@@ -283,7 +283,7 @@ impl<const D: usize> ThresholdedForestBuilder<D> {
 
     /// Drive the threshold from a streaming quantile of the score
     /// distribution instead of the Gaussian `μ + z·σ`. `p` is the
-    /// target tail quantile — `0.99` budgets ~1 % alert rate in
+    /// target tail quantile - `0.99` budgets ~1 % alert rate in
     /// steady state, `0.999` ~0.1 %. Mutually exclusive with
     /// [`Self::z_factor`]; the last call wins.
     #[must_use]
@@ -332,7 +332,7 @@ impl<const D: usize> ThresholdedForestBuilder<D> {
     ///
     /// Propagates [`ForestBuilder::build`] errors and
     /// [`ThresholdedConfig::validate`] errors.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn build(self) -> RcfResult<ThresholdedForest<D>> {
         self.thresholded.validate()?;
         let forest = self.forest.build()?;

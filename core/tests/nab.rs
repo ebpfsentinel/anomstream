@@ -7,7 +7,7 @@
     clippy::cast_sign_loss,
     clippy::redundant_closure_for_method_calls
 )]
-//! Numenta Anomaly Benchmark (NAB) — detection-quality test on
+//! Numenta Anomaly Benchmark (NAB) - detection-quality test on
 //! real-world labeled streams.
 //!
 //! `#[ignore]` by default: NAB is a ~50 MB Apache-2.0 dataset and
@@ -34,10 +34,10 @@ use serde_json::Value;
 // Pipeline tuned via `examples/nab_ablation.rs`:
 //
 // 1. 32-lag temporal embedding (~160 min of context on 5-min NAB
-//    series) — longer context absorbs more of the contextual-shift
+//    series) - longer context absorbs more of the contextual-shift
 //    anomaly structure.
 // 2. Z-score normalise each embedding dim against the warm-phase
-//    mean/stddev — NAB series have wildly different scales
+//    mean/stddev - NAB series have wildly different scales
 //    (CPU %, taxi counts, temperatures) and RCF's cut sampling
 //    is range-weighted.
 // 3. EMA-smooth the raw score stream (`alpha = 0.02`, half-life
@@ -114,7 +114,7 @@ fn in_any_window(ts: &str, windows: &[(String, String)]) -> bool {
 }
 
 /// Trapezoidal ROC-AUC on descending scores. Identical to the
-/// helper in `tests/detection_quality.rs` — duplicated here to
+/// helper in `tests/detection_quality.rs` - duplicated here to
 /// keep the test files self-contained.
 fn auc(scores: &[f64], labels: &[u8]) -> f64 {
     assert_eq!(scores.len(), labels.len());
@@ -155,14 +155,14 @@ fn auc(scores: &[f64], labels: &[u8]) -> f64 {
 /// Which scoring API to exercise per probe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Scorer {
-    /// Fast isolation-depth `score()` — non-mutating, rayon-
+    /// Fast isolation-depth `score()` - non-mutating, rayon-
     /// parallel, eBPF-hot-path friendly.
     IsolationDepth,
-    /// Probe-based codisp via `score_codisp` — AWS Java / rrcf
+    /// Probe-based codisp via `score_codisp` - AWS Java / rrcf
     /// semantic, mutates the forest per probe (known drift on long
     /// streams, see `score_codisp_stateless` for the fix).
     Codisp,
-    /// Stateless codisp via `score_codisp_stateless` — walks root
+    /// Stateless codisp via `score_codisp_stateless` - walks root
     /// → leaf along stored cuts, no reservoir mutation, preserves
     /// the frozen-baseline promise and parallelises across trees.
     CodispStateless,
@@ -228,12 +228,12 @@ fn score_file(rows: &[Row], windows: &[(String, String)], scorer: Scorer) -> (Ve
         .build()
         .unwrap();
 
-    // Phase 1 — warm on normalised embeddings, no score collection.
+    // Phase 1 - warm on normalised embeddings, no score collection.
     for p in &embeddings[..warm_end] {
         forest.update(*p).ok();
     }
 
-    // Phase 2 — score against the frozen warm-phase forest. We do
+    // Phase 2 - score against the frozen warm-phase forest. We do
     // NOT call `update` on the eval set: NAB anomaly windows are
     // wide (days), and folding anomaly points back into the
     // reservoir drags the baseline toward them and drops recall.
@@ -261,7 +261,7 @@ fn score_file(rows: &[Row], windows: &[(String, String)], scorer: Scorer) -> (Ve
         labels.push(u8::from(in_any_window(ts, windows)));
     }
 
-    // Phase 3 — EMA-smooth the score stream.
+    // Phase 3 - EMA-smooth the score stream.
     let mut scores = Vec::with_capacity(raw_scores.len());
     if let Some(&first) = raw_scores.first() {
         let mut acc = first;
@@ -273,14 +273,14 @@ fn score_file(rows: &[Row], windows: &[(String, String)], scorer: Scorer) -> (Ve
     (scores, labels)
 }
 
-/// Shared corpus runner — iterates `data/realKnownCause` in
+/// Shared corpus runner - iterates `data/realKnownCause` in
 /// parallel (one rayon worker per file), prints per-file AUC and
 /// the weighted aggregate, returns the aggregate for floor-based
 /// regression guards.
 fn run_corpus(scorer: Scorer, label: &str) -> f64 {
     let Some(root) = nab_root() else {
         panic!(
-            "RCF_NAB_PATH not set — clone https://github.com/numenta/NAB \
+            "RCF_NAB_PATH not set - clone https://github.com/numenta/NAB \
              and export the path before running this ignored test"
         );
     };
@@ -304,7 +304,7 @@ fn run_corpus(scorer: Scorer, label: &str) -> f64 {
         data_dir.display()
     );
 
-    // Parallel across files — each file owns its own forest, so
+    // Parallel across files - each file owns its own forest, so
     // per-file pipelines are independent. `par_iter` fans out one
     // CSV per rayon worker.
     let paths: Vec<_> = entries.iter().map(std::fs::DirEntry::path).collect();
@@ -353,7 +353,7 @@ fn realknowncause_aggregate_auc_above_floor() {
     // detector change moved the needle, and by how much.
     assert!(
         weighted_auc > 0.70,
-        "aggregate weighted AUC = {weighted_auc:.3} below floor 0.70 — \
+        "aggregate weighted AUC = {weighted_auc:.3} below floor 0.70 - \
          detector regression or dataset change?"
     );
 }

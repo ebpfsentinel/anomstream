@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Severity bands end-to-end — pipe a trained thresholded forest's
+//! Severity bands end-to-end - pipe a trained thresholded forest's
 //! verdicts through [`anomstream_core::SeverityBands`] and check classification.
 //!
 //! Asserts:
@@ -45,7 +45,7 @@ fn bare_forest_score_classifies() {
         .unwrap();
     }
     // Raw anomstream-core scores follow the Guha-2016 convention, not the
-    // eBPFsentinel Z-score scale — relax the default bands for
+    // eBPFsentinel Z-score scale - relax the default bands for
     // this bench so the relative ordering (outlier > baseline)
     // still crosses a band boundary.
     let bands = SeverityBands::new(0.5, 0.8, 1.2, 2.0).unwrap();
@@ -76,7 +76,7 @@ fn thresholded_grade_severity_delegates_to_score() {
     }
     let grade = d.process([50.0, 50.0, 50.0, 50.0]).unwrap();
     let bands = SeverityBands::default();
-    // Grade.severity uses raw score — if the score exceeds Critical,
+    // Grade.severity uses raw score - if the score exceeds Critical,
     // verdict should be Critical regardless of bounded grade.
     if f64::from(grade.score()) >= 5.0 {
         assert_eq!(grade.severity(&bands), Severity::Critical);

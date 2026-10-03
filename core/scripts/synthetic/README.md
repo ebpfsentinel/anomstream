@@ -1,33 +1,33 @@
-# External bench — anomstream-core vs Python / Java baselines
+# External bench - anomstream-core vs Python / Java baselines
 
 Reproducible speed + AUC comparison between `anomstream-core` and three
 published reference implementations:
 
-- [`rrcf`](https://github.com/kLabUM/rrcf) 0.4.4 — Python + NumPy,
+- [`rrcf`](https://github.com/kLabUM/rrcf) 0.4.4 - Python + NumPy,
   the original open-source RCF port.
 - [`scikit-learn` `IsolationForest`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.IsolationForest.html)
-  — not RCF, but the canonical streaming-friendly tree-isolation
+  - not RCF, but the canonical streaming-friendly tree-isolation
   baseline every comparison pins against.
 - AWS's [`randomcutforest-java`](https://github.com/aws/random-cut-forest-by-aws)
-  4.4.0 — JVM reference. See `../README.md`.
+  4.4.0 - JVM reference. See `../README.md`.
 
-Scripts live outside the Rust crate by design — they pull in
+Scripts live outside the Rust crate by design - they pull in
 Python / JVM toolchains, aren't CI-green, and produce numbers
 that are only meaningful on the dev box they run on.
 
 ## Layout
 
-- `gen_points.py` — deterministic CSV generator shared by every
+- `gen_points.py` - deterministic CSV generator shared by every
   runner. First `n_normal` rows are clean (warm-up), last
   `n_outliers` rows are the anomaly probes.
-- `bench_rrcf_synthetic.py` — rrcf warm + `codisp` score loop.
-- `bench_sklearn_synthetic.py` — sklearn `IsolationForest` fit +
+- `bench_rrcf_synthetic.py` - rrcf warm + `codisp` score loop.
+- `bench_sklearn_synthetic.py` - sklearn `IsolationForest` fit +
   `decision_function`.
-- `RcfBenchSynthetic.java` — AWS Java driver; see
+- `RcfBenchSynthetic.java` - AWS Java driver; see
   `../README.md` for the Maven Central jar path.
 
 The anomstream-core side is an ordinary crate example:
-`examples/external_bench_driver.rs` — invoked via `cargo run`.
+`examples/external_bench_driver.rs` - invoked via `cargo run`.
 
 ## Running
 
@@ -59,7 +59,7 @@ java -cp "scripts/synthetic:$JAR" RcfBenchSynthetic \
 
 ## Measured numbers (i7-1370P, synthetic 10k × D=16, 1 % outliers)
 
-**5-seed variance** (seeds 2026–2030), mean ± stddev,
+**5-seed variance** (seeds 2026-2030), mean ± stddev,
 coefficient of variation in parens. Driven by
 `variance_sweep.sh`.
 
@@ -75,7 +75,7 @@ Ratios (mean / mean):
 - **Updates**: `anomstream-core` is ~8.4× faster than AWS Java, ~240×
   faster than `rrcf`. CVs around 5-7 %; ratios sit well outside
   the noise floor.
-- **Scores**: sklearn edges `anomstream-core` by 8 % (136 k vs 126 k) —
+- **Scores**: sklearn edges `anomstream-core` by 8 % (136 k vs 126 k) -
   real but small (stddevs combined ≈ 3 k, so the 10 k delta is
   ~3σ significant). `rrcf` trails `anomstream-core` by ~25 %; AWS Java
   trails by ~14×.
@@ -84,27 +84,27 @@ Ratios (mean / mean):
 
 ## Caveats
 
-Machine thermal state varies across runs — earlier single-seed
+Machine thermal state varies across runs - earlier single-seed
 cool-CPU measurements landed at ~32 k / 203 k for `anomstream-core`,
 dropping to the ~17 k / 126 k above on the 5-seed run. The
 **ratios are portable, the absolute numbers aren't**.
 
-The Python scripts are best-effort one-shot harnesses — they
+The Python scripts are best-effort one-shot harnesses - they
 don't pin NumPy BLAS threads, don't warm up, don't stabilise
 CPU frequency. Treat absolute numbers as "same hardware,
 order-of-magnitude" only.
 
 ## Why the Python runners are single-process
 
-- **`rrcf`** — `codisp` scoring mutates the tree on every probe
+- **`rrcf`** - `codisp` scoring mutates the tree on every probe
   (`insert_point(index=-1)` → `codisp(-1)` → `forget_point(-1)`),
   so threads collide on the shared `-1` slot and trip
   `AssertionError: index in leaves`. Multiprocessing fails at
-  pickle time — tree objects hold module references that
+  pickle time - tree objects hold module references that
   `pickle` rejects (`cannot pickle 'module' object`). The
   measured 184k scores/s is `rrcf`'s single-process ceiling;
   NumPy SIMD inside `codisp` already saturates.
-- **sklearn `IsolationForest`** — `n_jobs=-1` was tested and
+- **sklearn `IsolationForest`** - `n_jobs=-1` was tested and
   regresses at 100 trees × 10k points (joblib task-spawn
   overhead exceeds the split-tree win). The default
   single-threaded BLAS SIMD path is the faster one for this

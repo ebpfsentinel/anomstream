@@ -36,7 +36,7 @@ fn main() -> Result<(), RcfError> {
     // Simulate a 50 ms dormancy window.
     sleep(Duration::from_millis(50));
 
-    // Touch `alpha` — only `beta` is idle past the TTL.
+    // Touch `alpha` - only `beta` is idle past the TTL.
     pool.process(&"alpha", [0.1, 0.1])?;
 
     let evicted = pool.evict_idle(Duration::from_millis(25));

@@ -7,7 +7,7 @@
 //! observations. Real scoring only becomes meaningful once the
 //! detector has seen enough points to populate the reservoir and
 //! converge the adaptive threshold. In a production streaming agent
-//! this warmup window is a coverage hole at every restart — unless
+//! this warmup window is a coverage hole at every restart - unless
 //! the caller can replay a slice of recent history (from a TSDB,
 //! Kafka topic, S3 parquet dump…) before going live.
 //!
@@ -20,14 +20,14 @@
 //!
 //! Points containing non-finite components (`NaN`, `±∞`) are
 //! **skipped** and tallied in the report rather than aborting the
-//! whole bootstrap — historical TSDB query results routinely contain
+//! whole bootstrap - historical TSDB query results routinely contain
 //! gaps, and a single bad row should not sink the restart.
 
 use crate::error::{RcfError, RcfResult};
 use crate::forest::RandomCutForest;
 use crate::thresholded::ThresholdedForest;
 
-/// Summary of a bootstrap replay — what went in, what was filtered
+/// Summary of a bootstrap replay - what went in, what was filtered
 /// out, and where the detector's warmup stands afterwards.
 ///
 /// Used by callers to check the detector is ready for live traffic
@@ -52,7 +52,7 @@ pub struct BootstrapReport {
 }
 
 impl BootstrapReport {
-    /// Empty report — zero points, threshold at the configured floor.
+    /// Empty report - zero points, threshold at the configured floor.
     #[must_use]
     pub fn empty() -> Self {
         Self {
@@ -65,7 +65,7 @@ impl BootstrapReport {
 
     /// Whether any historical point actually made it into the
     /// detector. A `false` return means the iterator was empty or
-    /// every row was non-finite — the detector is still cold and
+    /// every row was non-finite - the detector is still cold and
     /// should be treated as warming-up by downstream consumers.
     #[must_use]
     pub fn is_hot(&self) -> bool {
@@ -86,7 +86,7 @@ fn is_finite_point<const D: usize>(p: &[f64; D]) -> bool {
 
 impl<const D: usize> RandomCutForest<D> {
     /// Replay historical `points` through the forest without
-    /// exposing any score — warms the reservoir so subsequent
+    /// exposing any score - warms the reservoir so subsequent
     /// [`Self::score`] calls return meaningful values from the first
     /// live point.
     ///
@@ -136,7 +136,7 @@ impl<const D: usize> ThresholdedForest<D> {
     /// folding each one into the forest *and* the score-stream EMA
     /// so the adaptive threshold is hot before the first live point.
     ///
-    /// Graded verdicts produced during the replay are discarded —
+    /// Graded verdicts produced during the replay are discarded -
     /// they would be misleading for historical data. The detector
     /// is ready for live traffic as soon as
     /// [`BootstrapReport::final_observations`] passes the configured

@@ -8,7 +8,7 @@
 //! monomorphisation. The matrix entries are expanded inline through
 //! the [`bench_dim`] helper, parameterised by the target dimension.
 //!
-//! The bench process pins `mimalloc` as the global allocator —
+//! The bench process pins `mimalloc` as the global allocator -
 //! reduces small-allocation overhead vs the system allocator, which
 //! is the same trick callers can apply at their `main.rs` to free
 //! a few percent on every `update`/`score` call.
@@ -90,7 +90,7 @@ fn bench_score_for<const D: usize>(
     });
 }
 
-/// Per-packet `score_trimmed` — exercises the thread-local
+/// Per-packet `score_trimmed` - exercises the thread-local
 /// scratch buffer path that replaced the per-call `Vec::with_capacity`
 /// heap allocation. Keeps an eye on any regression in that alloc
 /// elision.
@@ -143,7 +143,7 @@ fn bench_attribution_for<const D: usize>(
 // depth are not varied together, which is what makes them usable for
 // calibrating the threshold; `(200, 512, 16)` keeps the historical
 // deep-tree data point. `D = 14` is the shape the eBPFsentinel
-// Enterprise detector runs at (1400 units — below the threshold).
+// Enterprise detector runs at (1400 units - below the threshold).
 fn bench_insert(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_update");
     bench_update_for::<16>(&mut group, 50, 128);

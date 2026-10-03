@@ -40,7 +40,7 @@ fn main() {
 
     // Regime shift: mean jumps to 5.0 (outlier under regime-1
     // baseline but becomes the new normal). The first step is
-    // the "trigger moment" — in prod the caller routes an ADWIN /
+    // the "trigger moment" - in prod the caller routes an ADWIN /
     // PSI / CUSUM fire into `on_drift`; here we do it explicitly
     // at the shift for a reproducible demo.
     let p_shift = [5.0_f64, 5.0, 5.0, 5.0];
@@ -71,11 +71,11 @@ fn main() {
 
     if detector.swaps_total() > 0 {
         println!(
-            "recovery succeeded — shadow became primary after {} observations",
+            "recovery succeeded - shadow became primary after {} observations",
             detector.primary_age()
         );
     } else {
-        println!("no swap completed — raise shadow_warmup / check trigger");
+        println!("no swap completed - raise shadow_warmup / check trigger");
     }
     // Note: both regime baselines score similarly because each
     // forest adapts to whatever distribution it ingests. The

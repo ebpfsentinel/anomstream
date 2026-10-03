@@ -5,7 +5,7 @@
 //!
 //! Note: the `score` baseline uses rayon parallelism (default
 //! `parallel` feature on) while `score_early_term` walks trees
-//! sequentially — the early-term path's wall-clock only beats the
+//! sequentially - the early-term path's wall-clock only beats the
 //! parallel path when the early-stop rate is high *and* the caller
 //! cannot afford to saturate cores (batch jobs, no-std, tight
 //! single-thread budget). For a more even comparison add
@@ -38,7 +38,7 @@ fn main() -> Result<(), RcfError> {
     }
 
     // Use a looser threshold so early-stop kicks in on typical
-    // baseline traffic — 5 % stderr/mean is tight enough that many
+    // baseline traffic - 5 % stderr/mean is tight enough that many
     // forests walk the full ensemble anyway. 15 % lets early-stop
     // trigger on clearly-in-distribution points.
     let cfg = EarlyTermConfig {

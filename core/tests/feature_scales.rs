@@ -4,14 +4,14 @@
 //! Asserts:
 //!
 //! 1. A unit scale vector (`[1.0; D]`) produces scores identical to
-//!    no scales configured — scaling is neutral at the identity.
+//!    no scales configured - scaling is neutral at the identity.
 //! 2. A non-unit scale vector changes scoring behaviour
 //!    deterministically.
 //! 3. Builder validation rejects a wrong-length scale vector before
 //!    the forest is instantiated.
 //! 4. Builder validation rejects non-finite and non-positive scale
 //!    components.
-//! 5. `delete_by_value` matches the scaled-space representation —
+//! 5. `delete_by_value` matches the scaled-space representation -
 //!    inserting and then retracting the same raw point works end to
 //!    end.
 
@@ -66,7 +66,7 @@ fn non_unit_scales_change_scoring() {
         reference.update([v, v + 0.5]).unwrap();
         scaled.update([v, v + 0.5]).unwrap();
     }
-    // Probe on an uneven dimension — with scale [10, 0.1] dim 0 is
+    // Probe on an uneven dimension - with scale [10, 0.1] dim 0 is
     // exaggerated and dim 1 is compressed, so the anomaly profile
     // differs from the reference forest.
     let probe = [1.0_f64, 1.5];
@@ -80,8 +80,8 @@ fn non_unit_scales_change_scoring() {
 
 #[test]
 fn build_rejects_wrong_length_scales() {
-    // Build a config manually with a mismatched feature_scales length
-    // — the builder's dimension check fires before the forest is
+    // Build a config manually with a mismatched feature_scales length -
+    // the builder's dimension check fires before the forest is
     // instantiated.
     let b = ForestBuilder::<2>::new().seed(1);
     let mut cfg = b.config().clone();

@@ -4,14 +4,14 @@
 //! holds the geometric building blocks that the tree, sampler, visitor
 //! and forest layers compose:
 //!
-//! - [`point`] — `Point` type alias and dimensionality helpers
-//! - [`bounding_box::BoundingBox`] — axis-aligned bounding boxes with
+//! - [`point`] - `Point` type alias and dimensionality helpers
+//! - [`bounding_box::BoundingBox`] - axis-aligned bounding boxes with
 //!   `range_sum` and `probability_of_cut` (Guha 2016 §3)
-//! - [`cut::Cut`] — a single random cut (dimension + value) sampled
+//! - [`cut::Cut`] - a single random cut (dimension + value) sampled
 //!   weighted by the bounding box's per-dimension range
-//! - [`divector::DiVector`] — per-feature attribution vector for
+//! - [`divector::DiVector`] - per-feature attribution vector for
 //!   [`crate::visitor::AttributionVisitor`]
-//! - [`score::AnomalyScore`] — `NaN`-safe newtype around `f64`
+//! - [`score::AnomalyScore`] - `NaN`-safe newtype around `f64`
 
 pub mod bounding_box;
 pub mod cut;

@@ -1,4 +1,4 @@
-//! `anomstream` — streaming anomaly detection toolkit (facade).
+//! `anomstream` - streaming anomaly detection toolkit (facade).
 //!
 //! Umbrella crate that re-exports the three workspace members
 //! under feature gates so consumers get a single import path
@@ -53,7 +53,7 @@
 //!
 //! Every `pub use` below is the **complete committed public
 //! surface** of the `anomstream` crate. Re-exports are spelled
-//! out item by item rather than via glob — `pub use
+//! out item by item rather than via glob - `pub use
 //! member::*` would silently forward every future addition,
 //! private-ish helper, or accidentally-public escape hatch
 //! shipped by a member crate, and `cargo` does not read the
@@ -64,7 +64,7 @@
 //! travel through `cargo publish` rather than through prose.
 //!
 //! Items reachable only via [`core_lib`] / [`triage_lib`] /
-//! [`hotpath_lib`] are **not** part of that committed surface —
+//! [`hotpath_lib`] are **not** part of that committed surface -
 //! their stability follows the owning member crate's `SemVer`
 //! contract directly. Catalogue + member ownership table:
 //! `docs/features.md`.
@@ -135,7 +135,7 @@ pub use anomstream_triage::{
     SAGE_DEFAULT_SEED, SageEstimator, SageExplanation,
 };
 
-// Tamper-evident audit chain — HMAC-SHA256 envelope around each
+// Tamper-evident audit chain - HMAC-SHA256 envelope around each
 // `AlertRecord`. Surface mirrors the owning module exactly.
 #[cfg(feature = "audit-integrity")]
 #[doc(inline)]
@@ -152,7 +152,7 @@ pub use anomstream_triage::{
 // callers depend on.
 
 /// eBPF-style ingress primitives (`UpdateSampler`, `PrefixRateCap`,
-/// `update_channel`) — re-exported as a submodule so the path
+/// `update_channel`) - re-exported as a submodule so the path
 /// `anomstream::hot_path::UpdateSampler` matches the pre-split
 /// `anomstream_core::hot_path::UpdateSampler` spelling. Like the
 /// crate-root re-exports above, every entry is enumerated rather

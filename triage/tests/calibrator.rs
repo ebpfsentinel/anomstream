@@ -4,7 +4,7 @@
 //! Asserts:
 //!
 //! 1. A calibrator fit on synthetic labelled scores separates
-//!    classes — low score → low P, high score → high P.
+//!    classes - low score → low P, high score → high P.
 //! 2. Calibrator round-trips through serde bit-exact.
 //! 3. Forest scores piped through `calibrate_many` all land in
 //!    `[0, 1]`.

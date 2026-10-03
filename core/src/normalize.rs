@@ -7,7 +7,7 @@
 //! so the normalizer can be inserted into a detection pipeline
 //! even before fit data arrives.
 //!
-//! Policy-free — the lib stores params and applies the math;
+//! Policy-free - the lib stores params and applies the math;
 //! caller decides when to refit, when to swap, and what the
 //! source of the samples is.
 
@@ -17,7 +17,7 @@ use num_traits::Float;
 
 /// Per-dimension learned parameters.
 ///
-/// `identity()` yields `{mean=0, std_dev=1, min=0, max=1}` —
+/// `identity()` yields `{mean=0, std_dev=1, min=0, max=1}` -
 /// applied under [`NormStrategy::ZScore`] or
 /// [`NormStrategy::MinMax`] the transform reduces to the input
 /// unchanged when the value lies inside `[0, 1]`.
@@ -35,7 +35,7 @@ pub struct NormParams {
 }
 
 impl NormParams {
-    /// Identity parameters — pass-through transform.
+    /// Identity parameters - pass-through transform.
     #[must_use]
     pub const fn identity() -> Self {
         Self {
@@ -184,7 +184,7 @@ impl<const D: usize> Normalizer<D> {
 
 #[cfg(feature = "serde")]
 mod serde_arrays {
-    //! `serde` adapter for `[NormParams; D]` — default serde
+    //! `serde` adapter for `[NormParams; D]` - default serde
     //! derive works only up to `[T; 32]` for arbitrary `T`, so
     //! pass through a length-prefixed slice.
     use super::NormParams;

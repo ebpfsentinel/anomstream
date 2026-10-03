@@ -13,7 +13,7 @@
 //! dataset's ground-truth labels.
 //!
 //! To evaluate a full TSB-AD-M folder, wrap this runner in a shell
-//! loop over the `.csv` files — the library intentionally does not
+//! loop over the `.csv` files - the library intentionally does not
 //! bundle the dataset itself.
 //!
 //! ```bash
@@ -59,7 +59,7 @@ fn main() -> Result<(), RcfError> {
     let dim = dataset.feature_dim();
     if dim > MAX_D {
         eprintln!(
-            "tsb_ad_m_eval: feature dim {dim} > MAX_D {MAX_D} — \
+            "tsb_ad_m_eval: feature dim {dim} > MAX_D {MAX_D} - \
              increase `MAX_D` in examples/tsb_ad_m_eval.rs"
         );
         process::exit(3);
@@ -71,14 +71,14 @@ fn main() -> Result<(), RcfError> {
         .seed(SEED);
     let mut forest: DynamicForest<MAX_D> = DynamicForest::new(builder, dim)?;
 
-    // Calibration split — warm the forest on the first fraction of
+    // Calibration split - warm the forest on the first fraction of
     // the series without emitting scores for it.
     let calib = (n as f64 * CALIBRATION_FRACTION) as usize;
     for row in dataset.features.iter().take(calib) {
         forest.update(row)?;
     }
 
-    // Scoring pass — emit one score per remaining timestamp. The
+    // Scoring pass - emit one score per remaining timestamp. The
     // calibration prefix gets a neutral score (forest is not trained
     // on itself in-order).
     let mut scores = vec![0.0_f64; n];

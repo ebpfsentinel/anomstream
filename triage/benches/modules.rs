@@ -21,7 +21,7 @@ use std::hint::black_box;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-/// `LshAlertClusterer::hash_divector` + `observe` — quantise +
+/// `LshAlertClusterer::hash_divector` + `observe` - quantise +
 /// bucket lookup on a `DiVector<16>`.
 fn bench_lsh_cluster(c: &mut Criterion) {
     let mut group = c.benchmark_group("lsh_cluster");
@@ -64,7 +64,7 @@ fn bench_lsh_cluster(c: &mut Criterion) {
     });
 
     // Same shape as `hash_divector_d16` but on a `with_seed`
-    // clusterer — confirms the per-instance seed mix adds zero
+    // clusterer - confirms the per-instance seed mix adds zero
     // measurable overhead vs the default constructor (the seed
     // is one extra XOR pre-loop and one extra wrapping_mul +
     // XOR post-loop).
@@ -134,7 +134,7 @@ fn bench_calibrator(c: &mut Criterion) {
     group.finish();
 }
 
-/// `SageEstimator::explain` — permutation Shapley with default
+/// `SageEstimator::explain` - permutation Shapley with default
 /// 64 permutations. Expensive: `K · D` forest scores per call.
 fn bench_sage(c: &mut Criterion) {
     let mut group = c.benchmark_group("sage");
@@ -166,7 +166,7 @@ fn bench_sage(c: &mut Criterion) {
     group.finish();
 }
 
-/// `AlertClusterer::observe` — cosine-similarity clustering.
+/// `AlertClusterer::observe` - cosine-similarity clustering.
 /// Target: per-record cost of the `observe` path (similarity
 /// scan + decision) under a typical 32-alert window.
 fn bench_alert_cluster(c: &mut Criterion) {
@@ -262,7 +262,7 @@ fn bench_alert_cluster(c: &mut Criterion) {
     group.finish();
 }
 
-/// `FeedbackStore::label` + `adjust` — SOC label ingestion and
+/// `FeedbackStore::label` + `adjust` - SOC label ingestion and
 /// Gaussian-kernel score adjustment. Two variants: hot-path
 /// `adjust` cost (every probe), warm-up `label` cost (analyst
 /// cadence, much rarer).
@@ -313,7 +313,7 @@ fn bench_feedback(c: &mut Criterion) {
 }
 
 /// `AuditChain::append` + `verify_chain` cost on a 256-entry
-/// chain — characterises HMAC-SHA256 + postcard-encode overhead
+/// chain - characterises HMAC-SHA256 + postcard-encode overhead
 /// per emission and the linear walk on verification.
 #[cfg(all(feature = "audit-integrity", feature = "postcard"))]
 fn bench_audit_chain(c: &mut Criterion) {

@@ -1,19 +1,19 @@
-//! `anomstream-triage` — SOC-opinionated triage layer on top of
+//! `anomstream-triage` - SOC-opinionated triage layer on top of
 //! `anomstream-core`.
 //!
 //! Six higher-level components that turn a raw anomaly-score
 //! stream into something analysts can act on:
 //!
-//! - [`calibrator`] — Platt probability calibration (batch +
+//! - [`calibrator`] - Platt probability calibration (batch +
 //!   online SGD)
-//! - [`sage`] — SAGE Shapley attribution via permutation sampling
-//! - [`alert_cluster`] — cosine-similarity alert dedup over a
+//! - [`sage`] - SAGE Shapley attribution via permutation sampling
+//! - [`alert_cluster`] - cosine-similarity alert dedup over a
 //!   sliding window
-//! - [`lsh_cluster`] — LSH-based alert dedup for MSSP-volume
+//! - [`lsh_cluster`] - LSH-based alert dedup for MSSP-volume
 //!   streams
-//! - [`feedback`] — bounded ledger of analyst labels +
+//! - [`feedback`] - bounded ledger of analyst labels +
 //!   Gaussian-kernel score adjustment (Das et al. 2017)
-//! - [`audit`] — serialisable [`audit::AlertRecord`] envelope
+//! - [`audit`] - serialisable [`audit::AlertRecord`] envelope
 //!   packaging every analytic output for SIEM / WORM export
 //!
 //! All six consume core output types (`DiVector`, `AnomalyScore`,
@@ -24,7 +24,7 @@
 //!
 //! # Scope
 //!
-//! Policy-opinionated layer — not every consumer wants SOC
+//! Policy-opinionated layer - not every consumer wants SOC
 //! vocabulary (cluster dedup, audit records, feedback-weighted
 //! scores). Consumers who only need detectors + primitives
 //! should depend on `anomstream-core` alone.

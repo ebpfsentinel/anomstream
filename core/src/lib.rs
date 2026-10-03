@@ -1,4 +1,4 @@
-//! `anomstream-core` — core detectors + streaming primitives + cross-cut contracts.
+//! `anomstream-core` - core detectors + streaming primitives + cross-cut contracts.
 //!
 //! This crate is the math-first floor of the
 //! [`anomstream`](https://crates.io/crates/anomstream) workspace.
@@ -11,8 +11,8 @@
 //! `num_samples_per_tree`).
 //!
 //! Beyond the core forest, the crate ships a set of **companion
-//! primitives** — per-feature drift detectors, normalisers, streaming
-//! stats, frequency sketches — reused across detection pipelines so
+//! primitives** - per-feature drift detectors, normalisers, streaming
+//! stats, frequency sketches - reused across detection pipelines so
 //! callers can compose `RandomCutForest` + `PerFeatureEwma` +
 //! `PerFeatureCusum` + `FeatureDriftDetector` + `Normalizer` + …
 //! without reimplementing the underlying math.
@@ -24,13 +24,13 @@
 //! (not in a sibling crate) because every downstream layer depends
 //! on them:
 //!
-//! - [`metrics::MetricsSink`] — telemetry trait consumed by every
+//! - [`metrics::MetricsSink`] - telemetry trait consumed by every
 //!   detector, the hot-path sampler, and the triage pipeline.
-//! - [`severity::Severity`] + [`severity::SeverityBands`] —
+//! - [`severity::Severity`] + [`severity::SeverityBands`] -
 //!   classification vocabulary used by both the bare forest
 //!   ([`domain::AnomalyScore::severity`]) and the triage layer's
 //!   `AlertRecord` / `AlertClusterer`.
-//! - [`forest::ForestSnapshot`] — read-only health view that lets
+//! - [`forest::ForestSnapshot`] - read-only health view that lets
 //!   downstream triage consume forest state without reaching into
 //!   reservoir internals.
 //!
@@ -93,7 +93,7 @@
 //! | [`per_feature_cusum`] | Parallel two-sided CUSUM change-point detector |
 //! | [`severity`] | Ordinal severity bands + classification |
 //!
-//! The companion layer is policy-free — detectors return raw
+//! The companion layer is policy-free - detectors return raw
 //! statistics (z-scores, CUSUM magnitudes, min-max transforms);
 //! callers map them to alert severity via [`SeverityBands`] or a
 //! custom rule. `per_feature_cusum` intentionally co-exists with
@@ -140,10 +140,10 @@
 //!
 //! 1. Sudipto Guha, Nina Mishra, Gourav Roy, Okke Schrijvers. "Robust Random
 //!    Cut Forest Based Anomaly Detection on Streams." *International
-//!    Conference on Machine Learning*, pp. 2712–2721. 2016.
+//!    Conference on Machine Learning*, pp. 2712-2721. 2016.
 //! 2. Byung-Hoon Park, George Ostrouchov, Nagiza F. Samatova, Al Geist.
 //!    "Reservoir-based random sampling with replacement from data stream."
-//!    *SIAM International Conference on Data Mining*, pp. 492–496. 2004.
+//!    *SIAM International Conference on Data Mining*, pp. 492-496. 2004.
 //! 3. AWS `SageMaker` RCF reference.
 //!
 //! [aws-rcf]: https://docs.aws.amazon.com/sagemaker/latest/dg/randomcutforest.html

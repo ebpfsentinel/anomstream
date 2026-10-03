@@ -5,7 +5,7 @@
 //!
 //! 1. A partitioning set of groups explains 100 % of the raw score.
 //! 2. An outlier on a specific dim is attributed to the group that
-//!    owns that dim — the `top_group` answer matches the shock.
+//!    owns that dim - the `top_group` answer matches the shock.
 //! 3. Dimension-mismatch is caught at score time with the
 //!    documented error.
 //! 4. The pool-level entry point preserves tenant isolation.
@@ -50,7 +50,7 @@ fn partitioning_groups_fully_explain_raw_score() {
     let groups = rate_vs_payload_groups();
     let decomposition = f.group_scores(&[50.0, 50.0, 50.0, 50.0], &groups).unwrap();
     assert_eq!(decomposition.len(), 2);
-    // Full coverage — explained == total up to f64 precision.
+    // Full coverage - explained == total up to f64 precision.
     assert!(
         (decomposition.coverage() - 1.0).abs() < 1e-12,
         "coverage {coverage} should be 1.0 for a partitioning set",
@@ -70,7 +70,7 @@ fn outlier_on_payload_dims_attributed_to_payload_group() {
     for _ in 0..512 {
         f.update(noisy(&mut rng)).unwrap();
     }
-    // Outlier only on dims 2 and 3 — the "payload" group.
+    // Outlier only on dims 2 and 3 - the "payload" group.
     let outlier = [0.05_f64, 0.05, 50.0, 50.0];
     let groups = rate_vs_payload_groups();
     let d = f.group_scores(&outlier, &groups).unwrap();
@@ -163,6 +163,6 @@ fn pool_group_scores_are_per_tenant_isolated() {
     let rate_b = b.scores().iter().find(|(n, _)| n == "rate").unwrap().1;
     assert!(
         rate_a > rate_b,
-        "rate_a {rate_a} should be > rate_b {rate_b} — pool must isolate baselines",
+        "rate_a {rate_a} should be > rate_b {rate_b} - pool must isolate baselines",
     );
 }

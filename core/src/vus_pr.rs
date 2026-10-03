@@ -1,4 +1,4 @@
-//! VUS-PR — Volume Under the Surface, Precision-Recall variant.
+//! VUS-PR - Volume Under the Surface, Precision-Recall variant.
 //! Threshold-free, length-aware quality metric for time-series
 //! anomaly detection (Paparrizos et al. VLDB 2022).
 //!
@@ -7,23 +7,23 @@
 //! this penalises detectors whose scores peak *near* the true
 //! anomaly instead of on it. VUS-PR fixes both issues:
 //!
-//! - **Range-awareness** — each buffer size `l` inflates the
+//! - **Range-awareness** - each buffer size `l` inflates the
 //!   anomaly mask by `l` positions on each side for the precision
 //!   numerator, and dilates the prediction set by `l` on each side
 //!   for the recall denominator. A prediction that lands within
 //!   `l` of a true anomaly still counts as a hit.
-//! - **Threshold-free** — sweeps every possible threshold (by
+//! - **Threshold-free** - sweeps every possible threshold (by
 //!   walking the score-sorted prefix) and trapezoidally integrates
 //!   the resulting (R, P) curve → `RangeAUCPR(l)`.
-//! - **Length-agnostic** — integrates `RangeAUCPR(l)` over a range
+//! - **Length-agnostic** - integrates `RangeAUCPR(l)` over a range
 //!   of buffer sizes `l ∈ [0, L]` → the "volume under the surface".
 //!
 //! Useful as the bench target for benchmarks such as TSB-AD-M
-//! (Liu & Paparrizos, `NeurIPS` 2024) — see
+//! (Liu & Paparrizos, `NeurIPS` 2024) - see
 //! [`crate::tsb_ad_m`] for the matching CSV loader and
 //! `examples/tsb_ad_m_eval.rs` for an end-to-end runner.
 //!
-//! Gated behind `std` — needs sorting + allocation.
+//! Gated behind `std` - needs sorting + allocation.
 //!
 //! # Reference
 //!
@@ -37,7 +37,7 @@ use alloc::vec::Vec;
 
 use crate::error::{RcfError, RcfResult};
 
-/// Default maximum buffer — 100 positions. Corresponds to the
+/// Default maximum buffer - 100 positions. Corresponds to the
 /// typical average anomaly length on TSB-AD-M. Override via
 /// [`vus_pr_with_buffer`] when the expected anomaly length is
 /// known.
@@ -60,7 +60,7 @@ pub fn range_auc_pr(scores: &[f64], labels: &[bool], buffer: usize) -> RcfResult
 ///
 /// # Errors
 ///
-/// Returns [`RcfError::InvalidConfig`] when inputs are invalid —
+/// Returns [`RcfError::InvalidConfig`] when inputs are invalid -
 /// see [`range_auc_pr`].
 pub fn vus_pr(scores: &[f64], labels: &[bool]) -> RcfResult<f64> {
     vus_pr_with_buffer(scores, labels, DEFAULT_MAX_BUFFER)
@@ -72,7 +72,7 @@ pub fn vus_pr(scores: &[f64], labels: &[bool]) -> RcfResult<f64> {
 ///
 /// # Errors
 ///
-/// Returns [`RcfError::InvalidConfig`] when inputs are invalid —
+/// Returns [`RcfError::InvalidConfig`] when inputs are invalid -
 /// see [`range_auc_pr`].
 pub fn vus_pr_with_buffer(scores: &[f64], labels: &[bool], max_buffer: usize) -> RcfResult<f64> {
     validate(scores, labels)?;
@@ -98,7 +98,7 @@ fn validate(scores: &[f64], labels: &[bool]) -> RcfResult<()> {
     if scores.len() != labels.len() {
         return Err(RcfError::InvalidConfig(
             alloc::format!(
-                "vus_pr: length mismatch — scores {} vs labels {}",
+                "vus_pr: length mismatch - scores {} vs labels {}",
                 scores.len(),
                 labels.len()
             )
@@ -118,7 +118,7 @@ fn validate(scores: &[f64], labels: &[bool]) -> RcfResult<()> {
     Ok(())
 }
 
-/// Validated, allocating core of [`range_auc_pr`] — assumes inputs
+/// Validated, allocating core of [`range_auc_pr`] - assumes inputs
 /// already passed [`validate`].
 #[allow(clippy::cast_precision_loss)]
 fn range_auc_pr_inner(scores: &[f64], labels: &[bool], buffer: usize) -> f64 {
@@ -128,7 +128,7 @@ fn range_auc_pr_inner(scores: &[f64], labels: &[bool], buffer: usize) -> f64 {
         return 0.0;
     }
 
-    // Inflate the label mask by `buffer` on each side — precision
+    // Inflate the label mask by `buffer` on each side - precision
     // numerator uses this as its "true-positive" definition.
     let y_inflated = dilate(labels, buffer);
 
@@ -144,7 +144,7 @@ fn range_auc_pr_inner(scores: &[f64], labels: &[bool], buffer: usize) -> f64 {
     let mut precision_tp = 0_usize;
     let mut emitted = 0_usize;
 
-    // PR curve starts at (R=0, P=1) — the convention in
+    // PR curve starts at (R=0, P=1) - the convention in
     // scikit-learn / VUS reference code.
     let mut prev_recall = 0.0_f64;
     let mut prev_precision = 1.0_f64;
@@ -180,7 +180,7 @@ fn range_auc_pr_inner(scores: &[f64], labels: &[bool], buffer: usize) -> f64 {
     auc
 }
 
-/// Binary dilation — `out[i] = true` iff any `labels[j]` with
+/// Binary dilation - `out[i] = true` iff any `labels[j]` with
 /// `|i - j| ≤ buffer` is `true`. Computed in `O(n)` via a cumulative
 /// sum over the indicator array.
 fn dilate(labels: &[bool], buffer: usize) -> Vec<bool> {
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn monotone_in_score_quality() {
-        // A "bad" + "good" detector — good should score higher.
+        // A "bad" + "good" detector - good should score higher.
         let n = 64;
         let mut labels = vec![false; n];
         for i in 30..34 {

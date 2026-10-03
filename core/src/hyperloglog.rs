@@ -1,4 +1,4 @@
-//! `HyperLogLog` — probabilistic distinct-count (cardinality)
+//! `HyperLogLog` - probabilistic distinct-count (cardinality)
 //! estimator.
 //!
 //! `m = 2^p` register bank; each `add(x)` hashes `x` into 64 bits,
@@ -41,11 +41,11 @@ use num_traits::Float;
 
 use crate::error::{RcfError, RcfResult};
 
-/// Minimum precision bit count — 16 registers.
+/// Minimum precision bit count - 16 registers.
 pub const MIN_PRECISION: u8 = 4;
-/// Maximum precision bit count — 65 536 registers.
+/// Maximum precision bit count - 65 536 registers.
 pub const MAX_PRECISION: u8 = 16;
-/// Default precision `p = 12` — 4 096 registers, ≈ 1.625 % std
+/// Default precision `p = 12` - 4 096 registers, ≈ 1.625 % std
 /// error, ~4 KiB memory.
 pub const DEFAULT_PRECISION: u8 = 12;
 
@@ -62,22 +62,22 @@ pub const DEFAULT_PRECISION: u8 = 12;
 /// }
 /// let est = hll.estimate();
 /// let err = (est as i64 - 10_000).unsigned_abs() as f64 / 10_000.0;
-/// assert!(err < 0.05); // 3× the theoretical 1.625 % — conservative
+/// assert!(err < 0.05); // 3× the theoretical 1.625 % - conservative
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "HyperLogLogShadow"))]
 pub struct HyperLogLog {
-    /// Precision — register count is `2^precision`.
+    /// Precision - register count is `2^precision`.
     precision: u8,
     /// Per-register max-leading-zero count. `len == 2^precision`.
     registers: Vec<u8>,
-    /// Total values offered to [`Self::add`] — ops signal, not
+    /// Total values offered to [`Self::add`] - ops signal, not
     /// used by the estimator.
     total_added: u64,
 }
 
-/// Over-the-wire [`HyperLogLog`] layout — mirrors the public type
+/// Over-the-wire [`HyperLogLog`] layout - mirrors the public type
 /// field-for-field. Deserialization lands here first so
 /// [`TryFrom`] can re-run the constructor's invariant checks
 /// (`precision ∈ [MIN, MAX]`, register bank length `== 2^precision`)
@@ -148,12 +148,12 @@ impl HyperLogLog {
         })
     }
 
-    /// Default sketch — `p = 12`, 4 096 registers, ≈ 1.625 % std
+    /// Default sketch - `p = 12`, 4 096 registers, ≈ 1.625 % std
     /// error, ~4 KiB memory.
     ///
     /// # Panics
     ///
-    /// Never in practice — [`DEFAULT_PRECISION`] is a compile-time
+    /// Never in practice - [`DEFAULT_PRECISION`] is a compile-time
     /// constant validated against the `[MIN, MAX]` range.
     #[must_use]
     pub fn with_default_precision() -> Self {
@@ -196,7 +196,7 @@ impl HyperLogLog {
 
     /// Ingest a raw byte key. Cheaper when the caller already has
     /// a fixed-size fingerprint (e.g. `[u8; 16]` IP, flow-hash
-    /// tuple) — skips the generic `Hash` dispatch.
+    /// tuple) - skips the generic `Hash` dispatch.
     #[inline]
     pub fn add_bytes(&mut self, key: &[u8]) {
         let mut h = DefaultHasher::new();
@@ -206,7 +206,7 @@ impl HyperLogLog {
 
     /// Ingest a caller-supplied 64-bit hash. Escape hatch for
     /// callers with a stronger hasher (e.g. xxhash, siphash with
-    /// a keyed seed) — the sketch's accuracy depends on
+    /// a keyed seed) - the sketch's accuracy depends on
     /// `hash % 2^p` being uniform.
     #[allow(clippy::cast_possible_truncation)]
     #[inline]
@@ -217,7 +217,7 @@ impl HyperLogLog {
         // `as usize` cast is infallible on 32-bit+ targets since
         // `p ≤ 16` bounds the result to ≤ 65 535.
         let idx = (hash >> (64 - p)) as usize;
-        // Retained bits after the index — shifted so `leading_zeros`
+        // Retained bits after the index - shifted so `leading_zeros`
         // counts within the full 64-bit lane. Result fits `u8`
         // because `leading_zeros` is in `[0, 64]` and `p ≥ 4`.
         let tail = hash << p;
@@ -232,7 +232,7 @@ impl HyperLogLog {
         }
     }
 
-    /// Cardinality estimate — number of distinct values ingested.
+    /// Cardinality estimate - number of distinct values ingested.
     #[must_use]
     #[allow(
         clippy::cast_precision_loss,
@@ -256,20 +256,20 @@ impl HyperLogLog {
         let alpha = alpha_m(m);
         let raw = alpha * m_f * m_f / sum;
 
-        // Small-range correction — switch to linear counting
+        // Small-range correction - switch to linear counting
         // when many registers still hold the initial zero.
         if raw <= 2.5 * m_f && zeros > 0 {
             let v = zeros as f64;
             return (m_f * (m_f / v).ln()).round().max(0.0) as u64;
         }
 
-        // No large-range correction needed for 64-bit hashes —
+        // No large-range correction needed for 64-bit hashes -
         // the usual `2^32` ceiling only matters for 32-bit output.
         raw.round().max(0.0) as u64
     }
 
     /// Fold `other` into `self` by taking a per-register maximum.
-    /// Two sketches must share the same precision — HLL merge is
+    /// Two sketches must share the same precision - HLL merge is
     /// the whole reason the sketch is decomposable across shards
     /// / time windows.
     ///

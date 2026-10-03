@@ -43,7 +43,7 @@ pub fn score_unseen(depth: usize, mass: u64) -> f64 {
 }
 
 /// Damping factor `1 / (1 + ln(mass) / ln(total_mass))`. Returns
-/// `1.0` when `total_mass <= 1` (single-leaf tree — no damping).
+/// `1.0` when `total_mass <= 1` (single-leaf tree - no damping).
 #[must_use]
 pub fn damp(mass: u64, total_mass: u64) -> f64 {
     if total_mass <= 1 || mass == 0 {

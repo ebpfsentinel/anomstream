@@ -5,15 +5,15 @@
 //!
 //! 1. A point far outside the training baseline on a single dim
 //!    yields a stability report where every tree agrees on that
-//!    dim — `confidence` near `1.0` for the driver dim.
+//!    dim - `confidence` near `1.0` for the driver dim.
 //! 2. A "noisy" probe inside the baseline produces a report where
 //!    `mean ≈ 0` and the confidence bound is well-defined (`1.0` for
 //!    zero mean).
 //! 3. The stability mean equals the regular `attribution` mean bit
-//!    for bit — no silent drift in the accumulation path.
+//!    for bit - no silent drift in the accumulation path.
 //! 4. `attribution_stability` rejects dimension-mismatched points
 //!    and non-finite components just like `attribution` does.
-//! 5. The pool-level entry point is tenant-isolated — shocking
+//! 5. The pool-level entry point is tenant-isolated - shocking
 //!    tenant A's attribution does not change the stability report
 //!    for tenant B.
 
@@ -72,7 +72,7 @@ fn stability_mean_equals_plain_attribution() {
     let plain = f.attribution(&probe).unwrap();
     let s = f.attribution_stability(&probe).unwrap();
     // Tolerance accounts for rayon's reorder-safe fold/reduce in
-    // attribution() — the serial stability path can differ from the
+    // attribution() - the serial stability path can differ from the
     // parallel sum in the last ULP or two. 1e-10 is orders of
     // magnitude below any observable anomaly signal.
     for d in 0..4 {
@@ -174,7 +174,7 @@ fn pool_attribution_stability_is_tenant_isolated() {
     let b = pool.attribution_stability(&"b", &probe).unwrap();
     // Tenant A should see dim 0 as the driver (with high confidence).
     assert_eq!(a.argmax_weighted(), Some(0));
-    // Tenant B should see either noise or a different driver — at
+    // Tenant B should see either noise or a different driver - at
     // minimum, dim 0 is NOT the leader by a wide margin.
     let a_driver_mean = a.mean().per_dim_total(0);
     let b_driver_mean = b.mean().per_dim_total(0);

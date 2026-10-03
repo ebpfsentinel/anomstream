@@ -12,7 +12,7 @@ use thiserror::Error;
 
 /// Errors produced by `anomstream-core`.
 ///
-/// Variants are stable across `0.x` patch releases — adding a new
+/// Variants are stable across `0.x` patch releases - adding a new
 /// variant is a minor-version change.
 ///
 /// # Examples
@@ -38,7 +38,7 @@ pub enum RcfError {
     /// A configuration value falls outside the AWS `SageMaker` spec
     /// bounds enforced by `ForestBuilder`. The message payload is
     /// `Box<str>` rather than `String` so the variant fits in
-    /// 16 bytes on 64-bit targets (vs 24 for `String`) — matters
+    /// 16 bytes on 64-bit targets (vs 24 for `String`) - matters
     /// when `RcfError` propagates through hot-path return values.
     #[error("invalid configuration: {0}")]
     InvalidConfig(Box<str>),
@@ -70,7 +70,7 @@ pub enum RcfError {
     ///
     /// Left as `String` (not `Box<str>`) because every emission
     /// site formats a fresh heap-allocated message from an
-    /// upstream `serde` / `postcard` error — the extra 8 bytes
+    /// upstream `serde` / `postcard` error - the extra 8 bytes
     /// per variant vs `Box<str>` would cost a round-trip through
     /// `Box::from(String)` on an already-cold path.
     #[error("serialization failed: {0}")]

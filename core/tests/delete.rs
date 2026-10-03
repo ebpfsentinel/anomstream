@@ -14,7 +14,7 @@
 //!    returning the count.
 //! 5. Score + attribution continue to work after deletion.
 //! 6. The pool's `delete` / `delete_by_value` do not auto-create
-//!    tenants — retraction for an unknown tenant is a no-op.
+//!    tenants - retraction for an unknown tenant is a no-op.
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 

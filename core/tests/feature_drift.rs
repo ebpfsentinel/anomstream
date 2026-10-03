@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Integration-level checks on [`FeatureDriftDetector`] — empirical
+//! Integration-level checks on [`FeatureDriftDetector`] - empirical
 //! PSI / KL behaviour against known distributions.
 
 use anomstream_core::feature_drift::{

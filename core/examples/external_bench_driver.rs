@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::similar_names)]
-//! anomstream-core side of the synthetic-corpus bench — reads the CSV
+//! anomstream-core side of the synthetic-corpus bench - reads the CSV
 //! emitted by `scripts/synthetic/gen_points.py`, warms a
 //! forest, then reports inserts/s, scores/s, and `AUC` against
 //! the first-column label. Matches the metric shape of
 //! `bench_rrcf_synthetic.py` / `bench_sklearn_synthetic.py` so the numbers sit
 //! side by side in `docs/performance.md`.
 //!
-//! Deliberately `D = 16` (AWS-default) — regenerate the CSV with
+//! Deliberately `D = 16` (AWS-default) - regenerate the CSV with
 //! a matching width if you want a different dimensionality.
 //!
 //! Run with:
@@ -33,7 +33,7 @@ fn main() -> Result<(), RcfError> {
 
     let (points, labels) = load_csv(path);
     let n = points.len();
-    // Split 30 / 70 — warm on the first slice, score the rest
+    // Split 30 / 70 - warm on the first slice, score the rest
     // against the frozen-ish baseline. Matches realistic agent
     // deployments and gives a non-degenerate AUC signal on
     // synthetic outlier corpora.
@@ -46,7 +46,7 @@ fn main() -> Result<(), RcfError> {
         .seed(2026)
         .build()?;
 
-    // Warm phase — insert the first slice, no scoring yet.
+    // Warm phase - insert the first slice, no scoring yet.
     let t_insert = Instant::now();
     for p in &points[..split] {
         forest.update(*p)?;
@@ -55,10 +55,10 @@ fn main() -> Result<(), RcfError> {
     #[allow(clippy::cast_precision_loss)]
     let insert_per_s = split as f64 * 1.0e9 / insert_ns as f64;
 
-    // Eval phase — score the remaining points against the trained
+    // Eval phase - score the remaining points against the trained
     // baseline via the parallel `score_many` path. rayon fans out
     // across points on top of the per-tree parallelism, matching
-    // sklearn's `n_jobs=-1` — apples to apples throughput.
+    // sklearn's `n_jobs=-1` - apples to apples throughput.
     let eval = &points[split..];
     let eval_labels = &labels[split..];
     let t_score = Instant::now();
@@ -70,7 +70,7 @@ fn main() -> Result<(), RcfError> {
 
     let a = auc(&scores, eval_labels);
 
-    // Second scoring round — probe-based codisp via the
+    // Second scoring round - probe-based codisp via the
     // single-probe `score_codisp` path (insert probe, walk
     // leaf → root, delete probe per probe). The batched
     // `score_codisp_many` saturates the reservoir when the batch

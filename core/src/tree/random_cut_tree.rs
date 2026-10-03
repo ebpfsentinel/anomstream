@@ -3,19 +3,19 @@
 //! [`RandomCutTree`] sits on top of [`crate::tree::NodeStore`] and
 //! provides three operations:
 //!
-//! - [`add`](RandomCutTree::add) — insert a point following Guha
+//! - [`add`](RandomCutTree::add) - insert a point following Guha
 //!   et al. (2016) §2: at every visited node, sample a cut over the
 //!   augmented bounding box; if the cut isolates the new point from
 //!   the existing subtree, splice a new internal node here, otherwise
 //!   descend along the existing cut.
-//! - [`delete`](RandomCutTree::delete) — remove a leaf, merge its
+//! - [`delete`](RandomCutTree::delete) - remove a leaf, merge its
 //!   sibling up into the parent's slot, and recompute ancestor masses
 //!   and bounding boxes.
-//! - [`traverse`](RandomCutTree::traverse) — walk root→leaf along the
+//! - [`traverse`](RandomCutTree::traverse) - walk root→leaf along the
 //!   stored cuts, dispatching per-node callbacks to a
 //!   [`crate::visitor::Visitor`].
 //!
-//! The tree never owns point coordinates — callers (the forest
+//! The tree never owns point coordinates - callers (the forest
 //! layer) hand a [`PointAccessor`] in for any operation that needs
 //! to know a leaf's location.
 
@@ -38,7 +38,7 @@ use crate::visitor::Visitor;
 /// `Vec<[f64; D]>` for in-tree tests.
 ///
 /// `D` matches the tree's compile-time dimensionality so the returned
-/// reference is a fixed-size array rather than a slice — callers can
+/// reference is a fixed-size array rather than a slice - callers can
 /// always pass it to [`BoundingBox::from_point`] without paying for a
 /// runtime length check.
 ///
@@ -94,8 +94,8 @@ pub struct RandomCutTree<const D: usize> {
     /// Backing storage for all live nodes.
     store: NodeStore<D>,
     /// Reverse index: `point_idx → leaf NodeRef` for `O(1)` deletions.
-    /// Backed by a sparse `Vec<Option<NodeRef>>` indexed by `point_idx`
-    /// — the forest's `PointStore` reuses freed slots so the indices
+    /// Backed by a sparse `Vec<Option<NodeRef>>` indexed by `point_idx` -
+    /// the forest's `PointStore` reuses freed slots so the indices
     /// stay dense in steady state. Maintained alongside
     /// `distinct_count` so `distinct_point_count` stays `O(1)`.
     leaf_index: Vec<Option<NodeRef>>,
@@ -158,7 +158,7 @@ impl<const D: usize> RandomCutTree<D> {
         self.leaf_index.get(idx).copied().flatten()
     }
 
-    /// Whether `point_idx` is currently mapped — `O(1)` `Vec` index.
+    /// Whether `point_idx` is currently mapped - `O(1)` `Vec` index.
     #[inline]
     #[must_use]
     fn leaf_index_contains(&self, idx: usize) -> bool {
@@ -236,7 +236,7 @@ impl<const D: usize> RandomCutTree<D> {
     ///
     /// When an identical point is already present, the existing leaf's
     /// mass is incremented and `point_idx` is mapped to that same
-    /// leaf — duplicate-point handling per Guha 2016.
+    /// leaf - duplicate-point handling per Guha 2016.
     ///
     /// # Errors
     ///
@@ -281,7 +281,7 @@ impl<const D: usize> RandomCutTree<D> {
     // `Cow<BoundingBox<D>>` before we call `&mut self` helpers below.
     // With `[f64; D]` storage `Cow<BoundingBox<D>>` no longer
     // implements `Drop` directly, so clippy flags the explicit drops
-    // as redundant — they are not, they terminate the borrow.
+    // as redundant - they are not, they terminate the borrow.
     #[allow(clippy::drop_non_drop)]
     fn insert_at<R, P>(
         &mut self,
@@ -297,11 +297,11 @@ impl<const D: usize> RandomCutTree<D> {
     {
         let n_bbox = self.bbox_of(n, points)?;
 
-        // Sample over the *virtual* augmented bbox — no allocation
+        // Sample over the *virtual* augmented bbox - no allocation
         // unless we end up materialising the cached bbox for the
         // splice path below.
         if n_bbox.augmented_range_sum(point) <= 0.0 {
-            // Coincident with an existing leaf — bump its mass.
+            // Coincident with an existing leaf - bump its mass.
             drop(n_bbox);
             return self.absorb_duplicate(n, point_idx);
         }
@@ -310,7 +310,7 @@ impl<const D: usize> RandomCutTree<D> {
         let isolates = isolates_point(&cut, point, &n_bbox);
 
         if isolates {
-            // Materialise the augmented bbox once — it becomes the
+            // Materialise the augmented bbox once - it becomes the
             // cached bbox of the new internal node we are about to
             // splice in (so the allocation is unavoidable here).
             let mut augmented: BoundingBox<D> = (*n_bbox).clone();
@@ -382,7 +382,7 @@ impl<const D: usize> RandomCutTree<D> {
         Ok(new_internal)
     }
 
-    /// Cut did not isolate — descend into the matching subtree along
+    /// Cut did not isolate - descend into the matching subtree along
     /// the existing internal cut, updating mass and bbox on the way
     /// back up.
     fn descend_or_split<R, P>(
@@ -410,7 +410,7 @@ impl<const D: usize> RandomCutTree<D> {
                 // Under `packed-cut` two `f64`-distinct points can be
                 // closer than an `f32` ULP on every dimension, so no
                 // `f32` cut can separate them. They are coincident at the
-                // stored resolution — absorb the new point as a duplicate.
+                // stored resolution - absorb the new point as a duplicate.
                 #[cfg(feature = "packed-cut")]
                 return self.absorb_duplicate(n, point_idx);
             }
@@ -468,7 +468,7 @@ impl<const D: usize> RandomCutTree<D> {
     }
 
     /// Walk from `start` up to the root incrementing mass and
-    /// extending each cached internal bounding box by `point` —
+    /// extending each cached internal bounding box by `point` -
     /// in-place extend via [`NodeStore::view_mut`] avoids the
     /// `bbox.clone() + set_internal_bbox` round trip on every level.
     fn update_ancestors_after_insert(&mut self, start: NodeRef, point: &[f64]) -> RcfResult<()> {
@@ -518,7 +518,7 @@ impl<const D: usize> RandomCutTree<D> {
                 self.store.set_mass(parent, m - 1)?;
                 cur = parent;
             }
-            // Drop this idx from the reverse index — the leaf still
+            // Drop this idx from the reverse index - the leaf still
             // represents the other copies of the point under their own
             // point_idx, but `point_idx` itself is gone.
             self.leaf_index_clear(point_idx);
@@ -621,8 +621,8 @@ impl<const D: usize> RandomCutTree<D> {
         Ok(lb.merged(&rb))
     }
 
-    /// Borrow or build the bounding box of any node (internal: cached
-    /// — borrowed via [`Cow::Borrowed`] to skip an allocation; leaf:
+    /// Borrow or build the bounding box of any node (internal: cached -
+    /// borrowed via [`Cow::Borrowed`] to skip an allocation; leaf:
     /// built on the fly from the point store entry as
     /// [`Cow::Owned`]).
     fn bbox_of<'a, P>(&'a self, n: NodeRef, points: &'a P) -> RcfResult<Cow<'a, BoundingBox<D>>>
@@ -641,7 +641,7 @@ impl<const D: usize> RandomCutTree<D> {
         }
     }
 
-    /// Non-mutating codisp estimate — walks root → leaf following
+    /// Non-mutating codisp estimate - walks root → leaf following
     /// the stored cuts and accumulates the maximum per-depth ratio
     /// `sibling_mass / subtree_mass` across the descent path.
     ///
@@ -655,7 +655,7 @@ impl<const D: usize> RandomCutTree<D> {
     ///
     /// This path preserves the frozen-baseline promise exactly,
     /// takes `&self` so it parallelises across trees, and costs
-    /// `O(depth · D)` per call — typically cheaper than the
+    /// `O(depth · D)` per call - typically cheaper than the
     /// mutating walk since there is no reservoir housekeeping.
     ///
     /// # Errors
@@ -1127,7 +1127,7 @@ mod tests {
     }
 
     // Property test: under uniform-random insertions, the tree depth
-    // stays within `4 · ⌈log₂ N⌉ + 4` — the "expected `O(log n)`"
+    // stays within `4 · ⌈log₂ N⌉ + 4` - the "expected `O(log n)`"
     // bound from Guha 2016 §2 with a generous constant to absorb
     // the natural variance of random cuts.
     proptest::proptest! {

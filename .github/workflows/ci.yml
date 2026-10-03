@@ -4,7 +4,7 @@ name: CI
 # workflows (lint / test / build / security) on the development
 # sources (no version stamping).
 #
-# Per-commit CI is intentionally disabled — local
+# Per-commit CI is intentionally disabled - local
 # `cargo fmt && cargo clippy -- -D warnings && cargo test` covers
 # the hot loop. The Monday cron surfaces supply-chain drift
 # (yanked deps, fresh advisories) and `workflow_dispatch` is the

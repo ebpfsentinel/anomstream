@@ -73,7 +73,7 @@ fn warmup_gate_slows_reservoir_fill() {
 #[test]
 fn warmup_gate_preserves_without_replacement_invariant() {
     // Stream well past capacity and check each tree's reservoir still
-    // holds unique indices — the gate must not break the baseline
+    // holds unique indices - the gate must not break the baseline
     // AWS conformance property.
     let mut f = ForestBuilder::<4>::new()
         .num_trees(50)

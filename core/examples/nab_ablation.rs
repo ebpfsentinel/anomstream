@@ -9,7 +9,7 @@
     clippy::cast_precision_loss,
     clippy::redundant_closure_for_method_calls
 )]
-//! NAB ablation harness — try multiple hyperparameter / scoring
+//! NAB ablation harness - try multiple hyperparameter / scoring
 //! configurations on the `realKnownCause` subset, print weighted
 //! aggregate AUC per config. Used to gauge whether NAB results
 //! can be improved beyond the 0.615 baseline measured by
@@ -33,11 +33,11 @@ enum Mode {
     ForestFrozen,
     /// Bare RCF, probe-based hack (`update_indexed → score → delete`).
     ForestProbe,
-    /// Bare RCF, proper codisp via `score_codisp` — insert leaf,
+    /// Bare RCF, proper codisp via `score_codisp` - insert leaf,
     /// walk ancestors summing `max(sibling.mass / subtree.mass)`,
     /// remove leaf. The rrcf / AWS-Java scoring semantic.
     ForestCodisp,
-    /// TRCF with online updates — EMA-adaptive threshold evolves
+    /// TRCF with online updates - EMA-adaptive threshold evolves
     /// with the stream, `time_decay > 0` lets the baseline age out.
     /// `score_only` is called first (frozen view) and then the
     /// point is also folded back into the forest via `process` so
@@ -113,7 +113,7 @@ fn main() {
             false,
             0.1,
         ),
-        // TRCF online — real design for contextual anomalies
+        // TRCF online - real design for contextual anomalies
         mk("trcf-online D=8", 8, Mode::TrcfOnline, false, false, 0.0),
         mk("trcf-online D=32", 32, Mode::TrcfOnline, false, false, 0.0),
         mk(
@@ -263,7 +263,7 @@ fn run<const D: usize>(
         return (Vec::new(), Vec::new());
     }
 
-    // Build embeddings — either raw lag or first-difference.
+    // Build embeddings - either raw lag or first-difference.
     let (embeddings, ts_offset) = if cfg.diff_embedding {
         // [Δ_t, Δ_{t-1}, …, Δ_{t-(D-1)}] where Δ_t = v_t - v_{t-1}
         // Need D+1 history to build the first diff embedding →
@@ -372,12 +372,12 @@ fn run<const D: usize>(
                 .seed(2026)
                 .build()
                 .unwrap();
-            // Warm phase — process to feed both the forest and the
+            // Warm phase - process to feed both the forest and the
             // score-stream EMA so the threshold stabilises.
             for p in &embeddings[..warm_end] {
                 trcf.process(*p).ok();
             }
-            // Eval phase — continue processing, collect the graded
+            // Eval phase - continue processing, collect the graded
             // verdict. `grade()` is already normalised against the
             // adaptive threshold, which is the point.
             for (i, p) in embeddings[warm_end..].iter().enumerate() {

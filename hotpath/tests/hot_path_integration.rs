@@ -40,7 +40,7 @@ fn classifier_producer_updater_consumer_roundtrip() {
     let sampler = Arc::new(UpdateSampler::new(4));
     let (producer, consumer) = update_channel::<D>(1024);
     // Hold a local clone so we can read `dropped_total()` after
-    // classifier threads have dropped their handles — counters are
+    // classifier threads have dropped their handles - counters are
     // shared across clones via `Arc<AtomicU64>`.
     let observer = producer.clone();
     let stop = Arc::new(AtomicBool::new(false));
@@ -87,7 +87,7 @@ fn classifier_producer_updater_consumer_roundtrip() {
         c.join().unwrap();
     }
     drop(producer);
-    // Snapshot drop counter BEFORE dropping `observer` — counters
+    // Snapshot drop counter BEFORE dropping `observer` - counters
     // live in a shared Arc<AtomicU64>, so any live clone sees the
     // current total.
     let dropped = observer.dropped_total();
@@ -131,7 +131,7 @@ fn channel_drop_on_full_increments_counter() {
     let (p, _c) = update_channel::<2>(2);
     assert!(p.try_enqueue([1.0, 2.0]));
     assert!(p.try_enqueue([3.0, 4.0]));
-    // Queue full — both of these must drop.
+    // Queue full - both of these must drop.
     assert!(!p.try_enqueue([5.0, 6.0]));
     assert!(!p.try_enqueue([7.0, 8.0]));
     assert_eq!(p.enqueued_total(), 2);

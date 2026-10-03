@@ -11,7 +11,7 @@ repository = "https://github.com/maximewewer/anomstream"
 homepage = "https://github.com/maximewewer/anomstream"
 
 [workspace.dependencies]
-# Internal members — path deps resolve within the workspace.
+# Internal members - path deps resolve within the workspace.
 anomstream-core = { version = "0.0.0-dev", path = "core", default-features = false }
 anomstream-triage = { version = "0.0.0-dev", path = "triage", default-features = false }
 anomstream-hotpath = { version = "0.0.0-dev", path = "hotpath", default-features = false }

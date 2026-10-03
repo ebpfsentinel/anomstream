@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! Structured audit record for NIS2 / SOC2 compliance.
 //!
-//! Every "alert fired" event can be serialised to a durable log —
+//! Every "alert fired" event can be serialised to a durable log -
 //! score, grade, attribution, forensic baseline, severity, tenant
-//! key, timestamp — without the caller needing to reach into the
+//! key, timestamp - without the caller needing to reach into the
 //! underlying detector's analytic primitives.
 //!
 //! Run with `cargo run --example audit_trail --features postcard,serde_json`.
@@ -45,12 +45,12 @@ fn main() -> Result<(), RcfError> {
     #[cfg(feature = "serde_json")]
     {
         let json = serde_json::to_string(&record).expect("JSON serialise");
-        println!("json ({} bytes) — send to SIEM / WORM log", json.len());
+        println!("json ({} bytes) - send to SIEM / WORM log", json.len());
     }
     #[cfg(feature = "postcard")]
     {
         let bytes = postcard::to_allocvec(&record).expect("postcard serialise");
-        println!("postcard ({} bytes) — compact wire format", bytes.len());
+        println!("postcard ({} bytes) - compact wire format", bytes.len());
     }
     Ok(())
 }

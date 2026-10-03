@@ -19,14 +19,14 @@
 //! sampler degenerates to standard uniform-random reservoir sampling
 //! (keeping the smallest values of `ln(-ln(u))` is equivalent to the
 //! Efraimidis-Spirakis reservoir on weight 1). With `time_decay > 0`
-//! the offset shifts **older** items toward larger weights — so they
+//! the offset shifts **older** items toward larger weights - so they
 //! get evicted first and the reservoir biases toward recent items.
 //!
 //! # Warmup via `initial_accept_fraction`
 //!
 //! At boot the reservoir is empty and every offered point is admitted
 //! unconditionally. That makes the *very* first points over-weighted
-//! in the sample — a problem when the first batch of traffic is
+//! in the sample - a problem when the first batch of traffic is
 //! unrepresentative (startup noise, partial feature aggregations).
 //! Inspired by the AWS Java `CompactSampler`, [`ReservoirSampler`]
 //! supports an `initial_accept_fraction ∈ (0, 1]` that ramps the
@@ -102,7 +102,7 @@ struct WeightedEntry {
 
 impl PartialEq for WeightedEntry {
     fn eq(&self, other: &Self) -> bool {
-        // NaN cannot occur — `accept` rejects non-finite u and the
+        // NaN cannot occur - `accept` rejects non-finite u and the
         // formula is otherwise total. Use bitwise equality so two
         // entries with the same weight but different idx still
         // compare equal *for ordering purposes only*.
@@ -173,7 +173,7 @@ pub struct ReservoirSampler {
     initial_accept_fraction: f64,
 }
 
-/// Default value for [`ReservoirSampler::initial_accept_fraction`] — no
+/// Default value for [`ReservoirSampler::initial_accept_fraction`] - no
 /// warmup gating (classic reservoir behaviour). Exported primarily so
 /// the `serde` deserialiser can tolerate payloads persisted before the
 /// warmup knob was introduced.
@@ -187,7 +187,7 @@ impl ReservoirSampler {
     ///
     /// Shortcut for
     /// [`ReservoirSampler::with_initial_accept_fraction`]`(capacity,
-    /// time_decay, 1.0)` — preserved so existing callers do not need
+    /// time_decay, 1.0)` - preserved so existing callers do not need
     /// to thread the new parameter.
     ///
     /// # Errors
@@ -315,7 +315,7 @@ impl ReservoirSampler {
     }
 
     /// Whether `point_idx` is currently held in the reservoir.
-    /// O(`capacity`) — used by tests; the forest layer enforces
+    /// O(`capacity`) - used by tests; the forest layer enforces
     /// uniqueness through its own point store.
     #[must_use]
     pub fn contains(&self, point_idx: usize) -> bool {
@@ -326,14 +326,14 @@ impl ReservoirSampler {
     /// entry and the heap invariant. Returns `true` when a matching
     /// entry was present and evicted, `false` otherwise.
     ///
-    /// O(capacity) — drains the heap into a transient `Vec`, filters
+    /// O(capacity) - drains the heap into a transient `Vec`, filters
     /// out the target, and rebuilds. The reservoir size drops by one
     /// on success and the `entries_seen` counter is *not* adjusted
     /// so the time-decay weight trajectory of future inserts is
     /// unchanged.
     ///
     /// Exposed to support explicit deletion flows from the forest
-    /// layer (e.g. SOC-driven false-positive retractions) — the
+    /// layer (e.g. SOC-driven false-positive retractions) - the
     /// natural eviction path via [`Self::accept`] does not let
     /// callers target a specific index.
     pub fn remove(&mut self, point_idx: usize) -> bool {
@@ -381,7 +381,7 @@ impl ReservoirSampler {
             }
         }
 
-        // u ∈ (0, 1) — the standard `random::<f64>()` returns [0, 1),
+        // u ∈ (0, 1) - the standard `random::<f64>()` returns [0, 1),
         // so clamp the lower bound away from zero to keep `ln` finite.
         let mut u: f64 = rng.random();
         if u <= 0.0 {
@@ -397,7 +397,7 @@ impl ReservoirSampler {
             return SamplerOp::Inserted;
         }
 
-        // Max-heap: peek returns the largest weight currently held —
+        // Max-heap: peek returns the largest weight currently held -
         // the next eviction candidate. A smaller-weight new entry
         // bumps it out so the reservoir keeps the K smallest weights.
         let max_weight = self.heap.peek().expect("heap is non-empty").weight;
@@ -610,7 +610,7 @@ mod tests {
         }
 
         // With λ=0, expect ~10% of reservoir from last 10% of inputs.
-        // With λ > 0, recent items should be over-represented — assert
+        // With λ > 0, recent items should be over-represented - assert
         // > 25% (well above the uniform baseline).
         let total: u32 = (TRIALS * CAP) as u32;
         let recent_share = f64::from(recent_count) / f64::from(total);
@@ -790,7 +790,7 @@ mod tests {
         }
         let pivot = s.iter_indices().next().unwrap();
         assert!(s.remove(pivot));
-        // Force a fresh accept — the sampler should still decide
+        // Force a fresh accept - the sampler should still decide
         // evictions correctly against the rebuilt heap.
         let op = s.accept(9999, &mut rng);
         assert!(matches!(

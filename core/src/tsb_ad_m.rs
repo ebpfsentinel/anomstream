@@ -1,4 +1,4 @@
-//! TSB-AD-M — CSV loader for the multivariate split of the
+//! TSB-AD-M - CSV loader for the multivariate split of the
 //! Time-Series Benchmark for Anomaly Detection (Liu & Paparrizos,
 //! `NeurIPS` 2024).
 //!
@@ -13,7 +13,7 @@
 //! Every non-label column is a feature (`f64`); the final column
 //! carries a binary anomaly flag encoded as `0` / `1` (or `0.0` /
 //! `1.0`). Timestamp columns, when present, are treated as
-//! ordinary features — TSB-AD-M leaves time handling to the
+//! ordinary features - TSB-AD-M leaves time handling to the
 //! caller.
 //!
 //! The loader is dependency-free on purpose: TSB-AD-M files are
@@ -21,7 +21,7 @@
 //! comma delimiter, so a hand-written splitter is sufficient and
 //! keeps the crate's dep graph small.
 //!
-//! Gated behind `std` — needs `std::fs` for [`TsbAdMDataset::load_csv`].
+//! Gated behind `std` - needs `std::fs` for [`TsbAdMDataset::load_csv`].
 //!
 //! # Reference
 //!
@@ -38,7 +38,7 @@ use std::path::Path;
 
 use crate::error::{RcfError, RcfResult};
 
-/// One TSB-AD-M dataset — features + per-timestamp labels.
+/// One TSB-AD-M dataset - features + per-timestamp labels.
 ///
 /// `features[i]` is the `D`-dim feature vector at timestamp `i`.
 /// `labels[i]` is `true` iff timestamp `i` is flagged anomalous
@@ -193,7 +193,7 @@ impl TsbAdMDataset {
     }
 }
 
-/// Parse a TSB-AD-M label cell — accepts common binary encodings.
+/// Parse a TSB-AD-M label cell - accepts common binary encodings.
 fn parse_label(cell: &str) -> Option<bool> {
     match cell {
         "0" | "0.0" | "false" | "False" | "FALSE" => Some(false),

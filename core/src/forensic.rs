@@ -1,4 +1,4 @@
-//! Imputation-like forensic baseline — answer "what would this
+//! Imputation-like forensic baseline - answer "what would this
 //! dim have looked like if the point were normal?" by aggregating
 //! the per-dim distribution of the forest's currently-held sample
 //! points.
@@ -6,20 +6,20 @@
 //! Inspired by AWS's `ImputeVisitor` but repurposed: instead of
 //! imputing a `NaN` feature, this helper tells an SOC analyst how
 //! far an observed point sits from the forest's current idea of
-//! "normal" on every dimension — the *expected value under
+//! "normal" on every dimension - the *expected value under
 //! normality* plus a z-score-style delta.
 //!
 //! # Semantics
 //!
-//! - `expected[d]` — mean of dim `d` across every point currently
+//! - `expected[d]` - mean of dim `d` across every point currently
 //!   held in any tree's reservoir (the forest's live baseline).
-//! - `stddev[d]` — population standard deviation of the same set.
-//! - `observed[d]` — the caller's raw query value.
+//! - `stddev[d]` - population standard deviation of the same set.
+//! - `observed[d]` - the caller's raw query value.
 //! - `delta[d] = observed[d] − expected[d]`.
 //! - `zscore[d] = delta[d] / stddev[d]` (clamped to `0` when the
-//!   baseline stddev is zero on a dim — constant baseline means
+//!   baseline stddev is zero on a dim - constant baseline means
 //!   no meaningful z-score).
-//! - `live_points` — number of unique points contributing to the
+//! - `live_points` - number of unique points contributing to the
 //!   baseline.
 //!
 //! The baseline is computed in raw-point space: `feature_scales`
@@ -32,7 +32,7 @@
 /// the forest's current live sample distribution.
 ///
 /// Serialisable under the `serde` feature through the crate's
-/// `fixed_array_f64` adapter — callers that persist alert records
+/// `fixed_array_f64` adapter - callers that persist alert records
 /// for NIS2 / SOC2 audit trails can embed this struct directly.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -57,7 +57,7 @@ pub struct ForensicBaseline<const D: usize> {
 }
 
 impl<const D: usize> ForensicBaseline<D> {
-    /// Index of the dimension with the largest `|zscore|` — the dim
+    /// Index of the dimension with the largest `|zscore|` - the dim
     /// most out-of-family relative to the live baseline. Returns
     /// `None` on an empty forest (no live points) or when every
     /// z-score is exactly zero.

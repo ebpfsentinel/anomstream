@@ -41,7 +41,7 @@ fn unique_tmp_path(tag: &str) -> PathBuf {
     p
 }
 
-/// Best-effort cleanup — ignore failures (another test may have
+/// Best-effort cleanup - ignore failures (another test may have
 /// already unlinked the file, or it may never have existed).
 fn cleanup(path: &Path) {
     let _ = fs::remove_file(path);

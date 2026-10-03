@@ -3,7 +3,7 @@
 `anomstream-core` enforces the documented AWS `SageMaker` hyperparameter
 bounds at build time. Beyond these invariants the library does not
 aim for bit-exact parity with
-[aws/random-cut-forest-by-aws](https://github.com/aws/random-cut-forest-by-aws) —
+[aws/random-cut-forest-by-aws](https://github.com/aws/random-cut-forest-by-aws) -
 feature evolution is driven by eBPFsentinel Enterprise needs.
 
 Regression test: `tests/aws_conformance.rs` pins every row below.
@@ -14,7 +14,7 @@ Regression test: `tests/aws_conformance.rs` pins every row below.
 | `num_trees ∈ [50, 1000]`, default `100`                      | enforced by `ForestBuilder`                                                                                            |
 | `num_samples_per_tree ∈ [1, 2048]`, default `256`            | enforced by `ForestBuilder`                                                                                            |
 | `time_decay = 0.1 / sample_size`                             | resolved by `ForestBuilder`; pass `.time_decay(0.0)` to disable                                                        |
-| `initial_accept_fraction ∈ [0, 1]`, default `1.0` (disabled) | `ForestBuilder::initial_accept_fraction` — pass `0.125` to match AWS `CompactSampler`                                  |
+| `initial_accept_fraction ∈ [0, 1]`, default `1.0` (disabled) | `ForestBuilder::initial_accept_fraction` - pass `0.125` to match AWS `CompactSampler`                                  |
 | Reservoir sampling without replacement                       | `sampler::ReservoirSampler`                                                                                            |
 | Score = average across trees (isolation depth)               | `forest::RandomCutForest::score` (fast, non-mutating, parallel)                                                        |
 | Collusive-displacement score (AWS Java / rrcf default)       | `forest::RandomCutForest::score_codisp` (probe-based, mutating) or `score_codisp_stateless` (non-mutating, drift-free) |
@@ -22,93 +22,93 @@ Regression test: `tests/aws_conformance.rs` pins every row below.
 
 Extensions beyond the AWS signature:
 
-- `ForestBuilder::feature_scales([f64; D])` — per-dim pre-scaling
+- `ForestBuilder::feature_scales([f64; D])` - per-dim pre-scaling
   applied before any hot-path call. `1 / stddev[d]` gives
   unit-variance normalisation without a separate caller pass.
-- `ThresholdedForest` — adaptive threshold on top of the bare
+- `ThresholdedForest` - adaptive threshold on top of the bare
   forest, inspired by AWS's `TRCF` in `randomcutforest-parkservices`
   but kept light (no short/long duality, no near-threshold
   heuristics). Builder `z_factor`, `min_threshold`,
   `min_observations`, `score_decay`. Two `ThresholdMode` variants:
   legacy `ZSigma { z_factor }` (`μ + z·σ` on EMA) or new
-  `Quantile { p }` (streaming `TDigest` p99/p99.9) — the latter is
+  `Quantile { p }` (streaming `TDigest` p99/p99.9) - the latter is
   the recommended path because isolation-depth scores are
   right-skewed, not Gaussian. Opt in via
   `ThresholdedForestBuilder::quantile_threshold(p)`.
-- `forensic_baseline(&point)` — repurposes the AWS `ImputeVisitor`
+- `forensic_baseline(&point)` - repurposes the AWS `ImputeVisitor`
   concept as a per-dim _"what would this have looked like under
   the live baseline?"_ SOC triage helper. Returns raw-space
   `expected / stddev / delta / zscore`.
-- `score_early_term` — sequential early-termination scoring on
+- `score_early_term` - sequential early-termination scoring on
   converged per-tree means, cuts latency on easy points.
-- `score_codisp` — probe-based codisp walk (insert → walk leaf
+- `score_codisp` - probe-based codisp walk (insert → walk leaf
   → root accumulating `max(sibling.mass / subtree.mass)` per
   level → delete). Matches AWS Java / rrcf scoring semantic;
   ~25× slower than `score()` post the rayon-per-tree parallel
   walk + delete refactor. On NAB `realKnownCause` it lifts
   aggregate AUC 0.719 → 0.776. Mutates the reservoir per probe
-  — known baseline drift on long streams, see
+  - known baseline drift on long streams, see
   `score_codisp_stateless`.
-- `score_codisp_stateless` — non-mutating codisp estimate via
+- `score_codisp_stateless` - non-mutating codisp estimate via
   root → leaf descent along stored cuts, `max(sibling_mass /
 subtree_mass)` per depth. Takes `&self`, rayon-parallel across
   trees, preserves the frozen-baseline promise exactly (zero
   reservoir churn). Aggregate AUC 0.763 on NAB, 0.751 on
-  TSB-AD-M — ~0.01-0.02 below the mutating variant, ~12×
+  TSB-AD-M - ~0.01-0.02 below the mutating variant, ~12×
   faster on NAB (1.09 s full corpus vs 12.6 s).
-- `score_codisp_many` / `score_codisp_stateless_many` — batched
+- `score_codisp_many` / `score_codisp_stateless_many` - batched
   variants. The mutating `_many` pre-inserts all probes, shares
   the walk cache, then bulk-deletes (saturates reservoir past
   batch ≥ sample_size). The stateless `_many` maps over probes
   in parallel, handles arbitrary batch sizes, zero drift.
-- `score_and_attribution` — fused single-walk producing
-  `(AnomalyScore, DiVector)` — ~40 % faster than calling
+- `score_and_attribution` - fused single-walk producing
+  `(AnomalyScore, DiVector)` - ~40 % faster than calling
   `score` + `attribution` back-to-back.
-- `score_with_confidence` — mean + per-tree dispersion
+- `score_with_confidence` - mean + per-tree dispersion
   (`stddev`, `stderr`), `ci95()` / `ci(z)` helpers for Gaussian
   confidence intervals.
-- `score_many_locality_sorted` + `locality_bucket` — opt-in
+- `score_many_locality_sorted` + `locality_bucket` - opt-in
   cache-aware batch scoring (sort by quantised leading-dim key,
   score, un-permute). Wins only on strongly-correlated batches;
-  do not swap blindly — bench your workload.
-- `DynamicForest<MAX_D>` (`dynamic_forest`) — runtime-dim wrapper
+  do not swap blindly - bench your workload.
+- `DynamicForest<MAX_D>` (`dynamic_forest`) - runtime-dim wrapper
   for heterogeneous multi-tenant / MSSP deployments. Zero-pads
   inputs shorter than `MAX_D`; preserves the const-generic
   hot-path semantics.
-- `SageEstimator<D>` (`sage`) — Monte-Carlo permutation-sampling
+- `SageEstimator<D>` (`sage`) - Monte-Carlo permutation-sampling
   Shapley attribution (Covert NeurIPS 2020). Interaction-aware
   alternative to the marginal `DiVector` attribution.
-- `LshAlertClusterer` (`lsh_cluster`) — O(1) bucket-hash
+- `LshAlertClusterer` (`lsh_cluster`) - O(1) bucket-hash
   alternative to the cosine-similarity `AlertClusterer`. Scales
   to MSSP-volume alert streams.
-- `PlattCalibrator::update_online` — SGD step per labelled
+- `PlattCalibrator::update_online` - SGD step per labelled
   observation. Refine an existing batch fit as feedback
   accumulates.
-- `FeedbackStore<D>` + `FeedbackLabel` (`feedback` module) —
+- `FeedbackStore<D>` + `FeedbackLabel` (`feedback` module) -
   SOC-analyst-label ingestion (Das et al. `arXiv:1708.09441`).
   Analyst labels (`Benign` / `Confirmed`) fold into a bounded
   ledger; `adjust(probe, raw_score)` returns a Gaussian-kernel-
   weighted adjustment (Benign pulls down, Confirmed pushes up),
   forest untouched. Lightweight alternative to full AAD per-leaf
-  weight learning — swap in later if AUC gap justifies.
+  weight learning - swap in later if AUC gap justifies.
 - `AdwinDetector` + `DriftAwareForest` (`adwin` + `drift_aware`
-  modules) — ADWIN adaptive-window change-point detector (Bifet
+  modules) - ADWIN adaptive-window change-point detector (Bifet
   SDM 2007) + shadow-forest swap policy for drift recovery.
   Closes the "PSI fires Alert but baseline stays stale" gap: on
   trigger, spawn a shadow forest; swap atomically after
   `shadow_warmup` observations. `min_primary_age` anti-flap guard.
 - `PotDetector` + `fisher_combine` (`univariate_spot` +
-  `ensemble` modules) — streaming Peaks-Over-Threshold univariate
+  `ensemble` modules) - streaming Peaks-Over-Threshold univariate
   bank (Siffer KDD 2017) + Fisher's p-value combination for joint
   anomaly signal across K feature dims. Orthogonal ensemble head
   to catch per-dim marginal drift that isolation depth misses on
   heterogeneously-distributed multivariate features.
-- `ShingledForest<D>` — scalar-stream wrapper with internal
+- `ShingledForest<D>` - scalar-stream wrapper with internal
   ring-buffer shingling. Captures temporal autocorrelation that
   bare isolation depth misses on periodic / dwell / beaconing
   signals. Matches the shape of AWS Java `RotateShingle`; fixes
   NAB `rogue_agent_key_hold` / SWaT contextual-anomaly floors.
-- `hot_path` module — eBPF-ingress building blocks:
+- `hot_path` module - eBPF-ingress building blocks:
   `UpdateSampler` (stride / per-flow-hash 1-in-N admission, with
   `new_keyed` variant using a 128-bit `getrandom` secret to
   defeat MITRE ATLAS `AML.T0020` reservoir-poisoning sprays),

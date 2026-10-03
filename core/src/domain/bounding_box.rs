@@ -32,13 +32,13 @@ use crate::error::{RcfError, RcfResult};
 /// `f32` rounding of a value sampled in `[lo, hi)` can land on or past
 /// `hi` (breaking cut isolation) or just below `lo`; this snaps it back
 /// into the half-open interval. When no `f32` exists strictly inside
-/// `[lo, hi)` — the two bounds are closer than an `f32` ULP, i.e. the
-/// points are coincident at `f32` resolution — the result falls below
+/// `[lo, hi)` - the two bounds are closer than an `f32` ULP, i.e. the
+/// points are coincident at `f32` resolution - the result falls below
 /// `lo`, which yields a non-isolating cut that the tree resolves by
 /// absorbing the point as a duplicate.
 #[cfg(feature = "packed-cut")]
 #[inline]
-// Deliberate `f64 → f32` narrowing — the stored cut coordinate is `f32`
+// Deliberate `f64 → f32` narrowing - the stored cut coordinate is `f32`
 // under `packed-cut`; this fn exists to keep that narrowing inside
 // `[lo, hi)`.
 #[allow(clippy::cast_possible_truncation)]
@@ -128,7 +128,7 @@ impl<const D: usize> BoundingBox<D> {
     ///
     /// # Panics
     ///
-    /// Panics when `d >= D` — call sites are internal and always
+    /// Panics when `d >= D` - call sites are internal and always
     /// size-checked.
     #[must_use]
     #[inline]
@@ -216,7 +216,7 @@ impl<const D: usize> BoundingBox<D> {
         out
     }
 
-    /// Per-dimension extension required to accommodate `point` —
+    /// Per-dimension extension required to accommodate `point` -
     /// `Δ_d = max(0, point_d − max_d) + max(0, min_d − point_d)`.
     ///
     /// When `point` already lies inside the box every `Δ_d` is `0` and
@@ -387,7 +387,7 @@ impl<const D: usize> BoundingBox<D> {
     }
 
     /// Total cut probability without allocating the per-dim
-    /// breakdown — fast path for [`crate::ScalarScoreVisitor`].
+    /// breakdown - fast path for [`crate::ScalarScoreVisitor`].
     ///
     /// Fuses the `range_sum` and extension passes into a single SIMD
     /// loop so `self.min` / `self.max` are loaded once per chunk. The

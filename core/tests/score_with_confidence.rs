@@ -40,7 +40,7 @@ fn stderr_non_negative() {
 fn mean_matches_bare_score_call_within_ulp() {
     // The bare `score` path aggregates via rayon par-fold (different
     // pair-sum order) while `score_with_confidence` sums
-    // sequentially — 1 ULP drift is tolerated.
+    // sequentially - 1 ULP drift is tolerated.
     let f = warm_forest();
     let plain = f64::from(f.score(&[0.5; 4]).unwrap());
     let ci = f.score_with_confidence(&[0.5; 4]).unwrap();

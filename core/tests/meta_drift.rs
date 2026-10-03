@@ -6,9 +6,9 @@
 //!
 //! 1. Baseline traffic alone produces no drift fire even while the
 //!    forest is warming up and its scores are noisier.
-//! 2. A sustained distributional shift in the *input stream* — the
+//! 2. A sustained distributional shift in the *input stream* - the
 //!    kind of slow degradation that a per-point `μ + 3σ` gate can
-//!    miss — fires the CUSUM with the expected direction.
+//!    miss - fires the CUSUM with the expected direction.
 //! 3. `reset()` after a drift fire prepares the detector to catch
 //!    the next shift without double-counting the previous one.
 
@@ -41,7 +41,7 @@ fn tight(rng: &mut ChaCha8Rng) -> [f64; 4] {
 }
 
 fn drifted(rng: &mut ChaCha8Rng) -> [f64; 4] {
-    // Slightly wider distribution — every sample individually is
+    // Slightly wider distribution - every sample individually is
     // unlikely to trip the 3σ threshold of TRCF, but the sustained
     // shift raises the mean score enough for CUSUM to detect.
     [
@@ -71,13 +71,13 @@ fn baseline_only_produces_no_drift_fire() {
             fires += 1;
         }
     }
-    // Allow a handful of transient fires during the forest's warmup —
+    // Allow a handful of transient fires during the forest's warmup -
     // the score stream is noisiest while the reservoir is filling
     // and the EMA reference is still converging. Anything past single
     // digits would indicate a broken CUSUM, not warmup noise.
     assert!(
         fires < 5,
-        "CUSUM fired {fires} times on stationary baseline — suspiciously high for a quiet stream",
+        "CUSUM fired {fires} times on stationary baseline - suspiciously high for a quiet stream",
     );
 }
 
@@ -93,14 +93,14 @@ fn sustained_distributional_shift_fires_upward() {
     .unwrap();
     let mut rng = ChaCha8Rng::seed_from_u64(2);
 
-    // Phase 1: tight baseline — warms forest + CUSUM reference stats.
+    // Phase 1: tight baseline - warms forest + CUSUM reference stats.
     for _ in 0..1024 {
         let verdict = forest.process(tight(&mut rng)).unwrap();
         let _ = meta.observe(f64::from(verdict.score()));
     }
 
     // Phase 2: shifted distribution. Any individual point may be
-    // within TRCF's 3σ band, but the *average* score rises — the
+    // within TRCF's 3σ band, but the *average* score rises - the
     // signature CUSUM is designed to catch.
     let mut saw_upward = false;
     for _ in 0..512 {
@@ -146,7 +146,7 @@ fn reset_allows_detecting_the_next_shift() {
     assert_eq!(meta.s_high(), 0.0);
     assert_eq!(meta.s_low(), 0.0);
 
-    // Simulate values near the new mean — CUSUM accumulators stay
+    // Simulate values near the new mean - CUSUM accumulators stay
     // low. Then drive a fresh downward shift and expect the next
     // fire to be in the opposite direction.
     for _ in 0..64 {

@@ -35,7 +35,7 @@ use crate::visitor::scoring::{damp, normalizer, score_seen, score_unseen};
 pub struct AttributionVisitor<'a> {
     /// Per-dimension `(high, low)` accumulator.
     di: DiVector,
-    /// Queried point — borrowed for the visitor's lifetime so the
+    /// Queried point - borrowed for the visitor's lifetime so the
     /// forest layer can build a fresh visitor per tree without
     /// cloning the point coordinates each time.
     point: &'a [f64],
@@ -121,7 +121,7 @@ impl<const D: usize> Visitor<D> for AttributionVisitor<'_> {
     }
 
     fn accept_leaf(&mut self, _depth: usize, _mass: u64, _point_idx: usize) {
-        // No per-dimension cut at the leaf — nothing to attribute.
+        // No per-dimension cut at the leaf - nothing to attribute.
     }
 
     fn needs_per_dim_prob(&self) -> bool {

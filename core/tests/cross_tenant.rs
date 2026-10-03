@@ -32,7 +32,7 @@ fn make_pool() -> TenantForestPool<&'static str, 2> {
 fn ranks_and_filters_warming_up() {
     let mut pool = make_pool();
     let mut rng = ChaCha8Rng::seed_from_u64(1);
-    // a, b, c — all trained past min_observations.
+    // a, b, c - all trained past min_observations.
     for _ in 0..64 {
         pool.process(&"a", [rng.random::<f64>() * 0.1, rng.random::<f64>() * 0.1])
             .unwrap();
@@ -47,7 +47,7 @@ fn ranks_and_filters_warming_up() {
         )
         .unwrap();
     }
-    // d — only 4 observations, still warming-up.
+    // d - only 4 observations, still warming-up.
     for _ in 0..4 {
         pool.process(&"d", [rng.random::<f64>() * 0.1, rng.random::<f64>() * 0.1])
             .unwrap();

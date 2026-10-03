@@ -4,7 +4,7 @@
 //! Exercises every public entry point against adversarial inputs
 //! (NaN, ±inf, subnormals, extreme magnitudes) and cross-API
 //! invariants (roundtrip, serial-vs-bulk equivalence, insert/delete
-//! symmetry). Stays on stable via `proptest` — libFuzzer harnesses
+//! symmetry). Stays on stable via `proptest` - libFuzzer harnesses
 //! would require nightly and are intentionally out of scope.
 //!
 //! Every property runs `cases = 64` by default, small enough to
@@ -12,7 +12,7 @@
 //! regressions that a handful of fixed cases would miss.
 //!
 //! Only compiled with both `postcard` and `serde_json` features so
-//! persistence roundtrip properties have both codecs available —
+//! persistence roundtrip properties have both codecs available -
 //! matches `persistence_roundtrip.rs`.
 
 #![cfg(all(feature = "postcard", feature = "serde_json"))]
@@ -42,14 +42,14 @@ fn warm_forest(seed: u64, points: &[[f64; D]]) -> RandomCutForest<D> {
     forest
 }
 
-/// Bounded-magnitude finite point — avoids `±inf` from arithmetic on
+/// Bounded-magnitude finite point - avoids `±inf` from arithmetic on
 /// 1e308 values inside the bounding-box math while still covering a
 /// wide dynamic range.
 fn finite_point() -> impl Strategy<Value = [f64; D]> {
     prop::array::uniform4(-1.0e6_f64..1.0e6_f64)
 }
 
-/// Adversarial f64 — full IEEE-754 domain including NaN, ±inf,
+/// Adversarial f64 - full IEEE-754 domain including NaN, ±inf,
 /// subnormals. Used to prove we never panic on hostile input.
 fn any_point() -> impl Strategy<Value = [f64; D]> {
     prop::array::uniform4(any::<f64>())
@@ -96,7 +96,7 @@ proptest! {
     }
 
     /// Non-finite inputs on every write/read path must return
-    /// `NaNValue` cleanly — never panic, never poison internal state.
+    /// `NaNValue` cleanly - never panic, never poison internal state.
     /// A follow-up finite score must still succeed.
     #[test]
     fn non_finite_input_rejected_cleanly(
@@ -118,7 +118,7 @@ proptest! {
             prop_assert!(matches!(forensic_result, Err(RcfError::NaNValue)));
         }
 
-        // Sentinel must still work — rejected input must not have
+        // Sentinel must still work - rejected input must not have
         // corrupted forest state.
         let s: AnomalyScore = forest.score(&sentinel).expect("post-adversarial score");
         prop_assert!(f64::from(s).is_finite());
@@ -126,7 +126,7 @@ proptest! {
 
     /// `score_many` must be observationally equivalent to a serial
     /// `score` loop, element-wise. Under rayon, parallel reduction
-    /// may reorder floating accumulations by a ULP — the tolerance
+    /// may reorder floating accumulations by a ULP - the tolerance
     /// matches `bulk_scoring::score_many_matches_individual_calls`.
     #[test]
     fn score_many_equals_serial_score(

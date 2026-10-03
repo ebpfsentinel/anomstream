@@ -1,4 +1,4 @@
-//! Matrix profile — batch time-series discord / motif detector
+//! Matrix profile - batch time-series discord / motif detector
 //! (STOMP, Zhu et al. 2016).
 //!
 //! For a univariate series `T` of length `n` and a window length
@@ -7,11 +7,11 @@
 //! *non-trivial* neighbour in `T` (i.e. skipping a small exclusion
 //! zone around `i`). `P` localises anomalies two ways:
 //!
-//! - **Discord** — `argmax P[i]`: subsequence least similar to
+//! - **Discord** - `argmax P[i]`: subsequence least similar to
 //!   anything else in the series. Analogue of a point-wise outlier,
 //!   but at the shape level. Ideal for "this one window looks
 //!   unlike anything we've seen before" detection.
-//! - **Motif** — `argmin P[i]`: most-repeated shape. Useful for
+//! - **Motif** - `argmin P[i]`: most-repeated shape. Useful for
 //!   carving out the dominant beaconing or periodic pattern before
 //!   feeding residuals to another detector.
 //!
@@ -107,7 +107,7 @@ impl MatrixProfile {
     /// `O(n · m)` one-time cost on the first-column seed (where
     /// `m = window`). Practical wall-clock: ~3 ms at
     /// `(n = 1 024, m = 32)`, ~49 ms at `(n = 4 096, m = 128)`
-    /// on a modern core. Budget aggressively — doubling `n`
+    /// on a modern core. Budget aggressively - doubling `n`
     /// quadruples the cost. Do **not** call on hot-path streams;
     /// reserve for forensic windows captured by the online
     /// [`crate::ShingledForest`] or triage batch jobs.
@@ -122,7 +122,7 @@ impl MatrixProfile {
     /// series is too short (`series.len() < 2 · window`), when
     /// `series` contains a non-finite value, or when
     /// `exclusion_zone` would leave zero valid neighbours.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn compute(
         series: &[f64],
         window: usize,
@@ -168,7 +168,7 @@ impl MatrixProfile {
         }
 
         let (means, stds) = sliding_stats(series, window);
-        // First column of the QT matrix — sliding dot products of
+        // First column of the QT matrix - sliding dot products of
         // `series` against the prefix `series[0..window]`.
         let qt_first = sliding_dot_product(series, &series[0..window]);
         let mut qt = qt_first.clone();
@@ -188,7 +188,7 @@ impl MatrixProfile {
         );
 
         for j in 1..subseq_n {
-            // Diagonal recurrence — must iterate top-down in
+            // Diagonal recurrence - must iterate top-down in
             // reverse so `qt[i]` reads the previous-iteration
             // `qt[i-1]` before it is overwritten.
             for i in (1..subseq_n).rev() {
@@ -234,7 +234,7 @@ impl MatrixProfile {
         self.profile.len()
     }
 
-    /// `true` when the profile holds zero subsequences — never
+    /// `true` when the profile holds zero subsequences - never
     /// returned by [`Self::compute`], provided as a total accessor.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -253,9 +253,9 @@ impl MatrixProfile {
         &self.index
     }
 
-    /// Discord — subsequence whose nearest neighbour is farthest.
+    /// Discord - subsequence whose nearest neighbour is farthest.
     /// Returns `(start_index, distance)`.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn discord(&self) -> (usize, f64) {
         self.profile
             .iter()
@@ -267,9 +267,9 @@ impl MatrixProfile {
     /// Top-`k` discords ranked by descending distance. `k` is
     /// clamped to [`Self::len`]. Uses a greedy suppression pass
     /// that skips any candidate within the exclusion zone of an
-    /// already-emitted discord — prevents the top-`k` from
+    /// already-emitted discord - prevents the top-`k` from
     /// clustering inside a single anomalous region.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn discord_topk(&self, k: usize) -> Vec<(usize, f64)> {
         let mut candidates: Vec<(usize, f64)> = self.profile.iter().copied().enumerate().collect();
         candidates.sort_by(|a, b| b.1.total_cmp(&a.1));
@@ -292,9 +292,9 @@ impl MatrixProfile {
         out
     }
 
-    /// Motif — subsequence whose nearest neighbour is closest.
+    /// Motif - subsequence whose nearest neighbour is closest.
     /// Returns `(start_index, distance)`.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn motif(&self) -> (usize, f64) {
         self.profile
             .iter()
@@ -339,7 +339,7 @@ fn sliding_stats(series: &[f64], window: usize) -> (Vec<f64>, Vec<f64>) {
 }
 
 /// Sliding dot product of `series` against a fixed `query` of
-/// length `m`. Naïve `O(n · m)` — used once to seed the first
+/// length `m`. Naïve `O(n · m)` - used once to seed the first
 /// column of `QT`; subsequent columns ride the diagonal recurrence.
 fn sliding_dot_product(series: &[f64], query: &[f64]) -> Vec<f64> {
     let m = query.len();
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn discord_finds_injected_anomaly() {
         let mut data = cosine_series(256, 0.25);
-        // Inject a shape anomaly — large triangular pulse.
+        // Inject a shape anomaly - large triangular pulse.
         for (k, v) in data.iter_mut().enumerate().skip(120).take(16) {
             *v += (k - 120) as f64 * 0.8;
         }

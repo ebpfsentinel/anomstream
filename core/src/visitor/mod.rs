@@ -3,9 +3,9 @@
 //! callbacks during a root→leaf walk, plus the two production
 //! visitors:
 //!
-//! - [`scalar_score::ScalarScoreVisitor`] — collusive-displacement
+//! - [`scalar_score::ScalarScoreVisitor`] - collusive-displacement
 //!   anomaly scoring per Guha et al. (2016) §3.
-//! - [`attribution::AttributionVisitor`] — per-feature
+//! - [`attribution::AttributionVisitor`] - per-feature
 //!   [`crate::DiVector`] attribution exposing which dimensions drove
 //!   the score.
 
@@ -61,7 +61,7 @@ pub trait Visitor<const D: usize> {
     /// subtree at this depth (the *pre-augmentation* box, i.e. the
     /// extent of the points currently in the subtree). `prob_cut` is
     /// the total probability that a uniform random cut over the
-    /// augmented bounding box would isolate the queried point — its
+    /// augmented bounding box would isolate the queried point - its
     /// per-dimension breakdown is supplied via `per_dim_prob`.
     fn accept_internal(
         &mut self,

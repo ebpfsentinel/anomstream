@@ -88,7 +88,7 @@ def score_file(timestamps, values, windows):
     for _ in range(TREES):
         forest.append(rrcf.RCTree())
 
-    # Warm — feed first slice, no scoring.
+    # Warm - feed first slice, no scoring.
     for p in emb[:warm_end]:
         for t in forest:
             if len(t.leaves) >= SAMPLE:
@@ -96,7 +96,7 @@ def score_file(timestamps, values, windows):
             t.insert_point(p, index=index)
         index += 1
 
-    # Score — frozen baseline.
+    # Score - frozen baseline.
     scores = np.zeros(len(emb) - warm_end)
     for idx, p in enumerate(emb[warm_end:]):
         codisp = 0.0

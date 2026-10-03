@@ -1,6 +1,6 @@
 //! Point type alias and dimensionality helpers.
 //!
-//! A [`Point`] is just `[f64]` — keeping the type as a slice/`Vec`
+//! A [`Point`] is just `[f64]` - keeping the type as a slice/`Vec`
 //! avoids friction at every call site. Validation (dim equality,
 //! finiteness) happens through [`ensure_dim`] and [`ensure_finite`]
 //! at the future `RandomCutForest::update` / `RandomCutForest::score`

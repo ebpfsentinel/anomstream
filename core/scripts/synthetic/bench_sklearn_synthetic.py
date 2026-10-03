@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Benchmark scikit-learn's `IsolationForest` on the shared dataset.
 
-IsolationForest is *not* RCF — it is batch-only and trains on a
-fixed window — but it is the canonical tree-based outlier baseline
+IsolationForest is *not* RCF - it is batch-only and trains on a
+fixed window - but it is the canonical tree-based outlier baseline
 for apples-to-apples comparison of speed + detection quality.
 
 Usage:
@@ -77,7 +77,7 @@ def main() -> int:
     # sklearn's IsolationForest is NumPy/Cython-backed; the hot
     # loop auto-vectorises via BLAS SIMD. `n_jobs=-1` actually
     # regresses at this batch size (joblib task-spawn overhead
-    # exceeds the win on 100 trees x 10k points) — keep the
+    # exceeds the win on 100 trees x 10k points) - keep the
     # default single-threaded config which measures the real
     # cost of the vectorised path.
     model = IsolationForest(n_estimators=args.trees, random_state=2026)

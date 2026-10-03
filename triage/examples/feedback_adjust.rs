@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::cast_precision_loss)]
-//! Demo of `FeedbackStore` SOC-analyst-label ingestion — warms
+//! Demo of `FeedbackStore` SOC-analyst-label ingestion - warms
 //! a forest on a clean baseline, identifies a legitimate-but-
 //! outlier probe that scores high, labels it `Benign`, then
 //! verifies the adjusted score drops toward baseline on repeat
@@ -28,7 +28,7 @@ fn main() {
         t += 0.1;
     }
 
-    // Probe that sits off-baseline — analyst inspects, confirms
+    // Probe that sits off-baseline - analyst inspects, confirms
     // benign (legitimate unusual-but-not-malicious traffic).
     let probe = [2.5_f64, 0.2, -1.8, 0.9];
     let raw_before: f64 = forest.score(&probe).unwrap().into();
@@ -39,20 +39,20 @@ fn main() {
 
     let raw_after: f64 = forest.score(&probe).unwrap().into();
     let adjusted_after = feedback.adjust(&probe, raw_after);
-    println!("raw score after feedback  = {raw_after:.3} (unchanged — forest untouched)");
+    println!("raw score after feedback  = {raw_after:.3} (unchanged - forest untouched)");
     println!(
         "adjusted score            = {adjusted_after:.3} (pulled toward baseline by Benign label)"
     );
 
     // A second probe near the labelled point also gets pulled
-    // down — the nearest-neighbour kernel spreads the feedback
+    // down - the nearest-neighbour kernel spreads the feedback
     // effect to similar traffic.
     let nearby = [2.55_f64, 0.15, -1.85, 0.95];
     let raw_nearby: f64 = forest.score(&nearby).unwrap().into();
     let adj_nearby = feedback.adjust(&nearby, raw_nearby);
     println!("nearby raw = {raw_nearby:.3}, adjusted = {adj_nearby:.3} (kernel-weighted leak)");
 
-    // A probe far from the labelled point is not influenced —
+    // A probe far from the labelled point is not influenced -
     // feedback is local, not global.
     let far = [-3.0_f64, -3.0, -3.0, -3.0];
     let raw_far: f64 = forest.score(&far).unwrap().into();

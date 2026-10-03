@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Forensic baseline — given an anomalous point, answer
+//! Forensic baseline - given an anomalous point, answer
 //! "what would dim d have looked like if this window were normal?".
 //!
 //! Run with `cargo run --example forensic`.

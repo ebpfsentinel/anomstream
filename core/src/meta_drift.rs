@@ -9,15 +9,15 @@
 //!
 //! The distinction matters operationally:
 //!
-//! - a **single high score** is an individual anomaly — a potential
+//! - a **single high score** is an individual anomaly - a potential
 //!   incident to triage;
-//! - a **sustained upward trend** in scores is baseline drift — the
+//! - a **sustained upward trend** in scores is baseline drift - the
 //!   threshold needs to adapt, not an incident to page;
 //! - a **sustained downward trend** is a quiescence event or a
 //!   detector becoming less sensitive over time.
 //!
 //! The existing [`crate::ThresholdedForest`] already tracks the
-//! score stream's EMA mean and variance — but CUSUM is strictly more
+//! score stream's EMA mean and variance - but CUSUM is strictly more
 //! sensitive than a `μ + zσ` gate for *small* persistent shifts,
 //! which is the signature of drift. CUSUM fires on many consecutive
 //! mild-deviation scores where a sigma-band test misses entirely.
@@ -40,7 +40,7 @@
 //! ```
 //!
 //! `μ` and `σ` are maintained by the built-in [`EmaStats`] the
-//! detector owns — the CUSUM update uses the *previous* values so a
+//! detector owns - the CUSUM update uses the *previous* values so a
 //! fresh observation cannot influence the reference it is compared
 //! against.
 //!
@@ -48,7 +48,7 @@
 //!
 //! Callers that react to a drift event should invoke
 //! [`MetaDriftDetector::reset`] afterwards so the CUSUM accumulators
-//! start over from zero. The EMA stats are kept — they *are* the new
+//! start over from zero. The EMA stats are kept - they *are* the new
 //! reference the post-drift distribution will be measured against.
 //! Use [`MetaDriftDetector::reset_stats`] to discard both the
 //! accumulators and the EMA, e.g. after a config change or a major
@@ -75,11 +75,11 @@ pub const DEFAULT_DECAY: f64 = 0.01;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum DriftKind {
-    /// The score stream shifted upward — sustained higher anomaly
+    /// The score stream shifted upward - sustained higher anomaly
     /// scores than the running mean. Typical in baseline drift where
     /// traffic gets slightly "weirder" over time.
     Upward,
-    /// The score stream shifted downward — sustained lower anomaly
+    /// The score stream shifted downward - sustained lower anomaly
     /// scores. Typical when the detector has adapted to what was
     /// previously anomalous, or when traffic quiesces.
     Downward,
@@ -118,7 +118,7 @@ impl CusumConfig {
     ///
     /// Returns [`RcfError::InvalidConfig`] when any field is outside
     /// its accepted range: `allowance_k` and `threshold_h` must be
-    /// finite and non-negative (`allowance_k == 0` is legal — no
+    /// finite and non-negative (`allowance_k == 0` is legal - no
     /// slack), `decay` must be finite and in `(0, 1]`.
     pub fn validate(&self) -> RcfResult<()> {
         if !self.allowance_k.is_finite() || self.allowance_k < 0.0 {
@@ -159,7 +159,7 @@ pub struct DriftVerdict {
     /// Absolute detection threshold in effect (`threshold_h · stddev`).
     pub threshold: f64,
     /// EMA mean of the score stream before the observation was folded
-    /// in — the reference the CUSUM compared against.
+    /// in - the reference the CUSUM compared against.
     pub mean: f64,
     /// EMA stddev of the score stream before the observation.
     pub stddev: f64,
@@ -190,7 +190,7 @@ pub struct MetaDriftDetector {
     s_high: f64,
     /// Downward cumulative sum accumulator.
     s_low: f64,
-    /// Observability sink — emits the CUSUM accumulators + fire
+    /// Observability sink - emits the CUSUM accumulators + fire
     /// counter. Defaults to [`crate::NoopSink`].
     #[cfg(feature = "std")]
     #[cfg_attr(
@@ -220,7 +220,7 @@ impl MetaDriftDetector {
         })
     }
 
-    /// Install a [`crate::MetricsSink`] — emits
+    /// Install a [`crate::MetricsSink`] - emits
     /// `rcf_drift_s_high` / `rcf_drift_s_low` histograms per call
     /// and increments `rcf_drift_fires_total` on fire verdicts.
     #[cfg(feature = "std")]
@@ -277,7 +277,7 @@ impl MetaDriftDetector {
     ///
     /// Non-finite inputs are silently ignored and return a verdict
     /// flagged as not-ready without mutating the detector.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, score: f64) -> DriftVerdict {
         if !score.is_finite() {
             return DriftVerdict {
@@ -356,14 +356,14 @@ impl MetaDriftDetector {
     }
 
     /// Clear the CUSUM accumulators while keeping the EMA reference
-    /// intact. Call this after reacting to a drift event — the new
+    /// intact. Call this after reacting to a drift event - the new
     /// distribution becomes the next reference.
     pub fn reset(&mut self) {
         self.s_high = 0.0;
         self.s_low = 0.0;
     }
 
-    /// Clear everything — accumulators and EMA reference. Returns
+    /// Clear everything - accumulators and EMA reference. Returns
     /// the detector to its warmup state.
     pub fn reset_stats(&mut self) {
         self.s_high = 0.0;

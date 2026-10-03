@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::cast_precision_loss)]
-//! Integration coverage for SOC feedback ingestion —
+//! Integration coverage for SOC feedback ingestion -
 //! `FeedbackStore` composes with `RandomCutForest::score` without
 //! mutating the forest. Verifies the label/adjust contract on
 //! realistic forest-score streams.
@@ -48,7 +48,7 @@ fn confirmed_label_pushes_score_up_on_nearby_probe() {
 
     let mut store = FeedbackStore::<2>::new(8, 2.0, 1.0).unwrap();
     store.label(known_bad, FeedbackLabel::Confirmed).unwrap();
-    // Probe near the confirmed label — adjusted score lifts by
+    // Probe near the confirmed label - adjusted score lifts by
     // the kernel weighted Confirmed sign.
     let nearby = [-3.95_f64, 5.05];
     let raw_nb: f64 = forest.score(&nearby).unwrap().into();
@@ -74,7 +74,7 @@ fn feedback_does_not_mutate_forest() {
     let after: f64 = forest.score(&probe).unwrap().into();
     assert!(
         (before - after).abs() < 1.0e-12,
-        "forest score drifted after feedback ops — forest must stay immutable"
+        "forest score drifted after feedback ops - forest must stay immutable"
     );
 }
 

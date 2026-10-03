@@ -97,5 +97,5 @@ fn min_observations_gate_filters_undertrained() {
     }
     // min_observations=64 filters b (only 3 stats observations).
     let pairs = pool.similarity_matrix(64);
-    assert!(pairs.is_empty());
+    assert_eq!(pairs.len(), 0);
 }

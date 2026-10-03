@@ -1,8 +1,8 @@
-//! Streaming quantile estimator — Ted Dunning's t-digest
+//! Streaming quantile estimator - Ted Dunning's t-digest
 //! (Computing Extremely Accurate Quantiles Using t-Digests, 2019).
 //!
 //! [`crate::ScoreHistogram`] bins values in a fixed number of
-//! equal-width buckets — fine for central percentiles, lossy at the
+//! equal-width buckets - fine for central percentiles, lossy at the
 //! tails where SOC SLOs typically live (p99, p99.9). [`TDigest`]
 //! maintains a small set of **centroids** whose weight grows near
 //! the distribution tails and stays tight in the centre, giving
@@ -36,11 +36,11 @@ use num_traits::Float;
 
 use crate::error::{RcfError, RcfResult};
 
-/// Default compression parameter — 100 balances accuracy and
+/// Default compression parameter - 100 balances accuracy and
 /// memory, matches Dunning's reference implementation.
 pub const DEFAULT_COMPRESSION: f64 = 100.0;
 
-/// Buffer-flush trigger — when pending inserts exceed
+/// Buffer-flush trigger - when pending inserts exceed
 /// `compression · BUFFER_MULT`, flush and merge.
 const BUFFER_MULT: usize = 10;
 
@@ -50,10 +50,10 @@ const BUFFER_MULT: usize = 10;
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Centroid {
-    /// Centroid mean — running average of every value that landed
+    /// Centroid mean - running average of every value that landed
     /// in this centroid during compaction.
     pub mean: f64,
-    /// Centroid weight — number of `record` values this centroid
+    /// Centroid weight - number of `record` values this centroid
     /// summarises (sub-1 weights are possible in principle but this
     /// implementation always starts them at 1.0).
     pub weight: f64,
@@ -61,13 +61,13 @@ pub struct Centroid {
 
 /// Streaming quantile estimator with tight-tail accuracy.
 ///
-/// `TDigest` is the streaming analogue of a percentile sketch —
+/// `TDigest` is the streaming analogue of a percentile sketch -
 /// `record(x)` is `O(1)` amortised, `quantile(q)` is `O(δ)`, and
 /// the maximum centroid count is `~2 · δ`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TDigest {
-    /// Compression — larger values → more centroids → more
+    /// Compression - larger values → more centroids → more
     /// accurate (especially on tails) at higher memory / merge
     /// cost. Typical range `[20, 1000]`; `100` is a sane default.
     compression: f64,
@@ -76,7 +76,7 @@ pub struct TDigest {
     centroids: Vec<Centroid>,
     /// Unsorted insertion buffer. Drained by `flush_buffer`.
     buffer: Vec<f64>,
-    /// Cached total weight — `centroids.weight_sum + buffer.len`
+    /// Cached total weight - `centroids.weight_sum + buffer.len`
     /// once pending inserts are flushed. Surfaced by
     /// [`Self::total_weight`] for diagnostics.
     total_weight: f64,
@@ -142,7 +142,7 @@ impl TDigest {
         self.total_weight + pending
     }
 
-    /// Number of centroids — bounded by `~2·compression` after a
+    /// Number of centroids - bounded by `~2·compression` after a
     /// flush.
     #[must_use]
     pub fn centroid_count(&self) -> usize {
@@ -172,7 +172,7 @@ impl TDigest {
     }
 
     /// Fold a single observation into the digest. Non-finite
-    /// values are silently ignored — the digest has no way to
+    /// values are silently ignored - the digest has no way to
     /// surface an error per-call and silently dropping matches
     /// [`crate::ScoreHistogram::record`] semantics.
     pub fn record(&mut self, value: f64) {
@@ -198,7 +198,7 @@ impl TDigest {
     }
 
     /// Force-flush the pending buffer. Callers normally don't need
-    /// this — [`Self::quantile`] flushes transparently — but it
+    /// this - [`Self::quantile`] flushes transparently - but it
     /// helps bound memory in high-churn scenarios where quantiles
     /// are queried rarely.
     pub fn flush(&mut self) {
@@ -267,7 +267,7 @@ impl TDigest {
         Some(last.mean + frac * (self.max - last.mean))
     }
 
-    /// Percentile — shorthand for `quantile(p / 100.0)`.
+    /// Percentile - shorthand for `quantile(p / 100.0)`.
     #[must_use]
     pub fn percentile(&mut self, p: f64) -> Option<f64> {
         self.quantile(p / 100.0)
@@ -295,10 +295,10 @@ impl TDigest {
         }
         self.flush_buffer();
         // Fold other's centroids + buffer into self's buffer, then
-        // flush — simplest path that round-trips through the same
+        // flush - simplest path that round-trips through the same
         // scale-function compaction.
         for c in &other.centroids {
-            // Expand centroid back to `weight` copies of its mean —
+            // Expand centroid back to `weight` copies of its mean -
             // close-enough approximation because `mean` is the
             // centroid's summary value.
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -320,7 +320,7 @@ impl TDigest {
         Ok(())
     }
 
-    /// Drop every recorded value — digest goes back to its empty
+    /// Drop every recorded value - digest goes back to its empty
     /// post-construction state. Compression is preserved.
     pub fn reset(&mut self) {
         self.centroids.clear();
@@ -330,7 +330,7 @@ impl TDigest {
         self.max = f64::NEG_INFINITY;
     }
 
-    /// Immutable view of the current centroid set — exposed for
+    /// Immutable view of the current centroid set - exposed for
     /// diagnostics / persistence helpers. Empty until the first
     /// flush.
     #[must_use]
@@ -338,7 +338,7 @@ impl TDigest {
         &self.centroids
     }
 
-    /// Flush the buffer — sort buffer, merge with centroids using
+    /// Flush the buffer - sort buffer, merge with centroids using
     /// scale-function 1 weight bounds.
     fn flush_buffer(&mut self) {
         if self.buffer.is_empty() {

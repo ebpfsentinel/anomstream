@@ -17,7 +17,7 @@
 //! - **Atomic file path** (`to_path` / `from_path`, gated on
 //!   `postcard + std`): write-tmp-then-rename + `fsync` so a crash or
 //!   power-loss mid-save cannot corrupt the snapshot on disk. Pair
-//!   with periodic checkpointing for **warm reload** — the detector
+//!   with periodic checkpointing for **warm reload** - the detector
 //!   resumes exactly where it left off across restarts.
 //! - **JSON file path** (`to_json_path` / `from_json_path`, gated on
 //!   `serde_json + std`): same atomic write discipline, human-readable
@@ -25,11 +25,11 @@
 //!
 //! The version prefix lives **outside** the serialised payload so a
 //! version skew is detected before any third-party deserialiser runs
-//! against arbitrary bytes — a defence against malformed
+//! against arbitrary bytes - a defence against malformed
 //! payload-driven panics.
 //!
 //! Both encodings preserve the per-point dimensionality `D` at the
-//! type level — callers must deserialise into a type with the same
+//! type level - callers must deserialise into a type with the same
 //! compile-time `D` that produced the payload.
 //!
 //! # Security
@@ -38,7 +38,7 @@
 //! payloads produced by an earlier process you control, stored on
 //! a filesystem you control, and reloaded at warm-restart time. The
 //! `postcard` and `serde_json` decoders accept any well-formed
-//! payload that matches the schema — they perform no integrity check
+//! payload that matches the schema - they perform no integrity check
 //! beyond the 4-byte version prefix and have no built-in cap on
 //! recursion depth, so a deliberately malformed payload could in
 //! principle drive an out-of-memory or stack-overflow condition.
@@ -46,7 +46,7 @@
 //! The current [`RandomCutForest`] / [`ThresholdedForest`] schema is
 //! arena-backed (flat `Vec<InternalData>` / `Vec<LeafData>`, no
 //! recursive type nesting) so the recursion-depth attack surface is
-//! limited in practice — but pretending the format is hostile-input-
+//! limited in practice - but pretending the format is hostile-input-
 //! safe would be wrong. Defence-in-depth measures shipped here:
 //!
 //! - [`MAX_DESERIALIZE_BYTES`] / [`MAX_JSON_BYTES`] caps reject
@@ -78,11 +78,11 @@ use crate::thresholded::ThresholdedForest;
 /// instead of silently misparsing the narrowed cut bytes.
 pub const PACKED_CUT_VERSION_FLAG: u32 = 0x8000_0000;
 
-/// Compile-time version offset — `PACKED_CUT_VERSION_FLAG` under
+/// Compile-time version offset - `PACKED_CUT_VERSION_FLAG` under
 /// `packed-cut`, otherwise `0`.
 #[cfg(feature = "packed-cut")]
 const PACKED_CUT_OFFSET: u32 = PACKED_CUT_VERSION_FLAG;
-/// Compile-time version offset — `0` for the default `f64` cut layout.
+/// Compile-time version offset - `0` for the default `f64` cut layout.
 #[cfg(not(feature = "packed-cut"))]
 const PACKED_CUT_OFFSET: u32 = 0;
 
@@ -133,7 +133,7 @@ pub const MAX_JSON_BYTES: usize = 1024 * 1024 * 1024;
 fn enforce_size_cap(len: usize, max: usize, kind: &'static str) -> RcfResult<()> {
     if len > max {
         return Err(RcfError::DeserializationFailed(format!(
-            "{kind} payload {len} byte(s) exceeds cap {max} (caller-controlled OOM guard) — \
+            "{kind} payload {len} byte(s) exceeds cap {max} (caller-controlled OOM guard) - \
              use the `*_with_max_size` variant to opt into a larger bound"
         )));
     }
@@ -162,7 +162,7 @@ fn read_version_prefix(bytes: &[u8]) -> RcfResult<u32> {
 /// Path helpers for atomic write-tmp-rename persistence.
 ///
 /// The tmp suffix is appended to the caller-supplied path so the temp
-/// file lives in the same filesystem — rename is only atomic within a
+/// file lives in the same filesystem - rename is only atomic within a
 /// single filesystem. The file is `fsync`'d before the rename so a
 /// power-loss between `write` and `rename` cannot leave a partially
 /// written snapshot on disk.
@@ -248,7 +248,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// # Security
     ///
-    /// Designed for trusted checkpoints — see the module-level
+    /// Designed for trusted checkpoints - see the module-level
     /// `# Security` section. The size cap defends against a
     /// caller-controlled OOM at decode time; the version prefix
     /// rejects schema drift before the third-party decoder runs.
@@ -275,7 +275,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Same trust model as [`Self::from_bytes`]. Setting `max` very
     /// large (close to `usize::MAX`) effectively disables the OOM
-    /// guard — only do this on payloads that have already passed an
+    /// guard - only do this on payloads that have already passed an
     /// out-of-band integrity check.
     #[cfg(feature = "postcard")]
     pub fn from_bytes_with_max_size(bytes: &[u8], max: usize) -> RcfResult<Self> {
@@ -294,7 +294,7 @@ impl<const D: usize> RandomCutForest<D> {
 
     /// Atomically serialise the forest to `path` using the binary
     /// encoding. Writes `<path>.tmp`, `fsync`s it, then renames onto
-    /// `path` — a mid-write crash leaves the previous snapshot
+    /// `path` - a mid-write crash leaves the previous snapshot
     /// intact.
     ///
     /// # Errors
@@ -319,7 +319,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// # Security
     ///
-    /// Inherits the trust model of [`Self::from_bytes`] — designed
+    /// Inherits the trust model of [`Self::from_bytes`] - designed
     /// for filesystem checkpoints written by a process the caller
     /// controls. Hostile bytes on the path require an out-of-band
     /// integrity check (HMAC / signature) before this call.
@@ -425,7 +425,7 @@ impl<const D: usize> ThresholdedForest<D> {
     /// Serialise the thresholded detector into a versioned binary blob.
     ///
     /// The payload carries the underlying forest, the threshold
-    /// configuration, and the EMA statistics — enough for a receiver
+    /// configuration, and the EMA statistics - enough for a receiver
     /// to resume scoring and emitting graded verdicts without a
     /// warmup gap.
     ///
@@ -457,7 +457,7 @@ impl<const D: usize> ThresholdedForest<D> {
     ///
     /// # Security
     ///
-    /// Designed for trusted checkpoints — see the module-level
+    /// Designed for trusted checkpoints - see the module-level
     /// `# Security` section. Use [`Self::from_bytes_with_max_size`]
     /// when the deployment's expected payload exceeds
     /// [`MAX_DESERIALIZE_BYTES`].
@@ -612,7 +612,7 @@ impl<const D: usize> ThresholdedForest<D> {
     }
 }
 
-/// JSON envelope used by [`RandomCutForest::to_json`] — borrows the
+/// JSON envelope used by [`RandomCutForest::to_json`] - borrows the
 /// forest to avoid an unnecessary clone during serialisation.
 #[cfg(feature = "serde_json")]
 #[derive(serde::Serialize)]
@@ -623,7 +623,7 @@ struct JsonEnvelope<'a, const D: usize> {
     forest: &'a RandomCutForest<D>,
 }
 
-/// JSON envelope used by [`RandomCutForest::from_json`] — owns the
+/// JSON envelope used by [`RandomCutForest::from_json`] - owns the
 /// reconstructed forest.
 #[cfg(feature = "serde_json")]
 #[derive(serde::Deserialize)]
@@ -874,7 +874,7 @@ mod json_tests {
     #[test]
     fn json_oversize_payload_rejected_by_default_cap() {
         // Synthesise a JSON string larger than MAX_JSON_BYTES via
-        // explicit-cap variant — feeding a real 1 GiB string into
+        // explicit-cap variant - feeding a real 1 GiB string into
         // the default-cap variant would cost the test runner too
         // much memory.
         let f = small_trained();

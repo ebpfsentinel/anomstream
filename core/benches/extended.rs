@@ -129,7 +129,7 @@ fn bench_early_term(c: &mut Criterion) {
     group.finish();
 }
 
-/// Forensic baseline — O(`live_points` × D). Sweep
+/// Forensic baseline - O(`live_points` × D). Sweep
 /// `(sample_size, D)` to show how the aggregate scales.
 fn bench_forensic(c: &mut Criterion) {
     let mut group = c.benchmark_group("forensic_baseline");
@@ -260,7 +260,7 @@ fn bench_codisp_stateless(c: &mut Criterion) {
     group.finish();
 }
 
-/// `ThresholdedForest::process` — the TRCF headline API (update
+/// `ThresholdedForest::process` - the TRCF headline API (update
 /// + score + EMA + verdict). One call per point, end-to-end.
 fn bench_thresholded_process(c: &mut Criterion) {
     let mut group = c.benchmark_group("thresholded_process");
@@ -295,7 +295,7 @@ fn bench_thresholded_process(c: &mut Criterion) {
     group.finish();
 }
 
-/// `RandomCutForest::delete` — paired with `update_indexed` to
+/// `RandomCutForest::delete` - paired with `update_indexed` to
 /// measure the per-probe reservoir mutation cost in isolation.
 fn bench_delete(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_delete");
@@ -307,7 +307,7 @@ fn bench_delete(c: &mut Criterion) {
             for slot in &mut p {
                 *slot = rng.random::<f64>();
             }
-            // Insert then delete — measures the round-trip cost a
+            // Insert then delete - measures the round-trip cost a
             // mutating codisp probe pays per point.
             let idx = forest.update_indexed(p).expect("update_indexed");
             let _ = forest.delete(black_box(idx));

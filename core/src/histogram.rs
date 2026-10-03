@@ -11,7 +11,7 @@
 //! whether the detector's threshold is well-calibrated without
 //! re-deriving per-minute aggregates in the monitoring pipeline.
 //!
-//! The histogram itself is standalone — callers feed it the scores
+//! The histogram itself is standalone - callers feed it the scores
 //! or grades they already collect through
 //! [`crate::ThresholdedForest::process`],
 //! [`crate::MetaDriftDetector::observe`], etc. Composition over
@@ -42,7 +42,7 @@ pub struct HistogramConfig {
 
 /// Over-the-wire [`HistogramConfig`] layout. Deserialization lands
 /// here first so [`TryFrom`] can re-run [`HistogramConfig::validate`]
-/// before a live config is handed out — `bin_count > 0`, finite
+/// before a live config is handed out - `bin_count > 0`, finite
 /// `min`/`max`, `min < max`.
 #[cfg(feature = "serde")]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -142,7 +142,7 @@ pub struct ScoreHistogram {
     underflow: u64,
     /// Observations at or above `config.max`.
     overflow: u64,
-    /// Non-finite observations (`NaN`, `±∞`) — counted separately so
+    /// Non-finite observations (`NaN`, `±∞`) - counted separately so
     /// `total()` can still reason about the sum of bin counts.
     non_finite: u64,
 }
@@ -251,7 +251,7 @@ impl ScoreHistogram {
         &self.bins
     }
 
-    /// Inclusive/exclusive edges of every bin — `[(min_0, max_0),
+    /// Inclusive/exclusive edges of every bin - `[(min_0, max_0),
     /// (min_1, max_1), …]`. Useful for Prometheus-style export
     /// where each bucket is named by its upper bound.
     #[must_use]
@@ -291,7 +291,7 @@ impl ScoreHistogram {
         self.non_finite
     }
 
-    /// Total number of `record` calls — sum of every bin,
+    /// Total number of `record` calls - sum of every bin,
     /// underflow, overflow, and non-finite.
     #[must_use]
     pub fn total(&self) -> u64 {
@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn upper_edge_goes_to_last_bin_not_overflow() {
-        // `max` is exclusive by contract — a value landing exactly
+        // `max` is exclusive by contract - a value landing exactly
         // on `max - ε` should fall in the last bin via floating
         // drift fallback.
         let mut h = hist();

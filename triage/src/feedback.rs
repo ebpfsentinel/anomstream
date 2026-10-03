@@ -1,10 +1,10 @@
-//! SOC-feedback ingestion — Das et al., *Incorporating Feedback
+//! SOC-feedback ingestion - Das et al., *Incorporating Feedback
 //! into Tree-based Anomaly Detection*, `arXiv:1708.09441` /
 //! KDD 2016 / ADI.
 //!
 //! An analyst triaging an alert labels it **benign** (false
-//! positive — the score was too high) or **confirmed** (true
-//! positive — the score was correctly high). A
+//! positive - the score was too high) or **confirmed** (true
+//! positive - the score was correctly high). A
 //! [`FeedbackStore`] keeps a bounded ring of labelled points and
 //! exposes [`FeedbackStore::adjust`] which shifts a raw anomaly
 //! score toward the label of its nearest labelled neighbours.
@@ -13,13 +13,13 @@
 //!
 //! **Is**: a lightweight feedback-adjustment layer on top of a
 //! live [`anomstream_core::RandomCutForest`]. No retraining, no extra model,
-//! no mutation of the forest — the raw RCF score survives
+//! no mutation of the forest - the raw RCF score survives
 //! intact, the adjustment is an additive bias driven by the
 //! Gaussian-kernel-weighted contribution of every live label.
 //!
 //! **Is not**: the full Das et al. Active Anomaly Discovery
 //! (AAD) optimiser with per-leaf weights learned via online
-//! convex optimisation. AAD is a heavier commitment — it requires
+//! convex optimisation. AAD is a heavier commitment - it requires
 //! scoring-path instrumentation to expose per-leaf contributions,
 //! an online solver, and careful hyper-parameter tuning. The
 //! simpler nearest-neighbour-kernel variant here captures the
@@ -43,7 +43,7 @@ use anomstream_core::metrics::{MetricsSink, default_sink, names};
 /// contributes a little. Starts at `1.0`; tune per feature scale.
 pub const DEFAULT_KERNEL_SIGMA: f64 = 1.0;
 
-/// Default contribution strength — coefficient on the label-
+/// Default contribution strength - coefficient on the label-
 /// weighted kernel sum before it's added to the raw score. `1.0`
 /// lets a single nearest-benign point cancel a `+1.0` raw score
 /// when the probe sits on the label; halve it for softer
@@ -60,7 +60,7 @@ pub const DEFAULT_CAPACITY: usize = 512;
 /// `LabelledPoint<D>` is `D · 8 + 8` bytes; at the maximum allowed
 /// `D = 10000` (matching the AWS RCF `feature_dim` ceiling) and
 /// `MAX_CAPACITY = 65 536` the worst-case per-tenant footprint is
-/// ~5 GiB — already far above any realistic SOC labelling volume.
+/// ~5 GiB - already far above any realistic SOC labelling volume.
 /// The cap exists to defeat caller-controlled OOM (a hostile or
 /// buggy config that passes `usize::MAX` would otherwise panic
 /// the allocator); raise it deliberately if a deployment really
@@ -70,7 +70,7 @@ pub const MAX_CAPACITY: usize = 65_536;
 /// Floor on the kernel-weight sum used by [`FeedbackStore::adjust`]
 /// to detect "every label too far from the probe to register".
 /// `f64::EPSILON` (~2.22e-16) is too tight under accumulated FP
-/// error from hundreds of labels — the kernel sum can sit just
+/// error from hundreds of labels - the kernel sum can sit just
 /// above zero and produce a `bias = signed_sum / kernel_sum` of
 /// many orders of magnitude. `1e-12` keeps the guard well below
 /// any meaningful kernel weight (a single label at distance
@@ -83,10 +83,10 @@ const KERNEL_SUM_FLOOR: f64 = 1e-12;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum FeedbackLabel {
-    /// False positive — the raw score was too high; the probe
+    /// False positive - the raw score was too high; the probe
     /// should score **down** toward baseline.
     Benign,
-    /// True positive — the raw score was correctly high; nearby
+    /// True positive - the raw score was correctly high; nearby
     /// probes should score **up** to match.
     Confirmed,
 }
@@ -104,13 +104,13 @@ impl FeedbackLabel {
     }
 }
 
-/// Bounded ledger of labelled points — oldest-first LRU eviction
+/// Bounded ledger of labelled points - oldest-first LRU eviction
 /// once [`FeedbackStore::capacity`] is reached.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FeedbackStore<const D: usize> {
     /// Labelled points in arrival order. `VecDeque` so that
-    /// oldest-first eviction on capacity pressure is `O(1)` — a
+    /// oldest-first eviction on capacity pressure is `O(1)` - a
     /// `Vec::remove(0)` would memmove the whole ring per label,
     /// `O(capacity)` per call, at 512-cap that is a measurable
     /// hot-path cost under sustained SOC labelling.
@@ -123,7 +123,7 @@ pub struct FeedbackStore<const D: usize> {
     /// Coefficient multiplied by the kernel-weighted label sum
     /// before it is added to the raw score.
     strength: f64,
-    /// Observability sink — serde-skipped, restored to the noop
+    /// Observability sink - serde-skipped, restored to the noop
     /// sink on round-trip.
     #[cfg_attr(
         feature = "serde",
@@ -202,7 +202,7 @@ impl<const D: usize> FeedbackStore<D> {
         })
     }
 
-    /// Install a metrics sink — every `label` call emits counters
+    /// Install a metrics sink - every `label` call emits counters
     /// keyed by verdict (benign vs confirmed).
     #[must_use]
     pub fn with_metrics_sink(mut self, sink: Arc<dyn MetricsSink>) -> Self {
@@ -287,8 +287,8 @@ impl<const D: usize> FeedbackStore<D> {
     /// ```
     ///
     /// The normalisation by the kernel-weight sum bounds `bias` in
-    /// `[-1, 1]` regardless of how many labels sit near the probe
-    /// — 500 confirmed labels at the probe no longer add
+    /// `[-1, 1]` regardless of how many labels sit near the probe -
+    /// 500 confirmed labels at the probe no longer add
     /// `500 · strength` to the raw score; they add at most
     /// `strength`. Without this normalisation the adjustment scale
     /// grew linearly in stored labels and could push adjusted
@@ -310,7 +310,7 @@ impl<const D: usize> FeedbackStore<D> {
     /// a `D`-element squared distance + one `exp` per label. At
     /// the [`MAX_CAPACITY`] ceiling (`L = 65 536`) and `D = 64`
     /// that is roughly 4 × 10⁶ multiply-adds + 65 536 transcendental
-    /// calls per call, ~1 ms on a modern core — fine for SOC
+    /// calls per call, ~1 ms on a modern core - fine for SOC
     /// triage cadence (one call per alert), **not** for hot-path
     /// per-packet adjustment. High-`D` (`D ≥ 1024`) and
     /// high-`L` (`L ≥ 16 384`) deployments should either:
@@ -324,7 +324,7 @@ impl<const D: usize> FeedbackStore<D> {
     /// Profile with `bench_feedback::adjust_hot_512_labels` (and
     /// the high-`L` variants) before promoting `adjust` to the
     /// hot path of a high-throughput agent.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn adjust(&self, probe: &[f64; D], raw_score: f64) -> f64 {
         if self.entries.is_empty() || !probe.iter().all(|v| v.is_finite()) {
             return raw_score;
@@ -344,13 +344,13 @@ impl<const D: usize> FeedbackStore<D> {
         }
         // Normalise to a kernel-weighted mean of signs in `[-1, 1]`.
         // Guard the `0 / 0` case where every stored label is too
-        // far from `probe` to register any kernel weight — return
+        // far from `probe` to register any kernel weight - return
         // the raw score unchanged rather than propagate `NaN`.
         // The threshold is `KERNEL_SUM_FLOOR` (1e-12) rather than
         // `f64::EPSILON` because accumulated FP error from summing
         // up to `MAX_CAPACITY` near-zero kernel terms can leave
         // `kernel_sum` just above `EPSILON` while every individual
-        // contribution is numerical noise — the resulting
+        // contribution is numerical noise - the resulting
         // `signed_sum / kernel_sum` ratio swings wildly. The
         // larger floor keeps the guard above the FP-noise band
         // and well below any meaningful kernel weight.
@@ -362,7 +362,7 @@ impl<const D: usize> FeedbackStore<D> {
         (raw_score + self.strength * bias).max(0.0)
     }
 
-    /// Read-only view of the labelled entries — tests + doctool
+    /// Read-only view of the labelled entries - tests + doctool
     /// usage.
     pub fn entries(&self) -> impl Iterator<Item = (&[f64; D], FeedbackLabel)> {
         self.entries.iter().map(|e| (&e.point, e.label))
@@ -506,7 +506,7 @@ mod tests {
     #[test]
     fn far_probe_does_not_explode_under_full_ledger() {
         // Saturate the ledger with labels far from the probe so
-        // every kernel contribution is ~0 — accumulated FP error
+        // every kernel contribution is ~0 - accumulated FP error
         // can leave `kernel_sum` slightly above `f64::EPSILON`.
         // The relaxed `KERNEL_SUM_FLOOR` guard must still treat
         // this as "no signal" and return the raw score, not

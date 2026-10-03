@@ -1,9 +1,9 @@
-//! Runtime-dim wrapper for `RandomCutForest` — unblocks
+//! Runtime-dim wrapper for `RandomCutForest` - unblocks
 //! heterogeneous multi-tenant deployments where every tenant
 //! ships its own feature-vector width (MSSP pools, per-tenant
 //! feature extractors).
 //!
-//! The bare `RandomCutForest<D>` is const-generic on `D` — every
+//! The bare `RandomCutForest<D>` is const-generic on `D` - every
 //! distinct dim needs its own monomorphisation. A
 //! `TenantForestPool<K, D>` then has a single `D` across every
 //! tenant, forcing operators to whitelist dim values at compile
@@ -17,7 +17,7 @@
 //! # What this buys
 //!
 //! - One monomorphisation for every tenant whose dim `≤ MAX_D`.
-//! - No API break for callers who already have `[f64; D]` —
+//! - No API break for callers who already have `[f64; D]` -
 //!   [`DynamicForest::update`] / [`DynamicForest::score`] take
 //!   `&[f64]` of runtime length.
 //!
@@ -34,7 +34,7 @@
 //! # Not a replacement for the const-generic path
 //!
 //! Hot-path callers with a fixed known `D` should keep using
-//! [`crate::RandomCutForest<D>`] — the const-generic path is
+//! [`crate::RandomCutForest<D>`] - the const-generic path is
 //! faster (fewer runtime checks, better inlining) and idiomatic.
 //! [`DynamicForest`] is the escape hatch for MSSP /
 //! heterogeneous-tenant deployments where compile-time `D` is a
@@ -54,7 +54,7 @@ use crate::forest::RandomCutForest;
 pub struct DynamicForest<const MAX_D: usize> {
     /// Wrapped const-generic forest.
     forest: RandomCutForest<MAX_D>,
-    /// Caller-declared dim count — every incoming point must have
+    /// Caller-declared dim count - every incoming point must have
     /// exactly `active_dim` finite components; the remaining
     /// `MAX_D − active_dim` slots are zero-padded.
     active_dim: usize,
@@ -83,7 +83,7 @@ impl<const MAX_D: usize> DynamicForest<MAX_D> {
         Ok(Self { forest, active_dim })
     }
 
-    /// Active dim of this facade — every input slice must have
+    /// Active dim of this facade - every input slice must have
     /// this length.
     #[must_use]
     pub fn active_dim(&self) -> usize {
@@ -96,7 +96,7 @@ impl<const MAX_D: usize> DynamicForest<MAX_D> {
         MAX_D
     }
 
-    /// Read-only handle to the underlying const-generic forest —
+    /// Read-only handle to the underlying const-generic forest -
     /// useful for inspecting metrics / persistence state.
     #[must_use]
     pub fn forest(&self) -> &RandomCutForest<MAX_D> {
@@ -138,7 +138,7 @@ impl<const MAX_D: usize> DynamicForest<MAX_D> {
     pub fn attribution(&self, point: &[f64]) -> RcfResult<DiVector> {
         let padded = self.pad(point)?;
         let di_full = self.forest.attribution(&padded)?;
-        // Truncate to active_dim — callers care only about their
+        // Truncate to active_dim - callers care only about their
         // own feature-vector dims.
         let mut di = DiVector::zeros(self.active_dim);
         for d in 0..self.active_dim {

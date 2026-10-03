@@ -1,4 +1,4 @@
-//! Cross-crate integration — verify `AlertClusterer` (triage)
+//! Cross-crate integration - verify `AlertClusterer` (triage)
 //! drives the `MetricsSink` contract (core) through the
 //! `observe` / `prune` lifecycle.
 

@@ -1,13 +1,13 @@
 //! Forest aggregate root.
 //!
-//! - [`point_store::PointStore`] — a refcounted ring buffer that
+//! - [`point_store::PointStore`] - a refcounted ring buffer that
 //!   holds the canonical copy of every point currently referenced by
 //!   any tree. Trees see it through the
 //!   [`crate::tree::PointAccessor`] trait.
-//! - [`random_cut_forest::RandomCutForest`] — orchestrates `N`
+//! - [`random_cut_forest::RandomCutForest`] - orchestrates `N`
 //!   `(RandomCutTree, ReservoirSampler)` pairs sharing the
 //!   [`point_store::PointStore`].
-//! - [`ForestSnapshot`] — minimal read-only health + capacity view,
+//! - [`ForestSnapshot`] - minimal read-only health + capacity view,
 //!   exposed so downstream crates (`anomstream-triage`, any external
 //!   calibrator / SOC dashboard) can consume forest state without
 //!   reaching into the reservoir-level internals.
@@ -20,9 +20,9 @@ pub use random_cut_forest::RandomCutForest;
 
 /// Read-only snapshot view of a forest's capacity + health.
 ///
-/// Lives in `anomstream-core` so any consumer — including the
+/// Lives in `anomstream-core` so any consumer - including the
 /// downstream `anomstream-triage` crate that hosts SAGE, Platt,
-/// `AlertClusterer`, `FeedbackStore` — can introspect a forest
+/// `AlertClusterer`, `FeedbackStore` - can introspect a forest
 /// (`RandomCutForest` or `ThresholdedForest`) without needing
 /// access to the reservoir internals (`point_store()`, `trees()`).
 ///

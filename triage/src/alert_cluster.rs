@@ -1,4 +1,4 @@
-//! Alert clustering / dedup — SOC alert-fatigue reducer.
+//! Alert clustering / dedup - SOC alert-fatigue reducer.
 //!
 //! SIEM dashboards drown under RCF streams that fire many
 //! near-identical alerts (same attribution driver, same tenant,
@@ -13,7 +13,7 @@
 //! Cosine similarity on the flattened attribution
 //! [`DiVector`] (`high ⧺ low`). Two alerts with the same dominant
 //! dimension and similar magnitude ratios cluster; unrelated
-//! attributions stay apart. Threshold defaults to `0.95` — loosen
+//! attributions stay apart. Threshold defaults to `0.95` - loosen
 //! to merge more aggressively.
 //!
 //! # Sliding window
@@ -65,7 +65,7 @@ use std::sync::Arc;
 
 /// Default active-cluster cap. At one alert per millisecond this
 /// gives ~16 s of unique-attribution headroom before LRU eviction
-/// kicks in — enough for human-SOC flow rates, capped short of
+/// kicks in - enough for human-SOC flow rates, capped short of
 /// the memory-exhaustion regime a hostile high-cardinality
 /// stream would otherwise reach.
 pub const DEFAULT_MAX_CLUSTERS: usize = 16_384;
@@ -84,7 +84,7 @@ pub const MAX_TENANTS_PER_CLUSTER: usize = 32;
 /// Running cluster of near-duplicate alerts.
 ///
 /// Serializable under the `serde` feature so SIEM sinks can emit
-/// cluster summaries alongside the raw records — typical SOC
+/// cluster summaries alongside the raw records - typical SOC
 /// dashboard shows cluster rollups and lets analysts drill into
 /// the representative on demand.
 #[derive(Debug, Clone, PartialEq)]
@@ -93,13 +93,13 @@ pub struct AlertCluster<K = String, const D: usize = 4>
 where
     K: Clone,
 {
-    /// Representative alert — the first observation that opened the
+    /// Representative alert - the first observation that opened the
     /// cluster. Keeping the first (not the max) gives analysts a
     /// reproducible anchor; the `max_score` / `last_seen_ms` fields
     /// track the worst and most recent manifestations separately.
     pub representative: AlertRecord<K, D>,
     /// Number of alerts folded into this cluster (includes the
-    /// representative itself — never zero on a live cluster).
+    /// representative itself - never zero on a live cluster).
     pub count: u64,
     /// Timestamp of the oldest alert in this cluster.
     pub first_seen_ms: u64,
@@ -131,7 +131,7 @@ pub enum ClusterDecision {
 
 /// Streaming alert clusterer. Maintains an in-memory set of active
 /// [`AlertCluster`]s; each [`Self::observe`] call either extends one
-/// or opens a new one. Not thread-safe — wrap in `Mutex` / shard
+/// or opens a new one. Not thread-safe - wrap in `Mutex` / shard
 /// per tenant for concurrent ingest.
 ///
 /// # Tenant-key choice
@@ -141,8 +141,8 @@ pub enum ClusterDecision {
 /// insert** (the [`Self::observe`] Joined branch calls
 /// `rec.tenant.clone()` once per new tenant per cluster, capped
 /// by [`MAX_TENANTS_PER_CLUSTER`]). At MSSP scale (10 k+ alerts/s
-/// across many tenants) the per-clone heap traffic is measurable
-/// — typical workaround: instantiate `AlertClusterer::<u64, D>`
+/// across many tenants) the per-clone heap traffic is measurable -
+/// typical workaround: instantiate `AlertClusterer::<u64, D>`
 /// (or `u128`, or a tenant-ID newtype) so the tenant rolodex is
 /// `Vec<Option<u64>>`, branchless to compare and `Copy` to
 /// insert. Both specialisations compile under the same feature
@@ -151,37 +151,37 @@ pub enum ClusterDecision {
 ///
 /// ```ignore
 /// use anomstream_triage::AlertClusterer;
-/// // Default — convenient JSON tenant tokens, one heap clone per
+/// // Default - convenient JSON tenant tokens, one heap clone per
 /// // distinct tenant joining each cluster.
 /// let _: AlertClusterer<String, 16> = AlertClusterer::new(0.95, 60_000).unwrap();
-/// // Throughput-tuned — numeric tenant IDs, no heap traffic on
+/// // Throughput-tuned - numeric tenant IDs, no heap traffic on
 /// // the tenant-set update path.
 /// let _: AlertClusterer<u64, 16> = AlertClusterer::new(0.95, 60_000).unwrap();
 /// ```
 ///
 /// Callers that need string-typed tenants but cannot afford the
 /// per-insert clone can wrap the tenant identity in
-/// `alloc::sync::Arc<str>` — `K = Arc<str>` clones are an atomic
+/// `alloc::sync::Arc<str>` - `K = Arc<str>` clones are an atomic
 /// refcount bump, `O(1)` and allocation-free.
 pub struct AlertClusterer<K = String, const D: usize = 4>
 where
     K: Clone + PartialEq,
 {
     /// Cosine similarity above which two alerts join the same
-    /// cluster. Range `(0, 1]` — validated at construction.
+    /// cluster. Range `(0, 1]` - validated at construction.
     similarity_threshold: f64,
     /// Sliding-window width in milliseconds. Clusters whose
     /// `last_seen_ms` is older than `now − window_ms` are pruned.
     window_ms: u64,
     /// Hard cap on the active-cluster count. When [`Self::observe`]
     /// would grow the pool beyond this bound, the oldest cluster
-    /// (smallest `last_seen_ms`) is evicted first — protects
+    /// (smallest `last_seen_ms`) is evicted first - protects
     /// against adversarial high-cardinality attribution streams
     /// that would otherwise keep opening new clusters until OOM.
     max_clusters: usize,
     /// Active clusters, order not meaningful to callers.
     clusters: Vec<AlertCluster<K, D>>,
-    /// Pool-level metrics sink — every observe/prune emits to it.
+    /// Pool-level metrics sink - every observe/prune emits to it.
     #[cfg(feature = "std")]
     metrics: Arc<dyn anomstream_core::metrics::MetricsSink>,
 }
@@ -209,8 +209,8 @@ where
     /// Build a fresh clusterer. `similarity_threshold` must be in
     /// `(0, 1]`; `window_ms` is the sliding-window width in
     /// milliseconds (use `u64::MAX` to disable time-based pruning).
-    /// The active-cluster cap defaults to [`DEFAULT_MAX_CLUSTERS`]
-    /// — override via [`Self::with_max_clusters`] when the caller
+    /// The active-cluster cap defaults to [`DEFAULT_MAX_CLUSTERS`] -
+    /// override via [`Self::with_max_clusters`] when the caller
     /// has a tighter memory budget or explicitly wants to allow a
     /// larger working set.
     ///
@@ -240,7 +240,7 @@ where
     /// Override the active-cluster cap. When
     /// [`Self::observe`] would push the pool past `max`, the
     /// oldest cluster (smallest `last_seen_ms`) is evicted before
-    /// the new cluster is opened — bounded memory under
+    /// the new cluster is opened - bounded memory under
     /// adversarial high-cardinality alert streams.
     ///
     /// # Errors
@@ -268,7 +268,7 @@ where
         self.max_clusters
     }
 
-    /// Install a [`anomstream_core::MetricsSink`] — every `observe` / `prune`
+    /// Install a [`anomstream_core::MetricsSink`] - every `observe` / `prune`
     /// call emits counters / gauges into it.
     #[cfg(feature = "std")]
     #[must_use]
@@ -322,7 +322,7 @@ where
     /// (anything older than `window_ms` vs `rec.timestamp_ms`), then
     /// joins the highest-similarity cluster above threshold, or
     /// opens a new one.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, rec: AlertRecord<K, D>) -> ClusterDecision {
         #[cfg(feature = "std")]
         self.metrics
@@ -351,7 +351,7 @@ where
             if !cluster.contributing_tenants.contains(&rec.tenant) {
                 if cluster.contributing_tenants.len() >= MAX_TENANTS_PER_CLUSTER {
                     // FIFO-evict the oldest entry to keep the
-                    // tenant rolodex bounded — an attacker rotating
+                    // tenant rolodex bounded - an attacker rotating
                     // synthetic tenant keys cannot grow this vector
                     // unboundedly within a single cluster.
                     cluster.contributing_tenants.remove(0);
@@ -466,7 +466,7 @@ where
         self.emit_active_gauge_on(&self.metrics);
     }
 
-    /// Emit the resident-count gauge on an explicit sink — used by
+    /// Emit the resident-count gauge on an explicit sink - used by
     /// `with_metrics_sink` to stamp the initial value immediately.
     #[cfg(feature = "std")]
     fn emit_active_gauge_on(&self, sink: &Arc<dyn anomstream_core::metrics::MetricsSink>) {
@@ -479,7 +479,7 @@ where
 }
 
 /// Cosine similarity on the flattened `DiVector` (`high ⧺ low`).
-/// Returns `0.0` on degenerate (zero-norm) inputs — a zero-norm
+/// Returns `0.0` on degenerate (zero-norm) inputs - a zero-norm
 /// attribution carries no directional information so cannot be
 /// similar to anything.
 fn cosine_similarity(a: &DiVector, b: &DiVector) -> f64 {
@@ -586,7 +586,7 @@ mod tests {
         let mut c: AlertClusterer<String, 4> = AlertClusterer::new(0.95, 500).unwrap();
         let _ = c.observe(rec(&f, [5.0, 5.0, 5.0, 5.0], 1000));
         assert_eq!(c.len(), 1);
-        // 2000 ms later — prune window 500 ms
+        // 2000 ms later - prune window 500 ms
         c.prune_stale(2000);
         assert!(c.is_empty());
     }
@@ -676,7 +676,7 @@ mod tests {
 
     /// Build an `AlertRecord` with an orthogonal synthetic
     /// `DiVector` so cosine similarity between distinct records is
-    /// exactly zero — decouples the cap-enforcement test from the
+    /// exactly zero - decouples the cap-enforcement test from the
     /// forest's attribution behaviour.
     fn orthogonal_rec(slot: usize, ts: u64) -> AlertRecord<String, 4> {
         let mut high = alloc::vec![0.0_f64; 4];
@@ -714,7 +714,7 @@ mod tests {
             .unwrap()
             .with_max_clusters(3)
             .unwrap();
-        // 8 orthogonal attributions — each opens its own cluster.
+        // 8 orthogonal attributions - each opens its own cluster.
         // After the 4th the cap of 3 must start evicting.
         for i in 0..8 {
             let _ = c.observe(orthogonal_rec(i, 1_000 + i as u64));
@@ -737,7 +737,7 @@ mod tests {
 
     /// Build a record on a synthetic shared attribution so a flood
     /// of records with churning tenant keys all merge into the
-    /// same cluster — exercises the contributing-tenants cap path.
+    /// same cluster - exercises the contributing-tenants cap path.
     fn shared_attr_rec_with_tenant(tenant: u32, ts: u64) -> AlertRecord<u32, 4> {
         let attr = DiVector::from_arrays(vec![1.0, 0.0, 0.0, 0.0], vec![0.0; 4]).unwrap();
         let baseline = anomstream_core::forensic::ForensicBaseline::<4> {

@@ -1,11 +1,11 @@
-# Scripts — external bench harnesses
+# Scripts - external bench harnesses
 
 Three bench corpora; each lives under its own directory with a
 uniform file layout:
 
 | Dir | Corpus | Pipeline |
 |---|---|---|
-| [`synthetic/`](synthetic/README.md) | 10 k Gaussian points + 1 % outliers (`gen_points.py`) | update / score / AUC — primary throughput comparison |
+| [`synthetic/`](synthetic/README.md) | 10 k Gaussian points + 1 % outliers (`gen_points.py`) | update / score / AUC - primary throughput comparison |
 | [`nab/`](nab/README.md) | Numenta Anomaly Benchmark `realKnownCause` | 8-lag temporal embedding, frozen baseline, weighted-AUC |
 | [`tsb_ad/`](tsb_ad/README.md) | TSB-AD multivariate (TheDatumOrg, 2024) | native multivariate, per-dim z-score, frozen baseline |
 
@@ -25,7 +25,7 @@ Auxiliary helpers as needed: `gen_points.py` +
 ## AWS `randomcutforest-java` prerequisites (shared)
 
 Every Java driver needs `randomcutforest-core-4.4.0`. Grab the
-prebuilt jar from Maven Central — building from source is
+prebuilt jar from Maven Central - building from source is
 **not supported** on JDK 21+ (the upstream pom pins Lombok
 1.18.30 which does not handle the modern JDK module layout;
 bumping to 1.18.38 does not fix it).
@@ -38,7 +38,7 @@ curl -sLo /tmp/aws-rcf/randomcutforest-core-4.4.0.jar \
 #   2e851c82add6d4bcdd13e5cd85fdd091b8a28185fe104775761e8ff6606fd51b
 ```
 
-OpenJDK 21 or later (tested on 26) — only `javac` + `java` are
+OpenJDK 21 or later (tested on 26) - only `javac` + `java` are
 needed.
 
 ```bash
@@ -56,13 +56,13 @@ java -cp "scripts/nab:$JAR" RcfBenchNab /opt/nab
 
 ## Notes
 
-- Numbers are **cold JVM** on the Java driver — no JMH warmup.
-  A proper JVM micro-benchmark would warm JIT for 5–10 s before
+- Numbers are **cold JVM** on the Java driver - no JMH warmup.
+  A proper JVM micro-benchmark would warm JIT for 5-10 s before
   measuring. The cold numbers here represent a realistic
   process-startup cost for a shell-invoked job, which is the
   fair comparison against a native Rust binary.
 - AWS Java's `getAnomalyScore` uses a probability-of-separation
   visitor (codisp-like), directly comparable to anomstream-core's
-  `RandomCutForest::score_codisp()` — not to the isolation-depth
+  `RandomCutForest::score_codisp()` - not to the isolation-depth
   `score()` fast path. See `docs/performance.md` for the
   apples-to-apples split.

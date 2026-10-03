@@ -1,4 +1,4 @@
-//! Tamper-evident audit chain — HMAC-SHA256 chained
+//! Tamper-evident audit chain - HMAC-SHA256 chained
 //! [`crate::audit::AlertRecord`] stream.
 //!
 //! [`crate::audit::AlertRecord`] on its own is **not**
@@ -34,16 +34,16 @@
 //!   editing a record breaks its own tag; deleting a record
 //!   breaks the next entry's `prev_tag`.
 //! - **In-scope**: detect forged entries appended without the
-//!   secret key — the attacker cannot compute a valid `tag` for
+//!   secret key - the attacker cannot compute a valid `tag` for
 //!   a record they spliced in.
 //! - **Out of scope**: secrecy of the records (records remain
-//!   plaintext on disk — pair with at-rest encryption if the
+//!   plaintext on disk - pair with at-rest encryption if the
 //!   audit trail itself is sensitive).
 //! - **Out of scope**: protection against an attacker who has
 //!   compromised the key (they can rewrite history end-to-end
 //!   and re-sign; that is a key-management problem solved at
 //!   the storage / HSM layer, not by this module).
-//! - **Out of scope**: replay across separate chains — two
+//! - **Out of scope**: replay across separate chains - two
 //!   chains with the same key + `genesis_prev` produce the same
 //!   tags for the same records. Either rotate the key per chain
 //!   or rotate `genesis_prev` per chain (e.g. derive it from a
@@ -89,16 +89,16 @@ use anomstream_core::error::{RcfError, RcfResult};
 /// HMAC-SHA256 instantiation alias used by every chain entry.
 type HmacSha256 = Hmac<Sha256>;
 
-/// HMAC-SHA256 tag width — 32 bytes (256 bits).
+/// HMAC-SHA256 tag width - 32 bytes (256 bits).
 pub const TAG_LEN: usize = 32;
 
-/// Default genesis prev-tag — 32 zero bytes. Override via the
+/// Default genesis prev-tag - 32 zero bytes. Override via the
 /// last argument to [`verify_chain`] or [`AuditChain::with_genesis`]
 /// when chains within the same key scope must be cross-replay-
 /// resistant.
 pub const GENESIS_PREV: [u8; TAG_LEN] = [0u8; TAG_LEN];
 
-/// Minimum HMAC key length — 32 bytes. HMAC accepts any length
+/// Minimum HMAC key length - 32 bytes. HMAC accepts any length
 /// per RFC 2104 but anything shorter than the SHA-256 block has
 /// poor entropy guarantees for an audit-trail key.
 pub const MIN_KEY_LEN: usize = 32;
@@ -108,7 +108,7 @@ pub const MIN_KEY_LEN: usize = 32;
 /// tag, and an HMAC-SHA256 tag computed over `(seq, prev_tag,
 /// postcard(record))`.
 ///
-/// Serialise the entire `AuditChainEntry` to the audit sink — the
+/// Serialise the entire `AuditChainEntry` to the audit sink - the
 /// verifier needs every field to recompute tags and detect
 /// tampering.
 #[derive(Debug, Clone, PartialEq)]
@@ -122,16 +122,16 @@ pub struct AuditChainEntry<K = alloc::string::String, const D: usize = 4>
 where
     K: Clone,
 {
-    /// Underlying audit record — bit-identical to the producer's
+    /// Underlying audit record - bit-identical to the producer's
     /// emission. Tampering with any field breaks [`Self::tag`].
     pub record: AlertRecord<K, D>,
-    /// Monotonic sequence number — `0` for the first entry, then
+    /// Monotonic sequence number - `0` for the first entry, then
     /// `+1` per `append`. Reordering breaks both the tag and the
     /// chain linkage of the following entry.
     pub seq: u64,
     /// HMAC tag of the previous entry (or [`GENESIS_PREV`] for
     /// `seq == 0`). Used by the verifier to confirm chain
-    /// continuity — deleting an entry breaks the next entry's
+    /// continuity - deleting an entry breaks the next entry's
     /// `prev_tag`.
     pub prev_tag: [u8; TAG_LEN],
     /// HMAC-SHA256 tag computed over the canonical postcard
@@ -144,7 +144,7 @@ where
 /// chains off the previous entry without caller bookkeeping.
 ///
 /// The HMAC key is held in a `Vec<u8>` and zeroed on `Drop` via
-/// the `hmac` crate's internal scrubbing — but the *original*
+/// the `hmac` crate's internal scrubbing - but the *original*
 /// caller-provided slice is unchanged, so callers should
 /// themselves zero their copy after construction if the key
 /// material is sensitive. Use a key-management library (`zeroize`,
@@ -161,7 +161,7 @@ where
     /// Tag of the most recently appended entry, `genesis_prev`
     /// before any append.
     prev_tag: [u8; TAG_LEN],
-    /// `K`/`D` phantom — chain state itself does not carry an
+    /// `K`/`D` phantom - chain state itself does not carry an
     /// `AlertRecord`, but the type parameters match the records
     /// it can sign.
     _marker: core::marker::PhantomData<fn() -> AlertRecord<K, D>>,
@@ -169,7 +169,7 @@ where
 
 impl<K: Clone, const D: usize> core::fmt::Debug for AuditChain<K, D> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        // Never print the key — Debug is for logs which the
+        // Never print the key - Debug is for logs which the
         // tamper-evident trail must not leak the signing key into.
         f.debug_struct("AuditChain")
             .field("key_len", &self.key.len())
@@ -191,7 +191,7 @@ impl<K: Clone, const D: usize> AuditChain<K, D> {
     }
 
     /// Build a chain at a caller-supplied `(seq, genesis_prev)`
-    /// origin — use to **resume** appending to a chain whose tail
+    /// origin - use to **resume** appending to a chain whose tail
     /// is persisted elsewhere (load `(seq, prev_tag)` from the
     /// last stored entry, build a chain that continues from it).
     ///
@@ -238,21 +238,21 @@ impl<K: Clone, const D: usize> AuditChain<K, D> {
         };
         self.seq = self.seq.checked_add(1).ok_or_else(|| {
             RcfError::InvalidConfig(
-                "AuditChain: seq overflow — rotate the chain (rare: 2^64 entries)".into(),
+                "AuditChain: seq overflow - rotate the chain (rare: 2^64 entries)".into(),
             )
         })?;
         self.prev_tag = tag;
         Ok(entry)
     }
 
-    /// Current monotonic `seq` — the next [`Self::append`] will
+    /// Current monotonic `seq` - the next [`Self::append`] will
     /// stamp this value, then increment.
     #[must_use]
     pub fn seq(&self) -> u64 {
         self.seq
     }
 
-    /// Current `prev_tag` — copy when persisting chain state for
+    /// Current `prev_tag` - copy when persisting chain state for
     /// later resume.
     #[must_use]
     pub fn prev_tag(&self) -> [u8; TAG_LEN] {
@@ -339,14 +339,14 @@ where
         }
         if entry.prev_tag.ct_eq(&expected_prev).unwrap_u8() != 1 {
             return Err(RcfError::InvalidConfig(
-                format!("verify_chain: entry {i} prev_tag mismatch — chain broken at this point")
+                format!("verify_chain: entry {i} prev_tag mismatch - chain broken at this point")
                     .into(),
             ));
         }
         let recomputed = compute_tag(key, entry.seq, &entry.prev_tag, &entry.record)?;
         if recomputed.ct_eq(&entry.tag).unwrap_u8() != 1 {
             return Err(RcfError::InvalidConfig(
-                format!("verify_chain: entry {i} tag mismatch — record tampered or key wrong")
+                format!("verify_chain: entry {i} tag mismatch - record tampered or key wrong")
                     .into(),
             ));
         }
@@ -406,7 +406,7 @@ mod tests {
     }
 
     fn key32() -> [u8; 32] {
-        // Stable test key — production must use a CSPRNG-derived
+        // Stable test key - production must use a CSPRNG-derived
         // value held in an HSM or KMS.
         let mut k = [0u8; 32];
         for (i, slot) in k.iter_mut().enumerate() {
@@ -452,7 +452,7 @@ mod tests {
         let key = key32();
         let mut chain: AuditChain<alloc::string::String, 4> = AuditChain::new(&key).unwrap();
         let mut entry = chain.append(make_record(&f, 1_000)).unwrap();
-        // Edit the record post-sign — verifier must reject.
+        // Edit the record post-sign - verifier must reject.
         entry.record.timestamp_ms = entry.record.timestamp_ms.wrapping_add(1);
         let res = verify_chain(core::slice::from_ref(&entry), &key, &GENESIS_PREV);
         assert!(res.is_err(), "record tamper must be detected");
@@ -477,7 +477,7 @@ mod tests {
         let entries: Vec<_> = (0..4_u64)
             .map(|ts| chain.append(make_record(&f, ts)).unwrap())
             .collect();
-        // Drop the second entry — the third's prev_tag now points
+        // Drop the second entry - the third's prev_tag now points
         // to a nonexistent predecessor.
         let mut tampered = entries.clone();
         tampered.remove(1);

@@ -4,7 +4,7 @@
 //! Rationale: the score and attribution paths walk the same root→leaf
 //! sequence, touch the same bounding boxes, and compute the same
 //! `dampened = blend · damp` per internal node. The only difference
-//! is how they spread that scalar — scalar score accumulates it
+//! is how they spread that scalar - scalar score accumulates it
 //! verbatim, attribution splits it across dims via
 //! `per_dim_prob[d] / p`. Walking the tree twice costs a second round
 //! of cache loads + bounding-box probability SIMD passes.
@@ -13,7 +13,7 @@
 //! traversal. Every `accept_internal` call computes the shared
 //! `dampened` once and forwards it to both outputs. At the leaf, the
 //! scalar `score_seen` contribution is added to the scalar
-//! accumulator only — attribution has no leaf contribution by design
+//! accumulator only - attribution has no leaf contribution by design
 //! (no cut at the leaf to attribute).
 
 use crate::domain::{AnomalyScore, BoundingBox, Cut, DiVector, ensure_finite};
@@ -39,12 +39,12 @@ use crate::visitor::scoring::{damp, normalizer, score_seen, score_unseen};
 /// ```
 #[derive(Debug, Clone)]
 pub struct ScoreAttributionVisitor<'a> {
-    /// Sum of per-depth dampened contributions — matches
+    /// Sum of per-depth dampened contributions - matches
     /// [`crate::ScalarScoreVisitor::accumulated`].
     accumulated: f64,
     /// Per-dimension attribution accumulator.
     di: DiVector,
-    /// Queried point — borrowed for the walk.
+    /// Queried point - borrowed for the walk.
     point: &'a [f64],
     /// Tree-wide leaf-mass total used for damping + normalisation.
     total_mass: u64,
@@ -101,10 +101,10 @@ impl<const D: usize> Visitor<D> for ScoreAttributionVisitor<'_> {
         let p = prob_cut.clamp(0.0, 1.0);
         let blend = (1.0 - p) * score_seen(depth, mass) + p * score_unseen(depth, mass);
         let dampened = blend * damp(mass, self.total_mass);
-        // Scalar accumulator — identical to ScalarScoreVisitor.
+        // Scalar accumulator - identical to ScalarScoreVisitor.
         self.accumulated += dampened;
 
-        // Attribution split — only when prob > 0 (else no dim
+        // Attribution split - only when prob > 0 (else no dim
         // contributed to this cut and the shares would divide by zero).
         if p <= 0.0 {
             return;

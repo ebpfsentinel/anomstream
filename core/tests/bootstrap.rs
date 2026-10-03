@@ -3,11 +3,11 @@
 //!
 //! Asserts:
 //!
-//! 1. Bootstrapping a thresholded forest skips the warmup hole —
+//! 1. Bootstrapping a thresholded forest skips the warmup hole -
 //!    the very next live probe returns `ready = true`.
 //! 2. A freshly bootstrapped detector fires on an outlier
 //!    immediately, proving the adaptive threshold is hot.
-//! 3. The pool's per-tenant bootstrap is isolated — bootstrapping
+//! 3. The pool's per-tenant bootstrap is isolated - bootstrapping
 //!    tenant A does not warm tenant B.
 //! 4. Non-finite points are skipped without sinking the bootstrap.
 //! 5. Bootstrap interoperates with warm reload: bootstrap, persist,
@@ -46,7 +46,7 @@ fn forest_bootstrap_warms_reservoir() {
     assert_eq!(r.points_ingested, 256);
     assert_eq!(r.points_skipped, 0);
     assert_eq!(f.updates_seen(), 256);
-    // First probe should return a valid score — no EmptyForest.
+    // First probe should return a valid score - no EmptyForest.
     let score: f64 = f.score(&[0.05, 0.05, 0.05, 0.05]).unwrap().into();
     assert!(score >= 0.0);
 }
@@ -81,7 +81,7 @@ fn thresholded_bootstrap_fires_outlier_without_live_warmup() {
         .build()
         .unwrap();
     d.bootstrap(history(3, 512)).unwrap();
-    // No live warmup — immediately probe an outlier.
+    // No live warmup - immediately probe an outlier.
     let outlier = d.process([50.0_f64, 50.0, 50.0, 50.0]).unwrap();
     assert!(outlier.ready());
     assert!(outlier.is_anomaly());
@@ -128,7 +128,7 @@ fn bootstrap_skips_non_finite_rows() {
         .seed(5)
         .build()
         .unwrap();
-    // Mix of valid + NaN + inf rows — the kind a TSDB query returns
+    // Mix of valid + NaN + inf rows - the kind a TSDB query returns
     // when some series have gaps.
     let pts: Vec<[f64; 2]> = vec![
         [0.0, 0.0],

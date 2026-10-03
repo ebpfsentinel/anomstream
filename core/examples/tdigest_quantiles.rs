@@ -10,7 +10,7 @@ use anomstream_core::TDigest;
 fn main() {
     let mut digest = TDigest::new(200.0).expect("valid compression");
 
-    // Skewed stream: 99 % small values + 1 % large outliers — the
+    // Skewed stream: 99 % small values + 1 % large outliers - the
     // classic SOC latency / anomaly-score shape.
     for i in 0..99_000 {
         digest.record(f64::from(i) * 1e-4);

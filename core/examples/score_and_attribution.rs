@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::cast_precision_loss)]
-//! Demo of `RandomCutForest::score_and_attribution` — single-walk
+//! Demo of `RandomCutForest::score_and_attribution` - single-walk
 //! API that returns `(AnomalyScore, DiVector)` from one tree
 //! traversal. Cheaper than calling `score` + `attribution`
 //! back-to-back when the caller needs both (alert pipelines that
@@ -104,7 +104,7 @@ fn main() -> Result<(), RcfError> {
 }
 
 /// Tiny linear-congruential RNG so the example has zero non-anomstream-core
-/// dependencies — produces uniform `f64` in `[0, 1)`.
+/// dependencies - produces uniform `f64` in `[0, 1)`.
 fn simple_lcg(seed: u64) -> impl FnMut() -> f64 {
     let mut state = seed;
     move || {

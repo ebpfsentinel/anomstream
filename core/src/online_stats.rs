@@ -1,13 +1,13 @@
 //! Welford online mean + variance accumulator.
 //!
 //! Numerically stable single-pass variance (Welford 1962 / Knuth
-//! TAOCP vol.2 §4.2.2) — updates `(mean, M2)` in place so the
+//! TAOCP vol.2 §4.2.2) - updates `(mean, M2)` in place so the
 //! returned sample variance is equivalent to a two-pass algorithm
 //! without storing the stream.
 //!
 //! Shared by the normalizer, per-feature CUSUM / EWMA detectors,
 //! and any downstream consumer that needs a cheap streaming
-//! `(mean, std_dev)` summary. Keep the shape minimal — callers
+//! `(mean, std_dev)` summary. Keep the shape minimal - callers
 //! layer warmup / decay / per-feature arrays on top.
 //!
 //! # References
@@ -60,7 +60,7 @@ impl OnlineStats {
         Self::default()
     }
 
-    /// Ingest a new sample — `O(1)` update to mean and `M2`.
+    /// Ingest a new sample - `O(1)` update to mean and `M2`.
     #[allow(clippy::cast_precision_loss)]
     pub fn update(&mut self, value: f64) {
         self.count += 1;
@@ -81,7 +81,7 @@ impl OnlineStats {
         self.m2 / (self.count - 1) as f64
     }
 
-    /// Sample standard deviation — `sqrt(variance())`.
+    /// Sample standard deviation - `sqrt(variance())`.
     #[must_use]
     pub fn std_dev(&self) -> f64 {
         self.variance().sqrt()

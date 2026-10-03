@@ -1,7 +1,7 @@
 //! Inter-tree dispersion of the per-dim attribution vector.
 //!
 //! [`crate::RandomCutForest::attribution`] already returns the mean
-//! [`DiVector`] across every tree in the forest — but the mean hides
+//! [`DiVector`] across every tree in the forest - but the mean hides
 //! how *unanimously* the trees agreed on that answer. An attribution
 //! of `high[4] + low[4] = 10` where every tree saw dim 4 as the top
 //! contributor is very different from the same mean synthesised from
@@ -14,9 +14,9 @@
 //! variation and a bounded `confidence ∈ [0, 1]` per dim, and offers
 //! two ways to pick the driver dimension:
 //!
-//! - [`AttributionStability::argmax_mean`] — classic
+//! - [`AttributionStability::argmax_mean`] - classic
 //!   [`DiVector::argmax`] behaviour, ignores disagreement.
-//! - [`AttributionStability::argmax_weighted`] — picks the dim that
+//! - [`AttributionStability::argmax_weighted`] - picks the dim that
 //!   maximises `mean × confidence`; downranks dims where the trees
 //!   disagree. Safer for SOC-facing alerts.
 //!
@@ -48,14 +48,14 @@ pub struct AttributionStability {
     /// non-trivial attribution. Identical to what
     /// [`crate::RandomCutForest::attribution`] returns.
     mean: DiVector,
-    /// Per-dim population variance (not the unbiased estimator —
+    /// Per-dim population variance (not the unbiased estimator -
     /// divides by `tree_count`, not `tree_count − 1`).
     variance: Vec<f64>,
     /// Per-dim standard deviation (`sqrt(variance)`), cached so
     /// callers that query [`Self::confidence`] in a hot loop do not
     /// re-square-root on every call.
     stddev: Vec<f64>,
-    /// Number of trees that actually contributed — trees with an
+    /// Number of trees that actually contributed - trees with an
     /// empty reservoir are skipped so `tree_count` may be less than
     /// the forest's configured `num_trees`.
     tree_count: usize,
@@ -92,13 +92,13 @@ impl AttributionStability {
         self.mean.dim()
     }
 
-    /// Coefficient of variation for dim `d` — `stddev[d] / |mean[d]|`.
+    /// Coefficient of variation for dim `d` - `stddev[d] / |mean[d]|`.
     /// Returns `0.0` when `|mean[d]| < f64::EPSILON` (no dispersion is
     /// observable when nothing was attributed).
     ///
     /// # Panics
     ///
-    /// Panics when `d >= self.dim()` — callers size-check first.
+    /// Panics when `d >= self.dim()` - callers size-check first.
     #[must_use]
     pub fn coefficient_of_variation(&self, d: usize) -> f64 {
         let mean_abs = self.mean.per_dim_total(d).abs();
@@ -110,18 +110,18 @@ impl AttributionStability {
 
     /// Bounded `[0, 1]` confidence that dim `d`'s mean contribution
     /// is a stable signal rather than a handful of trees agreeing by
-    /// chance. Derived as `1 / (1 + CV)` — `1.0` for perfect
+    /// chance. Derived as `1 / (1 + CV)` - `1.0` for perfect
     /// agreement, falling monotonically as CV rises.
     ///
     /// # Panics
     ///
-    /// Panics when `d >= self.dim()` — callers size-check first.
+    /// Panics when `d >= self.dim()` - callers size-check first.
     #[must_use]
     pub fn confidence(&self, d: usize) -> f64 {
         1.0 / (1.0 + self.coefficient_of_variation(d))
     }
 
-    /// Classic [`DiVector::argmax`] — dim with the largest mean
+    /// Classic [`DiVector::argmax`] - dim with the largest mean
     /// contribution, independent of stability. Returns `None` on an
     /// empty attribution vector.
     #[must_use]
@@ -211,7 +211,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// Inter-tree dispersion of the attribution vector on `point`.
     ///
     /// Returns the mean contribution per dim plus the per-dim
-    /// variance and stddev across trees — use
+    /// variance and stddev across trees - use
     /// [`AttributionStability::confidence`] or
     /// [`AttributionStability::argmax_weighted`] to pick a driver
     /// dim that downranks tree-level disagreement.
@@ -224,7 +224,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// - Any error bubbled up from the per-tree attribution path.
     pub fn attribution_stability(&self, point: &[f64; D]) -> RcfResult<AttributionStability> {
         ensure_finite(point)?;
-        // Keep parity with `attribution()` — stored points are in the
+        // Keep parity with `attribution()` - stored points are in the
         // forest's scaled space, so the caller query must be scaled
         // before walking the tree cuts.
         let scaled = self.scale_point_copy(point);
@@ -235,7 +235,7 @@ impl<const D: usize> RandomCutForest<D> {
 
 impl<const D: usize> ThresholdedForest<D> {
     /// Inter-tree dispersion of the attribution on `point`. Delegates
-    /// to the underlying forest — the threshold layer does not
+    /// to the underlying forest - the threshold layer does not
     /// influence attribution.
     ///
     /// # Errors
@@ -261,7 +261,7 @@ where
     ///
     /// # Panics
     ///
-    /// Never under normal use — the fall-through branch forces a
+    /// Never under normal use - the fall-through branch forces a
     /// slot via [`Self::score_only`] before re-borrowing through
     /// [`Self::get_mut`]; the assertion only fires on an impossible
     /// concurrent eviction through `&mut self`.

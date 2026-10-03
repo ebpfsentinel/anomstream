@@ -2,13 +2,13 @@
 //!
 //! `D` parallel univariate EWMA accumulators track per-dim mean +
 //! variance with geometric decay `α`. After a warmup budget,
-//! `observe` reports per-feature z-scores and the max across dims
-//! — policy-free, so caller maps max-z into alert severity via
+//! `observe` reports per-feature z-scores and the max across dims -
+//! policy-free, so caller maps max-z into alert severity via
 //! [`crate::SeverityBands`] or a custom rule.
 //!
 //! Scoring is applied *before* the accumulator update so the
 //! current observation is judged against the prior distribution
-//! (textbook EWCD / EWMA-Z convention) — without this, a large
+//! (textbook EWCD / EWMA-Z convention) - without this, a large
 //! step would fold into the mean in the same tick and miss the
 //! alert.
 //!
@@ -30,7 +30,7 @@
 #[allow(unused_imports)]
 use num_traits::Float;
 
-/// One univariate EWMA accumulator — public so callers can read
+/// One univariate EWMA accumulator - public so callers can read
 /// the evolving `(mean, variance, count)` for telemetry.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -44,7 +44,7 @@ pub struct EwmaAccumulator {
 }
 
 impl EwmaAccumulator {
-    /// Fresh accumulator — zeroed.
+    /// Fresh accumulator - zeroed.
     #[inline]
     #[must_use]
     pub const fn new() -> Self {
@@ -125,7 +125,7 @@ impl Default for PerFeatureEwmaConfig {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PerFeatureEwmaResult<const D: usize> {
-    /// `max(per_feature_z)` — single-number summary so a caller
+    /// `max(per_feature_z)` - single-number summary so a caller
     /// can classify severity without scanning the full array.
     pub max_z: f64,
     /// Per-dimension z-scores; index matches the input vector.
@@ -164,7 +164,7 @@ pub struct PerFeatureEwma<const D: usize> {
 
 #[cfg(feature = "serde")]
 mod serde_accumulators {
-    //! `serde` adapter for `[EwmaAccumulator; D]` — the derive
+    //! `serde` adapter for `[EwmaAccumulator; D]` - the derive
     //! macro does not cover arbitrary-`D` arrays, so round-trip
     //! through a length-prefixed slice.
     use super::EwmaAccumulator;
@@ -233,7 +233,7 @@ impl<const D: usize> PerFeatureEwma<D> {
 
     /// Per-dimension accumulator snapshot (useful for status
     /// endpoints and debugging; callers should not mutate in
-    /// place — use [`Self::reset`] instead).
+    /// place - use [`Self::reset`] instead).
     #[inline]
     #[must_use]
     pub const fn accumulators(&self) -> &[EwmaAccumulator; D] {
@@ -244,7 +244,7 @@ impl<const D: usize> PerFeatureEwma<D> {
     /// warmup is complete. Accumulators are always updated so a
     /// disabled caller can still warm the detector.
     #[inline]
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn observe(&mut self, input: &[f64; D]) -> Option<PerFeatureEwmaResult<D>> {
         let result = if self.is_warmed_up() {
             let mut per_feature_z = [0.0_f64; D];
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn max_z_picks_largest_feature() {
-        // Only dim 1 spikes — max_z must equal that dim's z.
+        // Only dim 1 spikes - max_z must equal that dim's z.
         let mut ewma = PerFeatureEwma::<3>::new(PerFeatureEwmaConfig {
             alpha: 0.1,
             warmup_samples: 5,

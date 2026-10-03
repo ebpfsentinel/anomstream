@@ -2,7 +2,7 @@
 //! Confidence interval on the anomaly score. The mean by itself
 //! does not tell the SOC whether the ensemble agrees; the per-tree
 //! stderr does. This example prints the 95 % CI for a tight-cluster
-//! probe and an outlier — the outlier CI is almost always wider.
+//! probe and an outlier - the outlier CI is almost always wider.
 //!
 //! Run with `cargo run --example score_confidence`.
 

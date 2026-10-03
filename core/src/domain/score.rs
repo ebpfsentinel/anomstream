@@ -3,7 +3,7 @@
 //! [`AnomalyScore`] enforces three invariants at construction time:
 //!
 //! 1. The wrapped value is finite (no `NaN`, no `±∞`).
-//! 2. The wrapped value is non-negative — RCF scores per Guha et al.
+//! 2. The wrapped value is non-negative - RCF scores per Guha et al.
 //!    (2016) are sums of non-negative terms.
 //! 3. The wrapped value can be totally ordered without surprise (the
 //!    [`Ord`] impl is sound thanks to the `NaN` rejection).

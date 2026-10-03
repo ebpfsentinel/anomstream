@@ -53,7 +53,7 @@ fn bench_hot_path_sampler(c: &mut Criterion) {
     group.finish();
 }
 
-/// `PrefixRateCap::check_and_record` — 256-bucket atomic counter
+/// `PrefixRateCap::check_and_record` - 256-bucket atomic counter
 /// sketch + window roll. Lock-free, `O(1)`.
 fn bench_hot_path_prefix_cap(c: &mut Criterion) {
     let mut group = c.benchmark_group("hot_path_prefix_cap");
@@ -94,7 +94,7 @@ fn bench_hot_path_prefix_cap(c: &mut Criterion) {
     // distinct buckets concurrently. Without cache-line padding
     // the adjacent `AtomicU32` buckets share a 64-byte line,
     // forcing every cross-thread write to bounce the line through
-    // MOESI/MESI — measurable as a >5× per-op slowdown on a
+    // MOESI/MESI - measurable as a >5× per-op slowdown on a
     // typical x86_64 box. Cache-padded buckets (current layout)
     // keep this bench near the single-thread cost.
     group.bench_function("check_and_record_contended_8threads", |b| {
@@ -107,8 +107,8 @@ fn bench_hot_path_prefix_cap(c: &mut Criterion) {
         ));
         b.iter_custom(|iters| {
             let stop = Arc::new(AtomicBool::new(false));
-            // 7 background threads keep the other cache lines hot
-            // — each one targets a distinct bucket so every write
+            // 7 background threads keep the other cache lines hot -
+            // each one targets a distinct bucket so every write
             // lands on its own cache line. Without padding, false
             // sharing across these adjacent atomics would dominate
             // the measurement.
@@ -165,7 +165,7 @@ fn bench_hot_path_channel(c: &mut Criterion) {
     group.finish();
 }
 
-/// `default_sink()` — cost of the shared-Arc clone path used by
+/// `default_sink()` - cost of the shared-Arc clone path used by
 /// every `UpdateSampler::new` / `update_channel` / detector
 /// constructor. Previously a per-call `Arc::new(NoopSink)` heap
 /// allocation; now a refcount bump on a lazily-initialised

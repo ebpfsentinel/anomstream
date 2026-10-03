@@ -1,16 +1,16 @@
 #![allow(clippy::unwrap_used, clippy::cast_precision_loss)]
-//! Minimal runnable demo of the `hot_path` module — classifier
+//! Minimal runnable demo of the `hot_path` module - classifier
 //! thread enqueues sampled features, dedicated updater thread
 //! drains into the forest at its own cadence.
 //!
 //! Models a realistic eBPF TC-action split:
 //!
-//! - **Classifier** (hot, single-packet path) — runs per packet,
+//! - **Classifier** (hot, single-packet path) - runs per packet,
 //!   computes a feature vector, invokes `UpdateSampler::accept_hash`
 //!   on the flow hash, and non-blockingly `try_enqueue`s admitted
 //!   probes into the update channel. Scoring against the current
 //!   forest snapshot would happen here in prod; the demo skips it.
-//! - **Updater** (cold, background) — owns `&mut forest`, drains
+//! - **Updater** (cold, background) - owns `&mut forest`, drains
 //!   the channel in a loop via `try_drain`, calls `forest.update`.
 //!   Its cadence is decoupled from the classifier.
 //!
@@ -77,7 +77,7 @@ fn main() {
             for (d, slot) in features.iter_mut().enumerate() {
                 *slot = ((i as f64) * 0.001 + (d as f64) * 0.1).sin();
             }
-            // Fake flow hash — in prod this comes from the 5-tuple.
+            // Fake flow hash - in prod this comes from the 5-tuple.
             let flow_hash = i.wrapping_mul(0x9E37_79B9_7F4A_7C15);
             if classifier_sampler.accept_hash(flow_hash) {
                 let _ = producer_tx.try_enqueue(features);

@@ -5,26 +5,26 @@
     clippy::similar_names,
     clippy::bool_to_int_with_if
 )]
-//! Detection-quality integration tests — measure whether the
+//! Detection-quality integration tests - measure whether the
 //! forest actually distinguishes anomalies from normal points on
 //! synthetic streams with known ground truth.
 //!
 //! Speed alone (criterion benches) says nothing about whether the
 //! scorer catches the anomalies. These tests report
 //!
-//! - **`AUC`** — area under the `ROC` curve. Perfect ranking = 1.0,
+//! - **`AUC`** - area under the `ROC` curve. Perfect ranking = 1.0,
 //!   random = 0.5. RCF on trivial separable data should sit very
 //!   close to 1.0.
-//! - **Precision / recall at a budget** — top-K alerts ranked by
+//! - **Precision / recall at a budget** - top-K alerts ranked by
 //!   score; how many true anomalies fall in the top-K?
-//! - **Score separation ratio** — `mean(anomaly_scores) /
+//! - **Score separation ratio** - `mean(anomaly_scores) /
 //!   mean(normal_scores)`. A value close to `1` means the scorer
 //!   cannot tell the classes apart; values > 2 indicate strong
 //!   separation.
 //!
 //! These are **not** a substitute for the Numenta NAB / Yahoo S5
-//! benchmarks (tracked under future work in `docs/performance.md`)
-//! — but they validate the core quality claim on controlled data
+//! benchmarks (tracked under future work in `docs/performance.md`) -
+//! but they validate the core quality claim on controlled data
 //! and regression-guard it so future refactors cannot silently
 //! break detection accuracy.
 
@@ -42,7 +42,7 @@ fn auc(scores: &[f64], labels: &[u8]) -> f64 {
         .zip(labels.iter())
         .map(|(&s, &l)| (s, l))
         .collect();
-    // Descending by score — highest score first.
+    // Descending by score - highest score first.
     pairs.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal));
     let total_pos: u64 = labels.iter().map(|&l| u64::from(l)).sum();
     let total_neg: u64 = labels.len() as u64 - total_pos;
@@ -149,7 +149,7 @@ fn auc_random_ranking_near_half() {
     );
 }
 
-/// Tight cluster + far outliers — the textbook case. RCF should
+/// Tight cluster + far outliers - the textbook case. RCF should
 /// rank every outlier above every in-cluster point.
 ///
 /// Two-phase protocol: train the forest on a **clean baseline**
@@ -167,13 +167,13 @@ fn cluster_plus_outliers_separable() {
         .unwrap();
     let mut rng = ChaCha8Rng::seed_from_u64(42);
 
-    // Phase 1 — warm the forest on 500 normal points only.
+    // Phase 1 - warm the forest on 500 normal points only.
     for _ in 0..500 {
         let p = [rng.random::<f64>() * 0.2, rng.random::<f64>() * 0.2];
         forest.update(p).unwrap();
     }
 
-    // Phase 2 — evaluation set: 200 normal + 25 anomalies.
+    // Phase 2 - evaluation set: 200 normal + 25 anomalies.
     let mut points: Vec<[f64; 2]> = Vec::new();
     let mut labels: Vec<u8> = Vec::new();
     for _ in 0..200 {
@@ -202,7 +202,7 @@ fn cluster_plus_outliers_separable() {
     assert!(r > 0.6, "recall@25 = {r}, expected > 0.6");
 }
 
-/// Transition anomalies — forest trained on a tight cluster,
+/// Transition anomalies - forest trained on a tight cluster,
 /// then queried with a mix of in-cluster and transition points
 /// (halfway between baseline and a hypothetical new mode).
 /// Transition points should rank above in-cluster ones.
@@ -215,13 +215,13 @@ fn transition_points_score_above_baseline() {
         .build()
         .unwrap();
     let mut rng = ChaCha8Rng::seed_from_u64(99);
-    // Phase 1 — warm on 800 baseline points around (0, 0).
+    // Phase 1 - warm on 800 baseline points around (0, 0).
     for _ in 0..800 {
         forest
             .update([rng.random::<f64>() * 0.2, rng.random::<f64>() * 0.2])
             .unwrap();
     }
-    // Phase 2 — evaluation: 200 baseline + 50 transition points
+    // Phase 2 - evaluation: 200 baseline + 50 transition points
     // (far from the trained centroid).
     let mut points: Vec<[f64; 2]> = Vec::new();
     let mut labels: Vec<u8> = Vec::new();
@@ -244,7 +244,7 @@ fn transition_points_score_above_baseline() {
     assert!(a > 0.90, "transition AUC = {a}, expected > 0.90");
 }
 
-/// Streaming score — bare forest's `score` call precedes `update`,
+/// Streaming score - bare forest's `score` call precedes `update`,
 /// so every point gets a prediction **before** it contaminates the
 /// forest's baseline. Confirms the online-scoring protocol matches
 /// eBPFsentinel Enterprise's per-packet deployment.
@@ -269,7 +269,7 @@ fn online_score_then_update_preserves_separation() {
         ];
         forest.update(p).unwrap();
     }
-    // Online evaluation phase — interleave normal + anomaly.
+    // Online evaluation phase - interleave normal + anomaly.
     for i in 0..500 {
         let p: [f64; 4] = [
             rng.random::<f64>() * 0.1,
@@ -282,7 +282,7 @@ fn online_score_then_update_preserves_separation() {
         if i % 10 == 0 {
             let anom: [f64; 4] = [5.0, 5.0, 5.0, 5.0];
             scores_anom.push(f64::from(forest.score(&anom).unwrap()));
-            // Do NOT update on anomaly — realistic: true anomalies
+            // Do NOT update on anomaly - realistic: true anomalies
             // should not re-baseline the forest on first sight.
         }
     }

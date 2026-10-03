@@ -12,7 +12,7 @@ dependencies.
 Referenced: MITRE ATLAS (Adversarial Threat Landscape for AI
 Systems) tactic / technique IDs.
 
-## T1 — Reservoir poisoning (`AML.T0020`)
+## T1 - Reservoir poisoning (`AML.T0020`)
 
 ### Attack
 
@@ -22,13 +22,13 @@ attacker's traffic shape becomes the detector's normal, and
 subsequent (real) anomalous traffic of the same shape is no
 longer flagged. Two vectors:
 
-1. **Deterministic admission spray** — when `UpdateSampler` uses
+1. **Deterministic admission spray** - when `UpdateSampler` uses
    the unkeyed `accept_hash(flow_hash)` path, admission is
    `flow_hash % keep_every_n == 0`. An attacker who can probe
    the admission decision (observe whether a given flow was
    reflected in the baseline via score drift) can spray 5-tuples
    whose caller-computed hash lands on the admitted residue class.
-2. **Single-source flood** — even keyed admission admits a fixed
+2. **Single-source flood** - even keyed admission admits a fixed
    rate per flow; a flood from a compromised source IP that
    churns through many 5-tuples saturates the reservoir with
    points all from the attacker's network.
@@ -50,7 +50,7 @@ longer flagged. Two vectors:
 - **Per-prefix rate cap**:
   `PrefixRateCap::new(NonZeroU32, NonZeroU64)` bounds how many
   admissions a single `/24`-prefix hash bucket can push within a
-  rolling window. Fixed 256-bucket sketch — buckets are
+  rolling window. Fixed 256-bucket sketch - buckets are
   **cache-line padded** (`#[repr(align(64))]`) so concurrent
   `fetch_add`s on different buckets do not bounce a shared cache
   line through MOESI/MESI; lock-free `check_and_record`,
@@ -58,7 +58,7 @@ longer flagged. Two vectors:
   per bucket per window under heavy concurrent load (the
   `fetch_add` + cap-comparison sequence is two distinct atomics);
   size the cap with that slack baked in. Collisions are soft (by
-  design — trades a little cross-prefix interference for constant
+  design - trades a little cross-prefix interference for constant
   memory).
 - **LSH alert clusterer keyed hash**: `LshAlertClusterer::new`
   draws a fresh per-instance 128-bit hash secret from
@@ -80,11 +80,11 @@ longer flagged. Two vectors:
 - No cryptographic integrity on the feature vector itself
   (caller must sanitise upstream).
 - No per-tenant separation of reservoir secrets across
-  `TenantForestPool` entries — all tenants share the keyed
+  `TenantForestPool` entries - all tenants share the keyed
   sampler's secret. Rotate on tenant provisioning if higher
   isolation is needed.
 
-## T2 — Evasion via contextual shift (`AML.T0043`)
+## T2 - Evasion via contextual shift (`AML.T0043`)
 
 ### Attack
 
@@ -96,14 +96,14 @@ sits inside the (drifted) baseline and is not flagged.
 
 - `MetaDriftDetector` (CUSUM on the score stream) fires
   `DriftKind::Upward` / `DriftKind::Downward` on sustained
-  baseline drift. Observability only — caller decides action.
+  baseline drift. Observability only - caller decides action.
 - `FeatureDriftDetector` (PSI + KL per feature) fires
   `DriftLevel::Alert` when the production distribution diverges
   from the frozen baseline by `≥ 0.25` PSI. Pin the offending
   dim via `argmax_psi()`.
 - `score_codisp_stateless` preserves the frozen baseline across
   long eval streams; the mutating `score_codisp` path drifts by
-  design — the non-mutating variant is the one to use when the
+  design - the non-mutating variant is the one to use when the
   caller needs a contextual-displacement score on a trusted
   baseline.
 
@@ -112,7 +112,7 @@ sits inside the (drifted) baseline and is not flagged.
 - Automatic drift *recovery* (shadow-forest swap on alert). The
   ADWIN-based swap is P1 on the roadmap.
 
-## T3 — Model extraction (`AML.T0024`)
+## T3 - Model extraction (`AML.T0024`)
 
 ### Attack
 
@@ -126,7 +126,7 @@ undetectable payloads.
 - No public score API out of the process boundary. The crate
   provides in-process `score()` only; exposing it externally is
   the caller's architectural decision.
-- `score` returns a clamped `AnomalyScore` newtype — its
+- `score` returns a clamped `AnomalyScore` newtype - its
   internal representation is not exposed beyond `f64` accessor,
   making pre-clamp score leakage unlikely under `rustc` opt.
 
@@ -136,7 +136,7 @@ undetectable payloads.
   (DP-SGD-equivalent for isolation forests is an open research
   problem; not in scope).
 
-## T4 — Classifier-side resource exhaustion
+## T4 - Classifier-side resource exhaustion
 
 ### Attack
 
@@ -146,7 +146,7 @@ the updater thread, starving legitimate updates.
 
 ### Defences shipped
 
-- `UpdateProducer::try_enqueue` is non-blocking — on full queue
+- `UpdateProducer::try_enqueue` is non-blocking - on full queue
   it increments `dropped_total` and returns `false`. The
   classifier stays hot-path-safe; the cost is visible via the
   counter so ops can alert on `dropped_total > 0`.
@@ -154,7 +154,7 @@ the updater thread, starving legitimate updates.
   1/N stride or per-flow gate is free (no allocations, no
   syscalls).
 - `update_channel(capacity)` validates `capacity ∈
-  1..=MAX_CHANNEL_CAPACITY` (`1 << 20` slots) at construction —
+  1..=MAX_CHANNEL_CAPACITY` (`1 << 20` slots) at construction -
   caller cannot OOM the allocator with `usize::MAX` or silently
   drop every offer with `0`. The non-panicking
   `try_update_channel` Result-returning variant surfaces the
@@ -164,14 +164,14 @@ the updater thread, starving legitimate updates.
   asymmetry (`window_ms == 0` panicked, `cap == 0` silently
   disabled the cap) is impossible to express.
 - `FeedbackStore::new(capacity, ...)` rejects `capacity >
-  MAX_CAPACITY = 65 536` — the bounded ledger can no longer be
+  MAX_CAPACITY = 65 536` - the bounded ledger can no longer be
   driven into allocator pressure by a hostile config. The
   per-cluster `contributing_tenants` rolodex on
   `AlertClusterer` is bounded by `MAX_TENANTS_PER_CLUSTER = 32`
   with FIFO eviction, so an attacker rotating synthetic tenant
   keys against a single cluster cannot grow the membership
   vector unboundedly. Per-call `MetricsSink` dispatch is
-  **batched every 64 ops** (`record_batched` helper) — line-rate
+  **batched every 64 ops** (`record_batched` helper) - line-rate
   load no longer spends ≈160 ms / s on `Arc<dyn>` vtable calls;
   call `flush_metrics()` on shutdown.
 
@@ -181,7 +181,7 @@ the updater thread, starving legitimate updates.
   the updater falls behind, the queue drops silently until ops
   reacts to the `dropped_total` gauge.
 
-## T5 — Audit-trail tampering
+## T5 - Audit-trail tampering
 
 ### Attack
 
@@ -191,8 +191,8 @@ naïve `serde`-roundtrip of the records on disk performs **no**
 integrity check beyond the 4-byte version prefix, so a downstream
 consumer that decodes the bytes has no way to tell a tampered
 trail from the original. Compliance regimes (SOC2 CC6 / NIS2 /
-PCI-DSS 10.5) generally require the audit trail itself —
-not just the storage — to be tamper-evident.
+PCI-DSS 10.5) generally require the audit trail itself -
+not just the storage - to be tamper-evident.
 
 ### Defences shipped
 
@@ -230,17 +230,17 @@ not just the storage — to be tamper-evident.
   sensitive (e.g. customer PII inside the `point` field).
 - Cross-chain replay protection. Two chains with the same key
   and `genesis_prev` produce the same tags for the same
-  records — rotate `genesis_prev` per chain (deriving from a
+  records - rotate `genesis_prev` per chain (deriving from a
   chain identifier) when separation matters.
 
 ## What is explicitly NOT in the threat model
 
 - Kernel-side eBPF verifier compromise (kernel concern).
 - Compromise of the upstream CTI feeds that drive threat
-  intelligence (out of scope — `anomstream-core` does not consume CTI
+  intelligence (out of scope - `anomstream-core` does not consume CTI
   directly).
 - Attacks on the persistence format (`to_bytes` / `from_bytes`)
-  — the crate enforces versioned envelopes with upfront
+  - the crate enforces versioned envelopes with upfront
   rejection of incompatible versions, but a compromised
   serialised state file trivially compromises the loaded
   detector. Callers must treat forest snapshots as

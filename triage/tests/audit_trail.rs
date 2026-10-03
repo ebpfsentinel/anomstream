@@ -90,7 +90,7 @@ fn audit_record_json_roundtrip_bit_exact_non_fp_fields() {
     assert_eq!(rec.baseline.live_points, back.baseline.live_points);
     // `score` is a *derived* f64 (a mean over per-tree scores), so it
     // can land on a double whose shortest decimal form re-parses one
-    // ULP away — e.g. serde_json writes `1.8295224971362654` and reads
+    // ULP away - e.g. serde_json writes `1.8295224971362654` and reads
     // back `1.8295224971362656`. Which double we land on legitimately
     // depends on the ensemble summation order (serial fold vs rayon
     // reduce tree), so pin the tolerance at one ULP rather than

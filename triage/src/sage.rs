@@ -1,5 +1,5 @@
 //! SAGE-style Shapley attribution estimator via permutation
-//! sampling — Covert, Lundberg & Lee, *Understanding Global
+//! sampling - Covert, Lundberg & Lee, *Understanding Global
 //! Feature Contributions With Additive Importance Measures*,
 //! `NeurIPS` 2020.
 //!
@@ -13,7 +13,7 @@
 //! # Why this and not the per-dim attribution `DiVector`?
 //!
 //! The shipped [`anomstream_core::AttributionVisitor`] returns **marginal**
-//! per-dim contributions — `attribution[d] = ∂score/∂dim_d` along
+//! per-dim contributions - `attribution[d] = ∂score/∂dim_d` along
 //! the forest's random-cut decomposition. Marginals ignore feature
 //! interactions; when two dims together signal an anomaly (packet
 //! rate × entropy = beacon) but neither alone does, the
@@ -25,7 +25,7 @@
 //!
 //! `K · D` forest scores per estimator invocation. Default
 //! `K = 64` permutations at `D = 16` = 1 024 scores ≈ 40 ms on
-//! reference hardware — batch / SOC triage range, not hot-path.
+//! reference hardware - batch / SOC triage range, not hot-path.
 //!
 //! # Privacy / determinism
 //!
@@ -41,7 +41,7 @@
 //!   estimator (e.g. by submitting their own traffic and reading
 //!   the resulting attribution) learns the same permutations a
 //!   second observer would see. The estimator is therefore **not
-//!   privacy-preserving** — it should not be used as a
+//!   privacy-preserving** - it should not be used as a
 //!   differentially-private mechanism, and the per-permutation
 //!   Shapley estimates should not be treated as a noise channel.
 //!
@@ -66,22 +66,22 @@ pub const DEFAULT_PERMUTATIONS: usize = 64;
 /// compute bombs: each permutation costs `D + 1` forest scores,
 /// so `1e9 × 16 = 1.6 × 10¹⁰` traversals per `explain()` call.
 /// 65 536 keeps the worst-case at `~4 s` on a modern core for
-/// `D = 16` — ample convergence for a Monte-Carlo estimator.
+/// `D = 16` - ample convergence for a Monte-Carlo estimator.
 pub const MAX_PERMUTATIONS: usize = 65_536;
 
-/// Default RNG seed — reproducible attributions across runs.
+/// Default RNG seed - reproducible attributions across runs.
 pub const DEFAULT_SEED: u64 = 2026;
 
 /// Per-dim Shapley estimates produced by [`SageEstimator::explain`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct SageExplanation<const D: usize> {
-    /// Per-dim Shapley value — positive means the dim pushes the
+    /// Per-dim Shapley value - positive means the dim pushes the
     /// score **up** vs baseline, negative means it pulls **down**.
     pub shapley: [f64; D],
     /// Baseline score the estimator was built against (score on
     /// the baseline point, with no feature contribution).
     pub baseline_score: f64,
-    /// Probe score (no masking applied) — should approximately
+    /// Probe score (no masking applied) - should approximately
     /// equal `baseline_score + sum(shapley)` up to sampling noise.
     pub probe_score: f64,
     /// Permutations actually executed (equals `K` on success).
@@ -89,7 +89,7 @@ pub struct SageExplanation<const D: usize> {
 }
 
 impl<const D: usize> SageExplanation<D> {
-    /// Dim with the largest absolute Shapley value — the dim the
+    /// Dim with the largest absolute Shapley value - the dim the
     /// score most depends on. `None` when `D == 0` or every value
     /// is exactly zero.
     #[must_use]
@@ -111,11 +111,11 @@ impl<const D: usize> SageExplanation<D> {
 }
 
 /// Shapley attribution estimator anchored on a caller-supplied
-/// baseline point. Stateless beyond the baseline + RNG seed —
+/// baseline point. Stateless beyond the baseline + RNG seed -
 /// cheap to instantiate per-probe.
 #[derive(Debug, Clone)]
 pub struct SageEstimator<const D: usize> {
-    /// Baseline feature vector — typically the warm-phase per-dim
+    /// Baseline feature vector - typically the warm-phase per-dim
     /// mean, or a synthetic "null" point the caller chooses.
     baseline: [f64; D],
     /// Number of Monte-Carlo permutations to sample per probe.
@@ -151,7 +151,7 @@ impl<const D: usize> SageEstimator<D> {
         })
     }
 
-    /// Convenience — [`DEFAULT_PERMUTATIONS`] + [`DEFAULT_SEED`].
+    /// Convenience - [`DEFAULT_PERMUTATIONS`] + [`DEFAULT_SEED`].
     ///
     /// # Errors
     ///
@@ -166,14 +166,14 @@ impl<const D: usize> SageEstimator<D> {
     /// → `K · D` total scores per call.
     ///
     /// Two calls with the same `(self, probe, forest snapshot)`
-    /// produce the same Shapley estimate — see the module-level
+    /// produce the same Shapley estimate - see the module-level
     /// "Privacy / determinism" note. For per-call randomness,
     /// use [`Self::explain_with_seed`].
     ///
     /// # Errors
     ///
     /// Propagates [`RandomCutForest::score`] failures.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn explain(
         &self,
         forest: &RandomCutForest<D>,
@@ -187,7 +187,7 @@ impl<const D: usize> SageEstimator<D> {
     /// [`Self::seed`]. Use to defeat cross-call permutation
     /// predictability when downstream consumers can read the
     /// per-permutation traces or correlate explanations across
-    /// requests — pass a CSPRNG-derived `u64` per call (e.g.
+    /// requests - pass a CSPRNG-derived `u64` per call (e.g.
     /// `getrandom::u64()`) and treat the explanation as a
     /// fresh sample.
     ///
@@ -197,7 +197,7 @@ impl<const D: usize> SageEstimator<D> {
     /// # Errors
     ///
     /// Same as [`Self::explain`].
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn explain_with_seed(
         &self,
         forest: &RandomCutForest<D>,
@@ -318,7 +318,7 @@ mod tests {
     fn argmax_identifies_dominant_dim() {
         let f = train_forest::<4>();
         let est = SageEstimator::new([0.0; 4], 128, 17).unwrap();
-        // Only dim 2 deviates — Shapley should attribute most of
+        // Only dim 2 deviates - Shapley should attribute most of
         // the score delta there.
         let probe = [0.0_f64, 0.0, 50.0, 0.0];
         let exp = est.explain(&f, &probe).unwrap();

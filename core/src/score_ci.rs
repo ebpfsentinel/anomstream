@@ -1,7 +1,7 @@
 //! Anomaly score with confidence interval.
 //!
 //! The bare [`crate::RandomCutForest::score`] returns a single
-//! [`crate::AnomalyScore`] — the mean of per-tree scores. SOC
+//! [`crate::AnomalyScore`] - the mean of per-tree scores. SOC
 //! threshold tuning benefits from also knowing how tightly the
 //! trees agree: a score of `2.1 ± 0.05` is qualitatively different
 //! from `2.1 ± 0.8` even though both produce the same alert under
@@ -11,7 +11,7 @@
 //!
 //! # Default confidence level
 //!
-//! The out-of-the-box factor is `z = 1.96` — the classical 95 %
+//! The out-of-the-box factor is `z = 1.96` - the classical 95 %
 //! normal-approximation CI. Callers that want a different level
 //! (99 % → `z = 2.576`; 90 % → `z = 1.645`) can call
 //! [`ScoreWithConfidence::ci`] with the desired `z`.
@@ -19,7 +19,7 @@
 //! # Statistical caveat
 //!
 //! Per-tree scores are IID under the RCF sampling contract, but
-//! the Gaussian approximation leans on the CLT — at `num_trees ≤
+//! the Gaussian approximation leans on the CLT - at `num_trees ≤
 //! 30` the intervals widen slightly vs. a bootstrap estimate.
 //! Good enough for SOC tuning, not for publication-grade error
 //! bars.
@@ -40,7 +40,7 @@ pub const DEFAULT_Z_FACTOR: f64 = 1.96;
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScoreWithConfidence {
-    /// Mean anomaly score — identical to
+    /// Mean anomaly score - identical to
     /// [`crate::RandomCutForest::score`]'s output.
     pub score: AnomalyScore,
     /// Number of trees that contributed (= ensemble size minus any
@@ -56,7 +56,7 @@ pub struct ScoreWithConfidence {
 
 impl ScoreWithConfidence {
     /// Symmetric confidence interval `(lower, upper)` at factor `z`.
-    /// The interval is clamped at zero on the lower side — anomaly
+    /// The interval is clamped at zero on the lower side - anomaly
     /// scores are non-negative by construction.
     #[must_use]
     pub fn ci(&self, z: f64) -> (f64, f64) {
@@ -65,14 +65,14 @@ impl ScoreWithConfidence {
         ((mean - half).max(0.0), mean + half)
     }
 
-    /// 95 % CI — convenience wrapper around [`Self::ci`] with
+    /// 95 % CI - convenience wrapper around [`Self::ci`] with
     /// [`DEFAULT_Z_FACTOR`].
     #[must_use]
     pub fn ci95(&self) -> (f64, f64) {
         self.ci(DEFAULT_Z_FACTOR)
     }
 
-    /// Relative stderr — `stderr / max(|mean|, ε)`. Mirrors the
+    /// Relative stderr - `stderr / max(|mean|, ε)`. Mirrors the
     /// metric used by [`crate::RandomCutForest::score_early_term`]
     /// so callers can compare the two paths.
     #[must_use]

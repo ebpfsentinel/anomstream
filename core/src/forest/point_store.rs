@@ -31,7 +31,7 @@ use crate::tree::PointAccessor;
 /// ([`add`](Self::add)) and final freeing
 /// ([`set_free`](Self::set_free) /
 /// [`drop_unreferenced`](Self::drop_unreferenced)) stay
-/// single-threaded — the forest serialises them before/after the
+/// single-threaded - the forest serialises them before/after the
 /// parallel block.
 ///
 /// # Examples
@@ -66,7 +66,7 @@ pub struct PointStore<const D: usize> {
 mod point_slots_serde {
     //! Serde adapter that snapshots `Vec<Option<[f64; D]>>` through a
     //! `Vec<Option<Vec<f64>>>` payload. Needed because `serde` does
-    //! not yet ship `Deserialize` for `[T; N]` at arbitrary `N` —
+    //! not yet ship `Deserialize` for `[T; N]` at arbitrary `N` -
     //! only fixed sizes up to 32. `D` is fixed at the type level so
     //! deserialisation rejects payloads whose array length differs.
     use alloc::format;
@@ -178,7 +178,7 @@ impl<const D: usize> PointStore<D> {
     }
 
     /// Insert `point` into the next free slot (or grow). The new
-    /// entry starts with a reference count of zero — callers must
+    /// entry starts with a reference count of zero - callers must
     /// invoke [`incr_ref`](Self::incr_ref) for every tree that
     /// adopts the point so [`decr_ref`](Self::decr_ref) eventually
     /// frees the slot.
@@ -229,7 +229,7 @@ impl<const D: usize> PointStore<D> {
     }
 
     /// Increment the reference count for slot `idx`. Lock-free
-    /// atomic op — safe to call from parallel workers via `&self`.
+    /// atomic op - safe to call from parallel workers via `&self`.
     ///
     /// # Errors
     ///
@@ -247,10 +247,10 @@ impl<const D: usize> PointStore<D> {
     }
 
     /// Decrement the reference count for slot `idx`. Returns `true`
-    /// when the count just hit zero — the caller (forest layer) must
+    /// when the count just hit zero - the caller (forest layer) must
     /// then invoke [`set_free`](Self::set_free) **single-threaded**
-    /// to actually mark the slot as reclaimable. Lock-free atomic op
-    /// — safe from parallel workers via `&self`.
+    /// to actually mark the slot as reclaimable. Lock-free atomic op -
+    /// safe from parallel workers via `&self`.
     ///
     /// # Errors
     ///
@@ -283,7 +283,7 @@ impl<const D: usize> PointStore<D> {
     }
 
     /// Mark `idx` as free after [`decr_ref`](Self::decr_ref) returned
-    /// `true`. Single-threaded — called from the forest layer outside
+    /// `true`. Single-threaded - called from the forest layer outside
     /// the parallel block.
     ///
     /// # Errors

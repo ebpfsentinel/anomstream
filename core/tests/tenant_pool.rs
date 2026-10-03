@@ -3,9 +3,9 @@
 //!
 //! Asserts four properties callers rely on:
 //!
-//! 1. Baselines do not bleed across tenants — a shock at tenant A
+//! 1. Baselines do not bleed across tenants - a shock at tenant A
 //!    does not move tenant B's adaptive threshold.
-//! 2. LRU eviction respects the access pattern — the least recently
+//! 2. LRU eviction respects the access pattern - the least recently
 //!    touched tenant is the one that gets dropped when capacity is
 //!    hit.
 //! 3. Warm reload round-trips every tenant via the existing
@@ -66,7 +66,7 @@ fn tenants_see_independent_baselines() {
         "tenant A threshold {a} did not rise above tenant B {b}",
     );
 
-    // Tenant B's baseline behaviour must be unchanged — no false
+    // Tenant B's baseline behaviour must be unchanged - no false
     // alarm on a tenant B noisy sample.
     let verdict_b = pool.process(&"b", noisy(&mut rng_b)).unwrap();
     assert!(
@@ -90,7 +90,7 @@ fn capacity_enforces_lru_eviction() {
     pool.process(&1, noisy(&mut rng)).unwrap();
     pool.process(&3, noisy(&mut rng)).unwrap();
 
-    // Push a 4th tenant — tenant 2 should evict.
+    // Push a 4th tenant - tenant 2 should evict.
     pool.process(&4, noisy(&mut rng)).unwrap();
     assert!(pool.contains(&1));
     assert!(
@@ -189,13 +189,13 @@ fn factory_error_does_not_corrupt_pool() {
 
 #[test]
 fn score_only_on_unseen_tenant_returns_none() {
-    // score_only / attribution do not auto-create — they only touch
+    // score_only / attribution do not auto-create - they only touch
     // existing tenants and leave the pool undisturbed when the
     // tenant is absent.
     //
     // (The pool's current `score_only` auto-creates the tenant to
     // give it warming-up semantics; this test therefore verifies the
-    // current contract — the tenant shows up in the pool *and* the
+    // current contract - the tenant shows up in the pool *and* the
     // verdict is warming-up.)
     let mut pool = TenantForestPool::<&'static str, 4>::new(4, build_factory()).unwrap();
     let verdict = pool.score_only(&"unknown", &[0.0, 0.0, 0.0, 0.0]).unwrap();

@@ -3,7 +3,7 @@
 //! Internal nodes live in `internals[0..capacity)`, leaves live in
 //! `leaves[0..capacity)`. Each arena owns its own free list (LIFO
 //! stack of freed slot indices) so allocations reuse the most-recently
-//! freed slot first — which keeps the live working set compact and
+//! freed slot first - which keeps the live working set compact and
 //! cache-friendly.
 //!
 //! Bounding-box semantics: only internal nodes carry a cached
@@ -81,7 +81,7 @@ impl<const D: usize> NodeStore<D> {
         let internals = (0..cap).map(|_| None).collect();
         let leaves = (0..cap).map(|_| None).collect();
         // Free list pre-populated in descending order so `pop()` hands
-        // out index 0 first — keeps the live set front-loaded.
+        // out index 0 first - keeps the live set front-loaded.
         let internal_free = (0..capacity).rev().collect();
         let leaf_free = (0..capacity).rev().collect();
         Ok(Self {
@@ -242,7 +242,7 @@ impl<const D: usize> NodeStore<D> {
         }
     }
 
-    /// Zero-copy mutable view of a node — see [`Self::view`].
+    /// Zero-copy mutable view of a node - see [`Self::view`].
     ///
     /// # Errors
     ///
@@ -276,7 +276,7 @@ impl<const D: usize> NodeStore<D> {
     }
 
     /// Typed immutable accessor for an internal node. Prefer this
-    /// when the caller already knows the node is internal —
+    /// when the caller already knows the node is internal -
     /// one-level shallower than going through [`Self::view`] + match.
     ///
     /// # Errors
@@ -302,7 +302,7 @@ impl<const D: usize> NodeStore<D> {
         })
     }
 
-    /// Typed mutable accessor for an internal node — see
+    /// Typed mutable accessor for an internal node - see
     /// [`Self::internal`].
     ///
     /// # Errors
@@ -352,7 +352,7 @@ impl<const D: usize> NodeStore<D> {
         })
     }
 
-    /// Typed mutable accessor for a leaf node — see [`Self::leaf`].
+    /// Typed mutable accessor for a leaf node - see [`Self::leaf`].
     ///
     /// # Errors
     ///
@@ -393,7 +393,7 @@ impl<const D: usize> NodeStore<D> {
     ///
     /// - [`RcfError::OutOfBounds`] when `n` does not exist.
     /// - [`RcfError::InvalidConfig`] when the parent is a leaf
-    ///   (impossible state — internal data structure invariant violated)
+    ///   (impossible state - internal data structure invariant violated)
     ///   or when `n` is not registered as a child of its parent
     ///   (orphan).
     pub fn sibling(&self, n: NodeRef) -> RcfResult<Option<NodeRef>> {
@@ -402,7 +402,7 @@ impl<const D: usize> NodeStore<D> {
         };
         if parent_ref.is_leaf() {
             return Err(RcfError::InvalidConfig(
-                "NodeStore::sibling: parent is a leaf — invariant violated".into(),
+                "NodeStore::sibling: parent is a leaf - invariant violated".into(),
             ));
         }
         let parent = self.internal(parent_ref)?;
@@ -423,7 +423,7 @@ impl<const D: usize> NodeStore<D> {
     /// # Errors
     ///
     /// - [`RcfError::OutOfBounds`] when the node does not exist.
-    /// - [`RcfError::InvalidConfig`] when called on a leaf — leaf
+    /// - [`RcfError::InvalidConfig`] when called on a leaf - leaf
     ///   bounding boxes are degenerate single-point boxes; build them
     ///   from the underlying point store entry on the consumer side.
     pub fn internal_bbox(&self, n: NodeRef) -> RcfResult<&BoundingBox<D>> {

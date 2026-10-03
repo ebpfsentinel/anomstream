@@ -3,7 +3,7 @@
 //! The forest's per-dimension attribution ([`DiVector`]) already
 //! answers "which dim pushes the score up" at the component level.
 //! Real-world feature vectors, though, tend to be semantically
-//! grouped — a 14-D traffic vector might be 2 rate features, 4
+//! grouped - a 14-D traffic vector might be 2 rate features, 4
 //! protocol ratios, 3 entropy / cardinality fields, 2 payload stats,
 //! 3 cardinality HLL estimates. An analyst triaging an alert is
 //! far better served by *"score is driven by cardinality +
@@ -11,7 +11,7 @@
 //!
 //! [`FeatureGroups`] lets callers declare those semantic groups
 //! once, at detector-build time, and query a decomposed
-//! [`GroupScores`] on every `group_scores` call — available on
+//! [`GroupScores`] on every `group_scores` call - available on
 //! [`crate::RandomCutForest`], [`crate::ThresholdedForest`], and
 //! [`crate::TenantForestPool`]. The decomposition is a pure sum of
 //! per-dim contributions, so
@@ -36,10 +36,10 @@
 //!
 //! # Overlap and gaps
 //!
-//! Groups may overlap (the same dim can appear in two groups) —
+//! Groups may overlap (the same dim can appear in two groups) -
 //! useful when a dim is meaningful to both a "traffic intensity"
 //! and a "burstiness" grouping, for example. A gap in the group
-//! coverage is legal too — the summed group contributions will
+//! coverage is legal too - the summed group contributions will
 //! then be less than [`DiVector::total`]. [`GroupScores::coverage`]
 //! exposes the ratio so callers can spot either case.
 
@@ -62,8 +62,8 @@ pub struct FeatureGroup {
 
 impl FeatureGroup {
     /// Build a group explicitly. Prefer the fluent
-    /// [`FeatureGroups::builder`] path when defining multiple groups
-    /// — it validates index bounds and name uniqueness.
+    /// [`FeatureGroups::builder`] path when defining multiple groups -
+    /// it validates index bounds and name uniqueness.
     ///
     /// # Errors
     ///
@@ -108,7 +108,7 @@ pub struct FeatureGroups {
     /// Ordered list of groups. Output of [`RandomCutForest::group_scores`]
     /// preserves this order so a caller-facing UI can pin columns.
     groups: Vec<FeatureGroup>,
-    /// Largest index referenced across every group — used to check
+    /// Largest index referenced across every group - used to check
     /// `max_index < D` at `group_scores` time.
     max_index: usize,
 }
@@ -140,7 +140,7 @@ impl FeatureGroups {
     }
 
     /// Largest dimension index referenced across every group. `0`
-    /// when the set is empty — callers that rely on `max_index < D`
+    /// when the set is empty - callers that rely on `max_index < D`
     /// must also check emptiness.
     #[must_use]
     pub fn max_index(&self) -> usize {
@@ -243,7 +243,7 @@ pub struct GroupScores {
     /// `(group_name, contribution)` pairs in the order declared on
     /// the source [`FeatureGroups`].
     scores: Vec<(String, f64)>,
-    /// Raw total from [`DiVector::total`] — sum of **every**
+    /// Raw total from [`DiVector::total`] - sum of **every**
     /// per-dim contribution, regardless of group coverage.
     total: f64,
 }
@@ -350,7 +350,7 @@ impl<const D: usize> crate::forest::RandomCutForest<D> {
 
 impl<const D: usize> crate::thresholded::ThresholdedForest<D> {
     /// Decompose the anomaly attribution of `point` over `groups`.
-    /// Delegates to the underlying forest's attribution — the
+    /// Delegates to the underlying forest's attribution - the
     /// adaptive threshold layer does not influence the
     /// decomposition.
     ///
@@ -380,7 +380,7 @@ where
     ///
     /// Never under normal use. The fall-through branch uses
     /// [`Self::score_only`] to force an entry for the tenant, then
-    /// asserts the tenant is resident — the assertion is only
+    /// asserts the tenant is resident - the assertion is only
     /// defensive and cannot fire unless a concurrent mutation
     /// evicts the tenant between the two calls, which cannot happen
     /// through `&mut self`.
@@ -390,7 +390,7 @@ where
         point: &[f64; D],
         groups: &FeatureGroups,
     ) -> RcfResult<GroupScores> {
-        // Force an entry for the tenant if it's absent — score_only
+        // Force an entry for the tenant if it's absent - score_only
         // auto-creates on first use with warming-up semantics, so
         // the subsequent get_mut is guaranteed to return a slot.
         if !self.contains(key) {

@@ -123,7 +123,7 @@ fn feature_scales_invert_for_raw_coords() {
     }
     let base_b = base.forensic_baseline(&[0.5, 1.0]).unwrap();
     let scaled_b = scaled.forensic_baseline(&[0.5, 1.0]).unwrap();
-    // Expected in raw coordinates must be close on both variants —
+    // Expected in raw coordinates must be close on both variants -
     // scaled mean * (1/10) ≈ base mean on dim 0.
     for d in 0..2 {
         let drift = (base_b.expected[d] - scaled_b.expected[d]).abs();

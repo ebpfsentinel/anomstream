@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
 //! Fit a Platt sigmoid on a labelled calibration set, then map
-//! fresh forest scores to `P(anomaly | score) ∈ [0, 1]` — the
+//! fresh forest scores to `P(anomaly | score) ∈ [0, 1]` - the
 //! audit-friendly output for SOC2 / NIS2 paperwork.
 //!
 //! Run with `cargo run --example calibrator`.
@@ -29,7 +29,7 @@ fn main() -> Result<(), RcfError> {
         f.update(p)?;
     }
 
-    // Collect labelled calibration scores — score BEFORE updating so
+    // Collect labelled calibration scores - score BEFORE updating so
     // the forest is probed as if the point were unseen, matching the
     // inference-time semantics.
     let mut calibration: Vec<(f64, bool)> = Vec::new();

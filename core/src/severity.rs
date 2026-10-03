@@ -7,7 +7,7 @@
 //! thresholds (`2.0 / 3.0 / 4.0 / 5.0`), so downstream alert
 //! routing can share the same vocabulary the agent already uses.
 //!
-//! Lib stays policy-free — the bands are caller-supplied. The
+//! Lib stays policy-free - the bands are caller-supplied. The
 //! `Default` provides a sensible starting point for RCF scores
 //! derived from the crate's Guha-2016-style scoring convention.
 
@@ -26,7 +26,7 @@ use crate::thresholded::AnomalyGrade;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum Severity {
-    /// Score below the `low` threshold — no alert.
+    /// Score below the `low` threshold - no alert.
     Normal,
     /// Score in `[low, medium)`.
     Low,
@@ -169,7 +169,7 @@ impl AnomalyScore {
 
 impl AnomalyGrade {
     /// Classify the graded verdict into a [`Severity`] band. Uses
-    /// the raw score, **not** the bounded `grade ∈ [0, 1]` —
+    /// the raw score, **not** the bounded `grade ∈ [0, 1]` -
     /// severity bands live in raw-score space so a caller switching
     /// between `ThresholdedForest` and the bare
     /// [`crate::RandomCutForest`] gets consistent labels.
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn classify_handles_non_finite() {
         let b = SeverityBands::default();
-        // Every non-finite input maps to `Normal` — safer default
+        // Every non-finite input maps to `Normal` - safer default
         // than forcing a Critical on NaN poisoning upstream.
         assert_eq!(b.classify(f64::NAN), Severity::Normal);
         assert_eq!(b.classify(f64::NEG_INFINITY), Severity::Normal);

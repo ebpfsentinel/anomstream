@@ -1,10 +1,10 @@
-//! Early-termination scoring — stop traversing trees once the
+//! Early-termination scoring - stop traversing trees once the
 //! running per-tree mean has converged tightly enough to be
 //! actionable.
 //!
 //! The classic [`crate::RandomCutForest::score`] always walks every
-//! tree, averaging the result. On most traffic — where the point
-//! sits cleanly inside or outside the baseline — the first ~20 of
+//! tree, averaging the result. On most traffic - where the point
+//! sits cleanly inside or outside the baseline - the first ~20 of
 //! 100 trees already agree so closely that the remaining 80
 //! traversals only refine the last digit of the score. Stopping
 //! early cuts inline detection latency by 30-50 % on "obvious"
@@ -17,7 +17,7 @@
 //! mean. The returned [`EarlyTermScore`] reports how many trees
 //! were actually evaluated so callers can meter latency savings.
 //!
-//! The parallel [`crate::RandomCutForest::score`] path is unchanged — use
+//! The parallel [`crate::RandomCutForest::score`] path is unchanged - use
 //! it when you do not care about tail latency and want the full
 //! ensemble answer.
 
@@ -26,11 +26,11 @@ use alloc::format;
 use crate::error::{RcfError, RcfResult};
 
 /// Default minimum tree count before the early-term check kicks
-/// in — picked so the running stderr estimate is stable enough to
+/// in - picked so the running stderr estimate is stable enough to
 /// trust.
 pub const DEFAULT_MIN_TREES: usize = 16;
 
-/// Default relative standard-error threshold — a running
+/// Default relative standard-error threshold - a running
 /// `stderr / |mean|` below `0.05` (5 %) is narrow enough to stop.
 pub const DEFAULT_CONFIDENCE_THRESHOLD: f64 = 0.05;
 
@@ -42,7 +42,7 @@ pub struct EarlyTermConfig {
     /// is even tried. The convergence test needs enough samples to
     /// produce a non-degenerate stderr estimate.
     pub min_trees: usize,
-    /// Relative standard-error threshold — stop as soon as
+    /// Relative standard-error threshold - stop as soon as
     /// `stderr / max(|mean|, ε)` drops below this value.
     pub confidence_threshold: f64,
 }
@@ -90,13 +90,13 @@ impl EarlyTermConfig {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EarlyTermScore {
-    /// Final scalar anomaly score — running mean at break time,
+    /// Final scalar anomaly score - running mean at break time,
     /// identical in shape to the full-ensemble score.
     pub score: crate::domain::AnomalyScore,
     /// Number of trees that actually contributed before the
     /// detector broke out of the loop.
     pub trees_evaluated: usize,
-    /// Total trees available in the forest — use with
+    /// Total trees available in the forest - use with
     /// `trees_evaluated` to compute the latency savings.
     pub trees_available: usize,
     /// Standard error of the per-tree score mean at break time

@@ -4,14 +4,14 @@
 //! Asserts every documented invariant of the AWS `SageMaker` RCF
 //! reference (<https://docs.aws.amazon.com/sagemaker/latest/dg/randomcutforest.html>):
 //!
-//! - `feature_dim ∈ [1, 10000]` — both ends checked
+//! - `feature_dim ∈ [1, 10000]` - both ends checked
 //! - `num_trees ∈ [50, 1000]`, default `100`
 //! - `num_samples_per_tree ∈ [1, 2048]`, default `256`
 //! - Reservoir sampling **without replacement** (no duplicate
 //!   `point_idx` in any tree's reservoir)
 //! - Score = average across trees (computed manually for a 2-tree
 //!   forest and compared bit-exactly)
-//! - Anomaly score is monotonic in tree depth — a far outlier scores
+//! - Anomaly score is monotonic in tree depth - a far outlier scores
 //!   strictly higher than a tight cluster member
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)] // exact-equality probes + small bounded counters.
@@ -45,7 +45,7 @@ fn aws_feature_dim_upper_bound_above_max_rejected() {
 
 #[test]
 fn aws_feature_dim_upper_bound_at_max_accepted() {
-    // Construct via `RcfConfig::validate_dimension` directly — the
+    // Construct via `RcfConfig::validate_dimension` directly - the
     // `[f64; 10_000]` monomorphisation would blow up the compiled
     // bench binary if we instantiated the forest at the limit.
     RcfConfig::validate_dimension(MAX_DIMENSION).expect("dimension at MAX_DIMENSION must validate");
@@ -154,7 +154,7 @@ fn aws_reservoir_without_replacement() {
         assert_eq!(
             indices.len(),
             unique.len(),
-            "reservoir sampler kept duplicate point_idx — violates without-replacement invariant"
+            "reservoir sampler kept duplicate point_idx - violates without-replacement invariant"
         );
     }
 }
@@ -220,6 +220,6 @@ fn aws_outlier_strictly_above_cluster_member() {
     let outlier: f64 = forest.score(&[10.0, 10.0]).unwrap().into();
     assert!(
         outlier > cluster,
-        "outlier {outlier} not strictly > cluster {cluster} — score must reflect tree-depth monotonicity",
+        "outlier {outlier} not strictly > cluster {cluster} - score must reflect tree-depth monotonicity",
     );
 }

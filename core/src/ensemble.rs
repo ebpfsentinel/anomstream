@@ -1,4 +1,4 @@
-//! Fisher's method — combine K independent p-values into a joint
+//! Fisher's method - combine K independent p-values into a joint
 //! anomaly score.
 //!
 //! Fisher 1932. Under the null `H_0` that every individual test is
@@ -14,7 +14,7 @@
 //!
 //! Combined with [`crate::univariate_spot::PotDetector`] (one per
 //! feature dim) this gives a **univariate detector bank** whose
-//! joint signal is tighter than any single dim in isolation — the
+//! joint signal is tighter than any single dim in isolation - the
 //! SPOT KDD 2017 prescription for multivariate anomaly detection
 //! on heterogeneously-distributed features.
 //!
@@ -41,7 +41,7 @@
 #![cfg(feature = "std")]
 
 /// Combine K independent p-values via Fisher's method. Returns the
-/// joint p-value — probability that the combined test statistic
+/// joint p-value - probability that the combined test statistic
 /// `T = -2 · Σ ln(p_i)` would exceed its observed value under the
 /// null `H_0` that every component is non-anomalous.
 ///
@@ -52,15 +52,15 @@
 ///
 /// # Complexity
 ///
-/// `O(K)` — tight loop over `p_values`, no allocations. Uses the
+/// `O(K)` - tight loop over `p_values`, no allocations. Uses the
 /// closed-form chi-squared-with-even-dof survival
 /// `Q(K, T/2) = e^{-T/2} · Σ_{i=0..K-1} (T/2)^i / i!` since
 /// `2K` degrees of freedom are always even.
 #[must_use]
 pub fn fisher_combine(p_values: &[f64]) -> f64 {
     // Statistic T = -2 · Σ ln(p). Non-finite slots are skipped
-    // entirely — both from the T sum and from the degrees of
-    // freedom count — so a NaN does not inflate `K` and depress
+    // entirely - both from the T sum and from the degrees of
+    // freedom count - so a NaN does not inflate `K` and depress
     // the joint p artificially.
     let mut t = 0.0_f64;
     let mut k = 0_usize;
@@ -78,11 +78,11 @@ pub fn fisher_combine(p_values: &[f64]) -> f64 {
     chi_squared_survival_even(k, t)
 }
 
-/// Upper-tail survival of a `χ²(2k)` distribution — the closed-form
+/// Upper-tail survival of a `χ²(2k)` distribution - the closed-form
 /// `Q(k, x/2)` for integer `k` and `x ≥ 0`.
 ///
 /// `Q(k, y) = e^{−y} · Σ_{i=0..k-1} y^i / i!` for integer `k`.
-/// Numerically stable for `k ≤ ~160` under f64 — beyond that the
+/// Numerically stable for `k ≤ ~160` under f64 - beyond that the
 /// `y^i / i!` terms start to lose precision; anomstream-core's detector
 /// banks top out well below that bound (typical `k ≤ 64` features).
 #[must_use]
@@ -94,7 +94,7 @@ pub fn chi_squared_survival_even(k: usize, t: f64) -> f64 {
         return 0.0;
     }
     let y = 0.5 * t;
-    // Kahan-compensated running sum — the `y^i / i!` terms mix
+    // Kahan-compensated running sum - the `y^i / i!` terms mix
     // very different magnitudes when `k ≥ 20`.
     let mut term = 1.0_f64; // i = 0: y^0 / 0! = 1
     let mut sum = 1.0_f64;

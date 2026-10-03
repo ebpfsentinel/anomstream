@@ -10,7 +10,7 @@
 //!
 //! A grade of `0.0` means the score did not exceed the adaptive
 //! threshold. A grade of `1.0` means the score sat a full `z_factor`
-//! standard deviations *above* the threshold — already `2·z_factor`
+//! standard deviations *above* the threshold - already `2·z_factor`
 //! above the running mean. Callers can route on the boolean
 //! [`AnomalyGrade::is_anomaly`] for simple alerting, or read the
 //! continuous grade when a severity channel is required.
@@ -27,7 +27,7 @@ pub struct AnomalyGrade {
     /// Adaptive threshold (`max(min_threshold, mean + z_factor · stddev)`)
     /// in effect when the score was produced.
     threshold: f64,
-    /// Severity in `[0, 1]` — linearly scaled between `threshold`
+    /// Severity in `[0, 1]` - linearly scaled between `threshold`
     /// (grade `0`) and `threshold + z_factor · stddev` (grade `1`).
     grade: f64,
     /// Whether the score exceeded the adaptive threshold at observation
@@ -36,7 +36,7 @@ pub struct AnomalyGrade {
     /// Whether the internal running statistics had enough samples to
     /// produce a meaningful threshold (`observations >= min_observations`
     /// and `stddev > 0`). When `false`, [`Self::is_anomaly`] is always
-    /// `false` and [`Self::grade`] is `0.0` — downstream consumers
+    /// `false` and [`Self::grade`] is `0.0` - downstream consumers
     /// should treat the verdict as "unknown, warming up".
     ready: bool,
 }

@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic)]
-//! Severity bands — classify raw anomaly scores into
+//! Severity bands - classify raw anomaly scores into
 //! Normal/Low/Medium/High/Critical ordinal labels. Defaults match
 //! eBPFsentinel Enterprise ml-detection (2/3/4/5).
 //!
@@ -29,7 +29,7 @@ fn main() -> Result<(), RcfError> {
     }
 
     // Raw anomstream-core scores use a different scale than eBPFsentinel
-    // Z-scores — tune the bands for this forest.
+    // Z-scores - tune the bands for this forest.
     let bands = SeverityBands::new(0.5, 1.0, 1.5, 2.5)?;
 
     let probes = vec![

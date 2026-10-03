@@ -4,7 +4,7 @@
 //!
 //! The bare [`anomstream_core::RandomCutForest::update`] costs tens of
 //! microseconds at the AWS-default `(100 trees, 256 samples, D = 16)`
-//! config — an order of magnitude above the few-µs budget a TC action
+//! config - an order of magnitude above the few-µs budget a TC action
 //! has per packet at 10 Gbps+. (See `docs/performance.md` for current
 //! figures; treat any absolute quoted here as indicative, since the
 //! ensemble cost scales with `num_trees × D`.) Making `update` faster
@@ -14,12 +14,12 @@
 //!
 //! This module ships two orthogonal building blocks:
 //!
-//! - [`UpdateSampler`] — stride or per-flow-hash decision
-//!   "does this packet contribute to the reservoir?" — discards the
+//! - [`UpdateSampler`] - stride or per-flow-hash decision
+//!   "does this packet contribute to the reservoir?" - discards the
 //!   rest before any RCF work. Per-flow sampling keeps the baseline
 //!   shape (every flow has *some* representation) while cutting the
 //!   update rate by the sampling ratio.
-//! - [`update_channel`] — bounded MPSC channel carrying `[f64; D]` points
+//! - [`update_channel`] - bounded MPSC channel carrying `[f64; D]` points
 //!   from classifier threads to a **single dedicated updater
 //!   thread**. The classifier thread `try_enqueue`s non-blockingly
 //!   and scores against the *previous* forest snapshot; the updater
@@ -36,7 +36,7 @@
 //! `rejected_total`, `UpdateProducer::enqueued`, `dropped_total`,
 //! [`PrefixRateCap::admitted_total`], `capped_total`) are plain
 //! `AtomicU64::fetch_add(1, Relaxed)`. Atomic `fetch_add` is
-//! wrapping by definition — `profile.release.overflow-checks` does
+//! wrapping by definition - `profile.release.overflow-checks` does
 //! not apply to atomic operations, so no panic can occur at
 //! wrap-around. At `10 Gpps` sustained load a `u64` wraps in
 //! roughly 58 years, well past any realistic deployment lifetime.
@@ -68,7 +68,7 @@
 //!     }
 //! });
 //!
-//! // Classifier thread (hot path — runs per packet).
+//! // Classifier thread (hot path - runs per packet).
 //! fn on_packet(
 //!     features: [f64; 16],
 //!     flow_hash: u64,
@@ -98,7 +98,7 @@ use anomstream_core::metrics::{MetricsSink, default_sink, names};
 /// Hard ceiling on the [`update_channel`] capacity. The bounded
 /// MPSC channel allocates `capacity * size_of::<[f64; D]>()` bytes
 /// up front; at `D = 16` and `MAX_CHANNEL_CAPACITY = 1_048_576`
-/// the worst-case per-channel footprint is 128 MiB — well above
+/// the worst-case per-channel footprint is 128 MiB - well above
 /// any realistic ingress rate × drain-cadence product. The cap
 /// exists to defeat caller-controlled OOM at construction; raise
 /// it deliberately if a deployment really needs more in-flight
@@ -113,7 +113,7 @@ pub const MAX_CHANNEL_CAPACITY: usize = 1 << 20;
 /// factor while keeping the in-process [`AtomicU64`] counters
 /// (`accepted_total`, `enqueued_total`, …) bit-exact every call.
 /// Sink lag at process-exit is bounded by `METRICS_BATCH_SIZE`
-/// minus one — call [`UpdateSampler::flush_metrics`] /
+/// minus one - call [`UpdateSampler::flush_metrics`] /
 /// [`UpdateProducer::flush_metrics`] / [`PrefixRateCap::flush_metrics`]
 /// before shutdown to drain the residue.
 pub const METRICS_BATCH_SIZE: u64 = 64;
@@ -141,7 +141,7 @@ fn record_batched(
 
 /// Manually flush whatever residue (`counter - last_flushed`) has
 /// accumulated since the last batched emission. Idempotent on
-/// repeated calls — the second call emits nothing. Use to drain
+/// repeated calls - the second call emits nothing. Use to drain
 /// the trailing 0..[`METRICS_BATCH_SIZE`] increments at process
 /// shutdown or before exporting a metrics snapshot.
 #[inline]
@@ -162,7 +162,7 @@ fn flush_batched(
 /// Stride-based or per-flow-hash update sampler.
 ///
 /// Accepts `1 / keep_every_n` of the offered updates. The sampler
-/// itself never touches the forest — callers invoke `accept_*`
+/// itself never touches the forest - callers invoke `accept_*`
 /// before calling [`anomstream_core::RandomCutForest::update`].
 ///
 /// `keep_every_n = 0` and `keep_every_n = 1` both disable sampling
@@ -174,11 +174,11 @@ pub struct UpdateSampler {
     keep_every_n: u32,
     /// Monotonic stride counter for [`Self::accept_stride`].
     counter: AtomicU64,
-    /// Running total of accepted offers — observability signal.
+    /// Running total of accepted offers - observability signal.
     accepted: AtomicU64,
     /// Running total of rejected offers.
     rejected: AtomicU64,
-    /// Sink-side cumulative emitted count for `accepted` — paired
+    /// Sink-side cumulative emitted count for `accepted` - paired
     /// with `accepted` to drain the residue on
     /// [`Self::flush_metrics`] without double-counting.
     accepted_flushed: AtomicU64,
@@ -186,17 +186,17 @@ pub struct UpdateSampler {
     rejected_flushed: AtomicU64,
     /// Per-sampler secret multipliers used by [`Self::accept_hash`].
     /// When non-zero the sampler runs a keyed remix of the caller-
-    /// supplied `flow_hash` before the modulo decision — makes the
+    /// supplied `flow_hash` before the modulo decision - makes the
     /// admission boundary unpredictable to an attacker who can
     /// observe or influence their own `flow_hash` value but cannot
     /// learn the sampler secret. Zero-init means "no remix", matches
     /// the historical deterministic behaviour of [`Self::new`].
     mix_k1: u64,
-    /// Second secret — XOR'd at the end of the mix to avoid the
+    /// Second secret - XOR'd at the end of the mix to avoid the
     /// multiply by `mix_k1` alone (a structure the attacker could
     /// invert given enough observations).
     mix_k2: u64,
-    /// Observability sink — emitted every [`METRICS_BATCH_SIZE`]
+    /// Observability sink - emitted every [`METRICS_BATCH_SIZE`]
     /// hot-path calls (in-process atomic counters stay bit-exact
     /// every call). Defaults to [`anomstream_core::NoopSink`].
     metrics: Arc<dyn MetricsSink>,
@@ -207,7 +207,7 @@ impl UpdateSampler {
     /// `0` and `1` disable sampling (every offer accepted).
     ///
     /// **`accept_hash` admission is deterministic without a
-    /// per-sampler secret** — an attacker who can probe the
+    /// per-sampler secret** - an attacker who can probe the
     /// admission decision on a known `flow_hash` can spray
     /// 5-tuples whose hash lands on the admitted residue class
     /// and poison the reservoir. For internet-facing ingress,
@@ -228,7 +228,7 @@ impl UpdateSampler {
         }
     }
 
-    /// Keyed variant — same ratio semantics as [`Self::new`] but
+    /// Keyed variant - same ratio semantics as [`Self::new`] but
     /// with a per-sampler secret mix applied to every
     /// [`Self::accept_hash`] input. Defeats the deterministic-
     /// admission poisoning vector (MITRE ATLAS `AML.T0020`): the
@@ -244,7 +244,7 @@ impl UpdateSampler {
     ///
     /// # Panics
     ///
-    /// Never in practice — the two `try_into().expect(...)` calls
+    /// Never in practice - the two `try_into().expect(...)` calls
     /// unwrap a compile-time known 8-byte slice taken from a
     /// 16-byte buffer.
     pub fn new_keyed(keep_every_n: u32) -> Result<Self, getrandom::Error> {
@@ -255,7 +255,7 @@ impl UpdateSampler {
         Ok(Self::new_keyed_with_seeds(keep_every_n, mix_k1, mix_k2))
     }
 
-    /// Caller-supplied-seed variant of [`Self::new_keyed`] — for
+    /// Caller-supplied-seed variant of [`Self::new_keyed`] - for
     /// restricted environments where `getrandom` is unavailable
     /// (early-boot embedded, chroot without `/dev/urandom`,
     /// `wasm32-unknown-unknown` without a JS host) **or** for
@@ -264,7 +264,7 @@ impl UpdateSampler {
     /// `k1` is forced odd via `| 1` so it remains a valid
     /// multiplicative-bijection modulus inside [`Self::keyed_mix`];
     /// `k2` is XOR'd at the end of the mix unchanged. Passing
-    /// `(0, 0)` would degrade `mix_k1` to `1` and `mix_k2` to `0` —
+    /// `(0, 0)` would degrade `mix_k1` to `1` and `mix_k2` to `0` -
     /// still keyed (the murmur finaliser still runs) but with a
     /// publicly-known seed, so the per-sampler-secret defence
     /// against `AML.T0020` poisoning sprays goes away. **Do not**
@@ -300,7 +300,7 @@ impl UpdateSampler {
         }
     }
 
-    /// Install a metrics sink — every `accept_*` call emits an
+    /// Install a metrics sink - every `accept_*` call emits an
     /// accepted/rejected counter through it. Chain-style builder.
     #[must_use]
     pub fn with_metrics_sink(mut self, sink: Arc<dyn MetricsSink>) -> Self {
@@ -326,7 +326,7 @@ impl UpdateSampler {
         self.keep_every_n
     }
 
-    /// Stride-based decision — every `keep_every_n`-th offer lands.
+    /// Stride-based decision - every `keep_every_n`-th offer lands.
     /// Call order-dependent: counter increments on every invocation.
     /// Cheap (one atomic fetch-add) but not flow-aware.
     pub fn accept_stride(&self) -> bool {
@@ -360,7 +360,7 @@ impl UpdateSampler {
         ok
     }
 
-    /// Per-flow decision — flows with
+    /// Per-flow decision - flows with
     /// `keyed_mix(flow_hash) % keep_every_n == 0` are admitted,
     /// every other flow rejected in full. Deterministic across the
     /// sampler's lifetime **for that sampler**: the same flow
@@ -368,7 +368,7 @@ impl UpdateSampler {
     /// representative coverage of every sampled flow rather than
     /// slicing any single flow.
     ///
-    /// The caller supplies `flow_hash` — typically a 64-bit mix of
+    /// The caller supplies `flow_hash` - typically a 64-bit mix of
     /// 5-tuple bytes (`SipHash` / `FxHash` / custom). Quality of
     /// sampling only matters modulo `keep_every_n`.
     ///
@@ -442,7 +442,7 @@ impl UpdateSampler {
 
     /// Drain the residue (≤ [`METRICS_BATCH_SIZE`] − 1 increments
     /// per counter) that the batched fast paths have not yet
-    /// emitted to the [`MetricsSink`]. Idempotent — call before
+    /// emitted to the [`MetricsSink`]. Idempotent - call before
     /// process shutdown or before exporting a metrics snapshot
     /// the operator wants matched against [`Self::accepted_total`]
     /// / [`Self::rejected_total`].
@@ -463,14 +463,14 @@ impl UpdateSampler {
 }
 
 /// Producer end of the hot-path update queue. Multi-producer: clone
-/// this handle per classifier thread. `try_enqueue` is non-blocking
-/// — on queue full it returns `false` and increments `dropped_total`.
+/// this handle per classifier thread. `try_enqueue` is non-blocking -
+/// on queue full it returns `false` and increments `dropped_total`.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct UpdateProducer<const D: usize> {
     /// Underlying bounded MPSC sender.
     tx: SyncSender<[f64; D]>,
-    /// Capacity the channel was built with — surfaced for gauges.
+    /// Capacity the channel was built with - surfaced for gauges.
     capacity: usize,
     /// Lifetime enqueued count.
     enqueued: Arc<AtomicU64>,
@@ -480,7 +480,7 @@ pub struct UpdateProducer<const D: usize> {
     enqueued_flushed: Arc<AtomicU64>,
     /// Sink-side cumulative emitted count for `dropped`.
     dropped_flushed: Arc<AtomicU64>,
-    /// Observability sink — shared with every clone of this
+    /// Observability sink - shared with every clone of this
     /// producer so every classifier thread emits to the same
     /// endpoint. Emitted every [`METRICS_BATCH_SIZE`] hot-path
     /// calls (in-process atomic counters stay bit-exact every
@@ -529,7 +529,7 @@ impl<const D: usize> UpdateProducer<D> {
 
     /// Drain the residue (≤ [`METRICS_BATCH_SIZE`] − 1 increments)
     /// that the batched [`Self::try_enqueue`] path has not yet
-    /// emitted to the [`MetricsSink`]. Idempotent — call before
+    /// emitted to the [`MetricsSink`]. Idempotent - call before
     /// shutdown / metrics export.
     pub fn flush_metrics(&self) {
         flush_batched(
@@ -566,7 +566,7 @@ impl<const D: usize> UpdateProducer<D> {
 
     /// Lifetime count of points dropped because the queue was full.
     /// Non-zero indicates classifier thread is producing faster than
-    /// the updater thread is draining — raise alert / widen the
+    /// the updater thread is draining - raise alert / widen the
     /// channel / raise the sampler ratio.
     #[must_use]
     pub fn dropped_total(&self) -> u64 {
@@ -585,7 +585,7 @@ pub struct UpdateConsumer<const D: usize> {
 
 impl<const D: usize> UpdateConsumer<D> {
     /// Drain every point currently queued into `sink`. Returns
-    /// `(ingested, errors)` — number of successful sink calls and
+    /// `(ingested, errors)` - number of successful sink calls and
     /// number of errored sink calls (typically forest reservoir
     /// errors). The method returns as soon as the queue is empty so
     /// the updater thread can back off or gauge throughput.
@@ -614,7 +614,7 @@ impl<const D: usize> UpdateConsumer<D> {
 }
 
 /// Build a bounded MPSC hot-path update channel with the requested
-/// capacity. Returns `(producer, consumer)` — clone the producer per
+/// capacity. Returns `(producer, consumer)` - clone the producer per
 /// classifier thread; hand the consumer to the dedicated updater
 /// thread.
 ///
@@ -634,7 +634,7 @@ impl<const D: usize> UpdateConsumer<D> {
 #[must_use]
 #[allow(clippy::panic, clippy::missing_panics_doc)]
 pub fn update_channel<const D: usize>(capacity: usize) -> (UpdateProducer<D>, UpdateConsumer<D>) {
-    // Documented panic — callers wanting a `Result` use
+    // Documented panic - callers wanting a `Result` use
     // `try_update_channel` instead.
     try_update_channel(capacity).unwrap_or_else(|e| panic!("update_channel: {e}"))
 }
@@ -656,7 +656,7 @@ pub fn update_channel_with_sink<const D: usize>(
         .unwrap_or_else(|e| panic!("update_channel_with_sink: {e}"))
 }
 
-/// Fallible variant of [`update_channel`] — returns
+/// Fallible variant of [`update_channel`] - returns
 /// [`RcfError::InvalidConfig`] instead of panicking when
 /// `capacity` is `0` or above [`MAX_CHANNEL_CAPACITY`].
 ///
@@ -711,7 +711,7 @@ pub fn try_update_channel_with_sink<const D: usize>(
     ))
 }
 
-/// Cache-line-padded `AtomicU32` — each bucket lives on its own
+/// Cache-line-padded `AtomicU32` - each bucket lives on its own
 /// 64-byte cache line so concurrent `fetch_add`s on different
 /// buckets do not bounce a shared line through the coherence
 /// protocol. Footprint trade: 256 buckets × 64 B = 16 KiB
@@ -727,7 +727,7 @@ struct PaddedBucket {
     inner: AtomicU32,
 }
 
-/// Fixed-bucket per-prefix rate cap — bounds how many admissions a
+/// Fixed-bucket per-prefix rate cap - bounds how many admissions a
 /// single source prefix can push into the reservoir within a
 /// rolling time window. Defends against the reservoir-poisoning
 /// spray where an attacker floods the ingress from one IP prefix
@@ -735,7 +735,7 @@ struct PaddedBucket {
 /// [`UpdateSampler::accept_hash`].
 ///
 /// Implementation: 256 atomic `u32` buckets indexed by
-/// `prefix_hash & 0xff`. Collisions are soft — the cap bounds
+/// `prefix_hash & 0xff`. Collisions are soft - the cap bounds
 /// across the *bucket*, not the exact prefix. This trades a small
 /// amount of cross-prefix interference for O(1) lock-free
 /// check-and-record with bounded memory.
@@ -752,7 +752,7 @@ struct PaddedBucket {
 /// but the brief over-admission window stays observable on
 /// multi-core load. The empirical bound under stress (see
 /// `prefix_rate_cap_concurrent_rollover_holds_hard_cap`) is
-/// roughly `4 × cap_per_window` per bucket per window — design
+/// roughly `4 × cap_per_window` per bucket per window - design
 /// the cap with that slack baked in (e.g. set the operator-facing
 /// "max 25 admits / window" by passing `cap_per_window = 6`).
 ///
@@ -784,7 +784,7 @@ pub struct PrefixRateCap {
     /// Window length. Cap counts reset every `window_ms`.
     window_ms: u64,
     /// Maximum admits per bucket per window. `0` means cap
-    /// disabled — every call admits (set by [`Self::disabled`]).
+    /// disabled - every call admits (set by [`Self::disabled`]).
     cap_per_window: u32,
     /// Lifetime count of admits that hit the cap and were rejected.
     capped_total: AtomicU64,
@@ -794,7 +794,7 @@ pub struct PrefixRateCap {
     admitted_flushed: AtomicU64,
     /// Sink-side cumulative emitted count for `capped`.
     capped_flushed: AtomicU64,
-    /// Observability sink — emitted every [`METRICS_BATCH_SIZE`]
+    /// Observability sink - emitted every [`METRICS_BATCH_SIZE`]
     /// hot-path calls (in-process atomic counters stay bit-exact
     /// every call).
     metrics: Arc<dyn MetricsSink>,
@@ -815,16 +815,16 @@ impl PrefixRateCap {
         Self::build(cap_per_window.get(), window_ms.get())
     }
 
-    /// Always-admit mode — every [`Self::check_and_record`] call
+    /// Always-admit mode - every [`Self::check_and_record`] call
     /// returns `true` and increments [`Self::admitted_total`].
     /// `window_ms` still has to be non-zero (kept on the type for
-    /// future-proofing — a re-enable path could repurpose it).
+    /// future-proofing - a re-enable path could repurpose it).
     #[must_use]
     pub fn disabled(window_ms: NonZeroU64) -> Self {
         Self::build(0, window_ms.get())
     }
 
-    /// Shared constructor — bypassed by [`Self::new`] /
+    /// Shared constructor - bypassed by [`Self::new`] /
     /// [`Self::disabled`] which guarantee the typed invariants.
     fn build(cap_per_window: u32, window_ms: u64) -> Self {
         // Cannot use `[PaddedBucket { ... }; 256]` because the
@@ -845,7 +845,7 @@ impl PrefixRateCap {
         }
     }
 
-    /// Install a metrics sink — every `check_and_record` call emits
+    /// Install a metrics sink - every `check_and_record` call emits
     /// an admitted/capped counter through it.
     #[must_use]
     pub fn with_metrics_sink(mut self, sink: Arc<dyn MetricsSink>) -> Self {
@@ -868,7 +868,7 @@ impl PrefixRateCap {
     /// the reset. `Release` / `Acquire` ordering makes the bucket
     /// zero-fill happen-before any subsequent bucket `fetch_add`.
     ///
-    /// **Soft over-admission window** — see the type-level docs.
+    /// **Soft over-admission window** - see the type-level docs.
     /// The `fetch_add` + cap-comparison sequence is two distinct
     /// atomics, so concurrent admissions can briefly exceed
     /// [`Self::cap_per_window`] before each thread that loses
@@ -895,14 +895,14 @@ impl PrefixRateCap {
             if start != 0 && now_ms.saturating_sub(start) < self.window_ms {
                 break;
             }
-            // Peer-move on `Err` — just loop; `Ok` wins the reset.
+            // Peer-move on `Err` - just loop; `Ok` wins the reset.
             // Bounded by thread count; no livelock.
             if self
                 .window_start_ms
                 .compare_exchange_weak(start, now_ms, Ordering::AcqRel, Ordering::Relaxed)
                 .is_ok()
             {
-                // Winner — zero-fill the bucket bank. The
+                // Winner - zero-fill the bucket bank. The
                 // `Release` side of the successful CAS makes this
                 // store visible to every peer whose subsequent
                 // `fetch_add` acquires the updated
@@ -925,7 +925,7 @@ impl PrefixRateCap {
             );
             true
         } else {
-            // Already over — roll back the increment so a late
+            // Already over - roll back the increment so a late
             // window roll doesn't accumulate forever on this
             // bucket.
             self.buckets[idx].inner.fetch_sub(1, Ordering::Relaxed);
@@ -940,7 +940,7 @@ impl PrefixRateCap {
     }
 
     /// Drain the batched-metrics residue (≤ [`METRICS_BATCH_SIZE`] − 1
-    /// increments per counter). Idempotent — call before shutdown
+    /// increments per counter). Idempotent - call before shutdown
     /// or before exporting a metrics snapshot. In-process
     /// [`Self::admitted_total`] / [`Self::capped_total`] stay
     /// bit-exact independent of this call.
@@ -1270,7 +1270,7 @@ mod tests {
 
         // A keyed sampler shifts the residue class: the same
         // hashes land on a different admission set. Use fixed seeds
-        // so the assertion is deterministic — a randomly-keyed
+        // so the assertion is deterministic - a randomly-keyed
         // sampler has a ~1/2^N chance of reproducing the unkeyed
         // decisions on N hashes, which would flake CI.
         let keyed = UpdateSampler::new_keyed_with_seeds(4, 0xdead_beef, 0xcafe_f00d);
@@ -1284,7 +1284,7 @@ mod tests {
         // hashes.
         assert!(
             diff_decision > 0,
-            "keyed sampler accepted every hash exactly like unkeyed — mix ineffective"
+            "keyed sampler accepted every hash exactly like unkeyed - mix ineffective"
         );
 
         // Smoke-check that the getrandom-seeded constructor builds a
@@ -1313,7 +1313,7 @@ mod tests {
     #[test]
     fn new_keyed_with_seeds_different_seeds_diverge() {
         // Distinct seed pairs must produce distinct admission
-        // residue classes — the whole point of per-sampler
+        // residue classes - the whole point of per-sampler
         // rotation against AML.T0020.
         let s_a = UpdateSampler::new_keyed_with_seeds(4, 0x1111, 0x2222);
         let s_b = UpdateSampler::new_keyed_with_seeds(4, 0x3333, 0x4444);
@@ -1345,7 +1345,7 @@ mod tests {
     #[test]
     fn keyed_sampler_is_deterministic_within_sampler() {
         // Same flow hash must decide the same way every call on
-        // the same sampler — baseline coverage per flow.
+        // the same sampler - baseline coverage per flow.
         let s = UpdateSampler::new_keyed(4).unwrap();
         let h = 0xdead_beef_cafe_babe_u64;
         let d1 = s.accept_hash(h);
@@ -1395,7 +1395,7 @@ mod tests {
         assert!(cap.check_and_record(prefix, 100));
         assert!(cap.check_and_record(prefix, 200));
         assert!(!cap.check_and_record(prefix, 300));
-        // Advance past the window — next call resets and admits.
+        // Advance past the window - next call resets and admits.
         assert!(cap.check_and_record(prefix, 1_500));
         assert_eq!(cap.admitted_total(), 3);
     }
@@ -1422,7 +1422,7 @@ mod tests {
         // lands on a different cache line; with cache-line padding
         // the test exercises the lock-free path with zero false
         // sharing. The point is correctness (admission counters
-        // line up) not throughput — the bench
+        // line up) not throughput - the bench
         // `check_and_record_contended_8threads` measures the
         // perf side.
         use std::sync::Arc;
@@ -1486,7 +1486,7 @@ mod tests {
         let admitted = cap.admitted_total();
         assert!(
             admitted <= 320,
-            "admit count {admitted} exceeds generous bound — race leaks"
+            "admit count {admitted} exceeds generous bound - race leaks"
         );
     }
 }

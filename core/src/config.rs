@@ -36,11 +36,11 @@ pub const DEFAULT_SAMPLE_SIZE: usize = 256;
 /// from `sample_size`: `default_time_decay = TIME_DECAY_NUMERATOR /
 /// sample_size`. `0.1` matches the AWS Java `CompactSampler` default
 /// and gives an effective reservoir "half-life" of a handful of
-/// reservoirs-worth of input — enough recency bias to track baseline
+/// reservoirs-worth of input - enough recency bias to track baseline
 /// drift on a streaming agent over hours / days without losing the
 /// uniform-sampling character on each individual window.
 pub const TIME_DECAY_NUMERATOR: f64 = 0.1;
-/// Default time-decay resolved against [`DEFAULT_SAMPLE_SIZE`] —
+/// Default time-decay resolved against [`DEFAULT_SAMPLE_SIZE`] -
 /// `0.1 / 256 ≈ 3.9 × 10⁻⁴`. Prefer [`default_time_decay_for`] when
 /// the sample size differs from the default.
 // Cast is precision-safe: 256 fits in f64's mantissa exactly.
@@ -60,7 +60,7 @@ pub fn default_time_decay_for(sample_size: usize) -> f64 {
         TIME_DECAY_NUMERATOR / sample_size as f64
     }
 }
-/// Default warmup admission fraction — `1.0` disables the gate and
+/// Default warmup admission fraction - `1.0` disables the gate and
 /// matches the classic reservoir behaviour. Set below `1.0` (AWS
 /// uses `0.125`) to ramp admission during the cold-start period.
 pub const DEFAULT_INITIAL_ACCEPT_FRACTION: f64 = 1.0;
@@ -123,7 +123,7 @@ pub struct RcfConfig {
     /// dimension by its raw range. Pre-scaling with `1 / stddev[d]`
     /// recovers a unit-variance input space where every dim pulls
     /// its weight. For full z-score normalisation the caller should
-    /// still mean-centre upstream — `feature_scales` is a weight, not
+    /// still mean-centre upstream - `feature_scales` is a weight, not
     /// a full affine transform.
     ///
     /// `None` keeps the classic "forest sees the raw caller point"
@@ -143,10 +143,10 @@ fn default_initial_accept_fraction() -> f64 {
 }
 
 /// Over-the-wire [`RcfConfig`] layout. Deserialization lands here
-/// first so [`TryFrom`] can re-run [`RcfConfig::validate`] —
+/// first so [`TryFrom`] can re-run [`RcfConfig::validate`] -
 /// enforcing the AWS `SageMaker` hyperparameter bounds
 /// (`num_trees`, `sample_size`, `time_decay`) and finite /
-/// positive `feature_scales` — before a live config is handed out.
+/// positive `feature_scales` - before a live config is handed out.
 #[cfg(feature = "serde")]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::missing_docs_in_private_items)]
@@ -370,7 +370,7 @@ impl<const D: usize> ForestBuilder<D> {
     /// Override the sampler time-decay factor. Pass `0.0` to disable
     /// recency bias and recover strict uniform reservoir sampling.
     /// Once called, the builder stops auto-resolving `time_decay`
-    /// from subsequent [`Self::sample_size`] changes — the caller's
+    /// from subsequent [`Self::sample_size`] changes - the caller's
     /// choice wins.
     #[must_use]
     pub fn time_decay(mut self, d: f64) -> Self {
@@ -410,7 +410,7 @@ impl<const D: usize> ForestBuilder<D> {
     /// Set per-dimension multiplicative weights applied to every
     /// point before it reaches the forest's hot paths. See
     /// [`RcfConfig::feature_scales`] for semantics. Pass the exact
-    /// `[f64; D]` array — length is checked against the builder's
+    /// `[f64; D]` array - length is checked against the builder's
     /// compile-time `D` at [`Self::build`] time, contents are
     /// checked for finiteness and positivity by
     /// [`RcfConfig::validate`].
@@ -420,7 +420,7 @@ impl<const D: usize> ForestBuilder<D> {
         self
     }
 
-    /// Drop any previously-set `feature_scales` — returns the builder
+    /// Drop any previously-set `feature_scales` - returns the builder
     /// to the unweighted state. Useful for tests that want to clear a
     /// shared template's scale vector before building a specialised
     /// forest.
@@ -431,7 +431,7 @@ impl<const D: usize> ForestBuilder<D> {
     }
 
     /// Read-only access to the config under construction.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn config(&self) -> &RcfConfig {
         &self.config
     }
@@ -448,7 +448,7 @@ impl<const D: usize> ForestBuilder<D> {
     ///
     /// Forwards [`RcfConfig::validate`] errors and propagates any
     /// failure from the underlying [`RandomCutForest`] constructor.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn build(self) -> RcfResult<RandomCutForest<D>> {
         RcfConfig::validate_dimension(D)?;
         self.config.validate()?;
@@ -633,7 +633,7 @@ mod tests {
     #[test]
     fn builder_sample_size_override_rescales_default_time_decay() {
         let b = ForestBuilder::<4>::new().sample_size(128);
-        // No explicit time_decay — should auto-resolve to 0.1/128.
+        // No explicit time_decay - should auto-resolve to 0.1/128.
         assert!(
             (b.config().time_decay - TIME_DECAY_NUMERATOR / 128.0).abs() < f64::EPSILON,
             "sample_size(128) should rescale default to 0.1 / 128, got {}",

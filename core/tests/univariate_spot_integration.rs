@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::cast_precision_loss)]
 //! Integration test for the SPOT univariate bank + Fisher p-value
-//! combination — Siffer KDD 2017. Fits one detector per dim on a
+//! combination - Siffer KDD 2017. Fits one detector per dim on a
 //! synthetic multivariate baseline, freezes, then asserts that a
 //! heavy outlier's joint p-value drops below the alert threshold
 //! while baseline probes stay near `p = 1`.
@@ -95,7 +95,7 @@ fn single_dim_outlier_still_lifts_joint_signal() {
         .collect();
     let joint = fisher_combine(&p_values);
     // Single-dim outlier should drag the joint below 0.01 even
-    // when the other dims are baseline — this is the point of
+    // when the other dims are baseline - this is the point of
     // combining: one very small p dominates Fisher's statistic.
     assert!(joint < 0.01, "dim-2 outlier alone gave joint p {joint}");
 }

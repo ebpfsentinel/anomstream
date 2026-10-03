@@ -21,7 +21,7 @@
 //! through [`crate::audit_chain::AuditChain`] to wrap it in an
 //! HMAC-SHA256-chained envelope that detects post-write
 //! tampering, deletion, and reordering. Without that feature the
-//! re-export remains a faithful structured log — useful for
+//! re-export remains a faithful structured log - useful for
 //! observability / dashboards, but **not** sufficient on its own
 //! for SOC2 CC6 / NIS2 / PCI-DSS 10.5 audit-trail requirements.
 //!
@@ -49,7 +49,7 @@
 //! ```
 //!
 //! Emit the record to a SIEM / object-store / WORM log via any
-//! `serde` sink — `postcard` for compact per-event bytes, JSON for
+//! `serde` sink - `postcard` for compact per-event bytes, JSON for
 //! pipelines that want self-describing records.
 
 use alloc::string::String;
@@ -66,7 +66,7 @@ use anomstream_core::thresholded::{AnomalyGrade, ThresholdedForest};
 /// schema changes surface early instead of silently drifting.
 pub const ALERT_RECORD_VERSION: u32 = 1;
 
-/// Caller-supplied provenance fields — the detector does not track
+/// Caller-supplied provenance fields - the detector does not track
 /// wall-clock time or tenant identity, so the audit pipeline passes
 /// them in explicitly on each emission.
 #[derive(Debug, Clone, PartialEq)]
@@ -81,7 +81,7 @@ where
     pub tenant: Option<K>,
     /// Unix epoch milliseconds at which the observation was ingested
     /// by the caller. Detector-internal timestamps (`update_at`)
-    /// are unrelated — this is the audit wall clock.
+    /// are unrelated - this is the audit wall clock.
     pub timestamp_ms: u64,
 }
 
@@ -105,7 +105,7 @@ impl<K: Clone> AlertContext<K> {
     }
 }
 
-/// Durable evidence of an anomaly evaluation — serialisable under
+/// Durable evidence of an anomaly evaluation - serialisable under
 /// the `serde` feature, round-trips bit-exact through postcard or
 /// JSON.
 ///
@@ -113,7 +113,7 @@ impl<K: Clone> AlertContext<K> {
 /// defaults to `String` for JSON-friendly audit sinks. `D` is the
 /// per-point dimensionality, identical to the producing detector.
 ///
-/// Fields are **all public** — audit consumers frequently need ad-hoc
+/// Fields are **all public** - audit consumers frequently need ad-hoc
 /// access in reporting pipelines, and the struct is already a
 /// caller-facing data carrier with no invariants beyond what the
 /// producing detector guaranteed.
@@ -159,7 +159,7 @@ where
 
 /// Over-the-wire [`AlertRecord`] layout. Deserialization lands
 /// here first so [`TryFrom`] can enforce
-/// `version == ALERT_RECORD_VERSION` — rejecting silent schema
+/// `version == ALERT_RECORD_VERSION` - rejecting silent schema
 /// drift. Incompatible future schema changes will bump the
 /// constant and fail loudly at decode time rather than producing
 /// field-misaligned audit trails.
@@ -241,7 +241,7 @@ impl<K: Clone, const D: usize> AlertRecord<K, D> {
     }
 
     /// Build an audit record from a bare [`RandomCutForest`]. No
-    /// TRCF grade is produced — [`Self::grade`] stays `None`.
+    /// TRCF grade is produced - [`Self::grade`] stays `None`.
     ///
     /// # Errors
     ///
@@ -269,7 +269,7 @@ impl<K: Clone, const D: usize> AlertRecord<K, D> {
         })
     }
 
-    /// Build an audit record from a [`ThresholdedForest`] — emits
+    /// Build an audit record from a [`ThresholdedForest`] - emits
     /// the TRCF grade alongside the raw analytic outputs.
     ///
     /// # Errors
@@ -418,7 +418,7 @@ mod tests {
         // field, an older consumer (with deny_unknown_fields)
         // must REJECT the payload rather than silently drop the
         // new field. Silent drops break the audit-integrity
-        // story — a tamperer could splice extra metadata into
+        // story - a tamperer could splice extra metadata into
         // the wire format that older consumers ignore while
         // newer consumers act on it.
         let json = r#"{

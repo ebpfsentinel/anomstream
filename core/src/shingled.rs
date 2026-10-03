@@ -4,7 +4,7 @@
 //! the last `D` observations in a ring buffer. Each new scalar shifts
 //! the window and emits a fresh `[f64; D]` to the forest. Isolation-
 //! depth scoring on the shingled view captures **temporal
-//! autocorrelation** that bare scalar scoring cannot — a dwell
+//! autocorrelation** that bare scalar scoring cannot - a dwell
 //! anomaly at constant rate (NAB `rogue_agent_key_hold`) does not
 //! expand the forest's bounding box on the raw scalar, but on the
 //! shingled vector the anomalous subsequence sits far from the
@@ -37,7 +37,7 @@
 //! # Shingled embedding shape
 //!
 //! For shingle size `D`, the emitted vector is
-//! `[v_{t-D+1}, …, v_{t-1}, v_t]` — oldest-first, newest-last. The
+//! `[v_{t-D+1}, …, v_{t-1}, v_t]` - oldest-first, newest-last. The
 //! ring buffer pre-loads on the first `D - 1` scalars; `update_scalar`
 //! returns `false` during warm-up and `true` once the forest received
 //! its first sample.
@@ -47,7 +47,7 @@
 //! Scaling is the caller's job. For network-security feature dims with wildly
 //! different magnitudes (packet-rate, entropy, port-count), z-score
 //! each scalar against its warm-phase `(mean, stddev)` **before**
-//! handing it to [`ShingledForest::update_scalar`] — RCF cuts are
+//! handing it to [`ShingledForest::update_scalar`] - RCF cuts are
 //! range-weighted, un-normalised scalars let whichever dim carries
 //! the biggest range dominate every cut.
 
@@ -59,7 +59,7 @@ use crate::forest::RandomCutForest;
 use crate::{ForestBuilder, RcfConfig};
 
 /// Builder producing a [`ShingledForest`]. Delegates every RCF
-/// hyperparameter to [`ForestBuilder`] — the only extra is the
+/// hyperparameter to [`ForestBuilder`] - the only extra is the
 /// compile-time shingle size which equals the forest
 /// dimensionality `D`.
 ///
@@ -67,7 +67,7 @@ use crate::{ForestBuilder, RcfConfig};
 /// vector = last `D` scalars.
 #[derive(Debug)]
 pub struct ShingledForestBuilder<const D: usize> {
-    /// Underlying bare-forest builder — full passthrough of every
+    /// Underlying bare-forest builder - full passthrough of every
     /// tuning knob.
     inner: ForestBuilder<D>,
 }
@@ -87,28 +87,28 @@ impl<const D: usize> ShingledForestBuilder<D> {
         }
     }
 
-    /// Number of trees — forwarded to [`ForestBuilder::num_trees`].
+    /// Number of trees - forwarded to [`ForestBuilder::num_trees`].
     #[must_use]
     pub fn num_trees(mut self, trees: usize) -> Self {
         self.inner = self.inner.num_trees(trees);
         self
     }
 
-    /// Sample size — forwarded to [`ForestBuilder::sample_size`].
+    /// Sample size - forwarded to [`ForestBuilder::sample_size`].
     #[must_use]
     pub fn sample_size(mut self, sample: usize) -> Self {
         self.inner = self.inner.sample_size(sample);
         self
     }
 
-    /// Master seed — forwarded to [`ForestBuilder::seed`].
+    /// Master seed - forwarded to [`ForestBuilder::seed`].
     #[must_use]
     pub fn seed(mut self, seed: u64) -> Self {
         self.inner = self.inner.seed(seed);
         self
     }
 
-    /// Time-decay — forwarded to [`ForestBuilder::time_decay`].
+    /// Time-decay - forwarded to [`ForestBuilder::time_decay`].
     #[must_use]
     pub fn time_decay(mut self, decay: f64) -> Self {
         self.inner = self.inner.time_decay(decay);
@@ -116,7 +116,7 @@ impl<const D: usize> ShingledForestBuilder<D> {
     }
 
     /// Fetch the resolved [`RcfConfig`] that [`Self::build`] would
-    /// use — mirrors [`ForestBuilder::config`].
+    /// use - mirrors [`ForestBuilder::config`].
     #[must_use]
     pub fn config(&self) -> &RcfConfig {
         self.inner.config()
@@ -128,7 +128,7 @@ impl<const D: usize> ShingledForestBuilder<D> {
     /// # Errors
     ///
     /// Propagates [`ForestBuilder::build`] errors.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn build(self) -> RcfResult<ShingledForest<D>> {
         let forest = self.inner.build()?;
         Ok(ShingledForest {
@@ -141,11 +141,11 @@ impl<const D: usize> ShingledForestBuilder<D> {
     }
 }
 
-/// `D`-dim shingled wrapper over [`RandomCutForest`] — scalar-stream
+/// `D`-dim shingled wrapper over [`RandomCutForest`] - scalar-stream
 /// input, internal ring buffer of the last `D` samples.
 ///
 /// The ring buffer is stored oldest-to-newest logically but laid out
-/// as a **circular array** internally — constant-time update with no
+/// as a **circular array** internally - constant-time update with no
 /// allocation. [`ShingledForest::current_shingle`] exposes the
 /// logical shingle in read-only form (oldest-first) for diagnostics.
 pub struct ShingledForest<const D: usize> {
@@ -154,7 +154,7 @@ pub struct ShingledForest<const D: usize> {
     /// Circular storage for the last `D` scalars. `cursor` points
     /// to the slot that will be overwritten on the next update.
     ring: [f64; D],
-    /// Scalars received since construction / last `reset` — saturates
+    /// Scalars received since construction / last `reset` - saturates
     /// at `D`, used by [`Self::is_warmed`].
     filled: usize,
     /// Next write position in `ring`.
@@ -188,7 +188,7 @@ impl<const D: usize> ShingledForest<D> {
         self.warmed
     }
 
-    /// Immutable view of the underlying bare forest — use this to
+    /// Immutable view of the underlying bare forest - use this to
     /// inspect tree state, read metrics, or route through the
     /// [`RandomCutForest::forensic_baseline`] / `attribution`
     /// helpers on the already-shingled last point.
@@ -197,7 +197,7 @@ impl<const D: usize> ShingledForest<D> {
         &self.forest
     }
 
-    /// Mutable escape hatch — handy for bootstrap replay
+    /// Mutable escape hatch - handy for bootstrap replay
     /// ([`RandomCutForest::bootstrap`]) when the caller has
     /// pre-shingled their warm-up corpus.
     pub fn forest_mut(&mut self) -> &mut RandomCutForest<D> {
@@ -224,12 +224,12 @@ impl<const D: usize> ShingledForest<D> {
     /// - [`RcfError::NaNValue`] on non-finite `value`.
     /// - Propagates [`RandomCutForest::update`] failures once the
     ///   shingle is submitted.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn update_scalar(&mut self, value: f64) -> RcfResult<bool> {
         if !value.is_finite() {
             return Err(RcfError::NaNValue);
         }
-        // Submit the *previous* shingle before rotating the ring —
+        // Submit the *previous* shingle before rotating the ring -
         // the new scalar becomes the newest entry of the shingle
         // seen by the forest next call.
         let submitted = if self.filled >= D {
@@ -251,7 +251,7 @@ impl<const D: usize> ShingledForest<D> {
 
     /// Score `value` against the frozen forest **without** folding
     /// it into the ring buffer. The query uses the current shingle
-    /// with `value` appended as the newest slot — matches what a
+    /// with `value` appended as the newest slot - matches what a
     /// subsequent [`Self::update_scalar`] would submit.
     ///
     /// # Errors
@@ -260,7 +260,7 @@ impl<const D: usize> ShingledForest<D> {
     /// - [`RcfError::EmptyForest`] before the ring buffer is full
     ///   or the forest has not yet received its first update.
     /// - Propagates [`RandomCutForest::score`] failures.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_scalar(&self, value: f64) -> RcfResult<AnomalyScore> {
         if !value.is_finite() {
             return Err(RcfError::NaNValue);
@@ -276,7 +276,7 @@ impl<const D: usize> ShingledForest<D> {
     /// # Errors
     ///
     /// Same as [`Self::score_scalar`].
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn attribution_scalar(&self, value: f64) -> RcfResult<DiVector> {
         if !value.is_finite() {
             return Err(RcfError::NaNValue);
@@ -286,7 +286,7 @@ impl<const D: usize> ShingledForest<D> {
     }
 
     /// Stateless codisp on the shingle formed with `value` appended.
-    /// Non-mutating — preserves the frozen-baseline contract across
+    /// Non-mutating - preserves the frozen-baseline contract across
     /// long streams. Prefer this over the mutating `score_codisp`
     /// path for shingled forensic replay.
     ///
@@ -302,7 +302,7 @@ impl<const D: usize> ShingledForest<D> {
     }
 
     /// Drop the ring buffer and reset the warm-up flag; the
-    /// underlying forest is **not** reset — callers who want a
+    /// underlying forest is **not** reset - callers who want a
     /// full state wipe should rebuild.
     pub fn reset_ring(&mut self) {
         self.ring = [0.0_f64; D];
@@ -373,7 +373,7 @@ mod tests {
         let submitted = f.update_scalar(3.0).unwrap();
         assert!(!submitted);
         assert_eq!(f.current_shingle(), Some([0.0, 1.0, 2.0, 3.0]));
-        // 5th scalar — now previous shingle [0,1,2,3] gets submitted.
+        // 5th scalar - now previous shingle [0,1,2,3] gets submitted.
         let submitted = f.update_scalar(4.0).unwrap();
         assert!(submitted);
         assert!(f.is_warmed());
@@ -459,7 +459,7 @@ mod tests {
         f.reset_ring();
         assert!(!f.is_warmed());
         assert_eq!(f.current_shingle(), None);
-        // Forest still holds its leaves — a fresh shingle submission
+        // Forest still holds its leaves - a fresh shingle submission
         // after re-warming should score against the prior baseline.
         for i in 0..10 {
             let _ = f.update_scalar(i as f64).unwrap();

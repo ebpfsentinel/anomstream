@@ -9,8 +9,8 @@
 //! tree adopted is dropped from the store.
 //!
 //! `score(point)` and `attribution(point)` walk every tree's
-//! `traverse` with a fresh visitor and average the per-tree outputs
-//! — matching the AWS spec ("average across trees").
+//! `traverse` with a fresh visitor and average the per-tree outputs -
+//! matching the AWS spec ("average across trees").
 
 use alloc::format;
 use alloc::vec;
@@ -34,7 +34,7 @@ use crate::visitor::{AttributionVisitor, ScalarScoreVisitor, ScoreAttributionVis
 
 /// Per-tree state: tree + sampler + dedicated RNG. The dedicated
 /// RNG is what unlocks parallel insertion under the `parallel`
-/// feature — every tree advances its own deterministic stream,
+/// feature - every tree advances its own deterministic stream,
 /// seeded once at construction from the master forest seed.
 type TreeSlot<const D: usize> = (RandomCutTree<D>, ReservoirSampler, ChaCha8Rng);
 
@@ -42,7 +42,7 @@ type TreeSlot<const D: usize> = (RandomCutTree<D>, ReservoirSampler, ChaCha8Rng)
 std::thread_local! {
     /// Reusable per-tree score buffer for
     /// [`RandomCutForest::score_trimmed`]. Kept thread-local so
-    /// per-packet scoring on hot paths does not allocate — every
+    /// per-packet scoring on hot paths does not allocate - every
     /// call `.clear()`s the existing buffer and reuses its capacity.
     /// The buffer is untyped (`f64`) and not tied to `D`, so a
     /// single-thread application driving forests of different `D`
@@ -75,7 +75,7 @@ std::thread_local! {
 pub struct RandomCutForest<const D: usize> {
     /// Validated configuration.
     config: RcfConfig,
-    /// Per-tree state: `(tree, sampler, rng)` triples — one entry per
+    /// Per-tree state: `(tree, sampler, rng)` triples - one entry per
     /// tree. Each tree owns a dedicated `ChaCha8Rng` seeded from the
     /// master forest seed at construction so parallel insert paths
     /// never share RNG state.
@@ -87,13 +87,13 @@ pub struct RandomCutForest<const D: usize> {
     /// Optional dedicated rayon thread pool, built from
     /// `config.num_threads` when the `parallel` feature is enabled
     /// and the config requested a custom pool size. Skipped from
-    /// serde — deserialised forests fall back to rayon's global
+    /// serde - deserialised forests fall back to rayon's global
     /// pool until the next [`from_config`](Self::from_config)-style
     /// rebuild.
     #[cfg(feature = "parallel")]
     #[cfg_attr(feature = "serde", serde(skip))]
     pool: Option<std::sync::Arc<rayon::ThreadPool>>,
-    /// Observability sink — every public operation emits counters,
+    /// Observability sink - every public operation emits counters,
     /// gauges, and histogram observations into it. Defaults to a
     /// shared [`crate::NoopSink`] so a detector without an attached
     /// sink pays only an inlined no-op per event.
@@ -106,7 +106,7 @@ pub struct RandomCutForest<const D: usize> {
     /// Optional per-point timestamps captured by [`Self::update_at`]
     /// / [`Self::update_indexed_at`]. Keyed by the `point_idx`
     /// returned at insertion time. Populated only when the caller
-    /// opts in via the `_at` APIs — the classic
+    /// opts in via the `_at` APIs - the classic
     /// [`Self::update`] path never touches this map. Cleaned up
     /// whenever a slot's reservoir refcount drops to zero
     /// (reservoir eviction or explicit [`Self::delete`]).
@@ -114,10 +114,10 @@ pub struct RandomCutForest<const D: usize> {
     timestamps: alloc::collections::BTreeMap<usize, u64>,
 }
 
-#[allow(clippy::missing_fields_in_debug)] // Bounded summary — see method docstring.
+#[allow(clippy::missing_fields_in_debug)] // Bounded summary - see method docstring.
 impl<const D: usize> core::fmt::Debug for RandomCutForest<D> {
-    /// Prints a bounded summary — forest shape, update count,
-    /// live-point total — instead of the derived dump of every
+    /// Prints a bounded summary - forest shape, update count,
+    /// live-point total - instead of the derived dump of every
     /// tree node, reservoir sample, and per-tree RNG state.
     /// `{:?}` on a default-configured forest would otherwise emit
     /// several MiB of numbers.
@@ -208,7 +208,7 @@ impl<const D: usize> RandomCutForest<D> {
         })
     }
 
-    /// Install a [`crate::MetricsSink`] — every subsequent public
+    /// Install a [`crate::MetricsSink`] - every subsequent public
     /// op emits counters / gauges / histograms into it. Zero-cost
     /// when the default [`crate::NoopSink`] is kept.
     #[cfg(feature = "std")]
@@ -224,7 +224,7 @@ impl<const D: usize> RandomCutForest<D> {
         self
     }
 
-    /// Read-only handle to the installed sink — mainly for tests.
+    /// Read-only handle to the installed sink - mainly for tests.
     #[cfg(feature = "std")]
     #[must_use]
     pub fn metrics_sink(&self) -> &std::sync::Arc<dyn crate::metrics::MetricsSink> {
@@ -245,7 +245,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// queries through the same path the forest uses internally.
     ///
     /// Silently passes through when the resolved scales length does
-    /// not match `D` — the invariant is enforced at build time, but
+    /// not match `D` - the invariant is enforced at build time, but
     /// snapshot-loaded forests that bypass validation must still
     /// behave predictably.
     #[must_use]
@@ -301,7 +301,7 @@ impl<const D: usize> RandomCutForest<D> {
         &self.trees
     }
 
-    /// Metered [`ensure_finite`] — bumps the `REJECTED_NAN_TOTAL`
+    /// Metered [`ensure_finite`] - bumps the `REJECTED_NAN_TOTAL`
     /// counter on the installed sink before propagating the error.
     /// Upstream bad-data volume is a first-class SOC signal.
     #[inline]
@@ -365,7 +365,7 @@ impl<const D: usize> RandomCutForest<D> {
         self.insert_point(scaled)
     }
 
-    /// Insert `point` and tag it with `timestamp` — a caller-
+    /// Insert `point` and tag it with `timestamp` - a caller-
     /// supplied monotonic sequence or epoch value. The timestamp
     /// feeds the [`Self::delete_before`] retention path so callers
     /// can prune history by age (GDPR, `NIS2` data-retention
@@ -392,7 +392,7 @@ impl<const D: usize> RandomCutForest<D> {
     pub fn update_indexed_at(&mut self, point: [f64; D], timestamp: u64) -> RcfResult<usize> {
         let idx = self.update_indexed(point)?;
         // Only record the timestamp if the store still holds the
-        // slot — a sample_size=0 forest or an immediately-rejected
+        // slot - a sample_size=0 forest or an immediately-rejected
         // reservoir drops the point via `drop_unreferenced`, in
         // which case there is no live idx to tag.
         if self.point_store.ref_count(idx) > 0 {
@@ -405,7 +405,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// than `cutoff`. Returns the number of indices deleted.
     ///
     /// Points inserted via the classic [`Self::update`] /
-    /// [`Self::update_indexed`] path (no timestamp) are ignored —
+    /// [`Self::update_indexed`] path (no timestamp) are ignored -
     /// retention requires the caller to have opted into the `_at`
     /// APIs.
     ///
@@ -458,7 +458,7 @@ impl<const D: usize> RandomCutForest<D> {
         self.timestamps.len()
     }
 
-    /// Attach `timestamp` to a specific `point_idx` after the fact —
+    /// Attach `timestamp` to a specific `point_idx` after the fact -
     /// used by higher-level wrappers (e.g.
     /// [`crate::ThresholdedForest::process_indexed_at`]) that cannot
     /// route their insertion through [`Self::update_indexed_at`]
@@ -468,7 +468,7 @@ impl<const D: usize> RandomCutForest<D> {
         self.timestamps.insert(point_idx, timestamp);
     }
 
-    /// Core insertion body — performs the full `update` pipeline and
+    /// Core insertion body - performs the full `update` pipeline and
     /// returns the freshly assigned `point_idx`. Shared by
     /// [`Self::update`] and [`Self::update_indexed`] so the hot-path
     /// logic lives in exactly one place.
@@ -526,7 +526,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// no tree had the point (already evicted by the reservoir, or
     /// the index was never observed in the first place).
     ///
-    /// Use this to handle SOC-driven false-positive retractions —
+    /// Use this to handle SOC-driven false-positive retractions -
     /// a window that an analyst marks as benign post-hoc should no
     /// longer baseline the detector.
     ///
@@ -570,7 +570,7 @@ impl<const D: usize> RandomCutForest<D> {
     }
 
     /// Retract every point whose stored value bit-matches `point`.
-    /// Returns the number of indices actually deleted — zero when no
+    /// Returns the number of indices actually deleted - zero when no
     /// reservoir currently holds a matching observation.
     ///
     /// The match is strictly bit-for-bit: a point that was stored
@@ -587,11 +587,11 @@ impl<const D: usize> RandomCutForest<D> {
     /// Propagates [`Self::delete`] errors.
     pub fn delete_by_value(&mut self, point: &[f64; D]) -> RcfResult<usize> {
         self.ensure_finite_metered(point)?;
-        // Stored points live in the forest's scaled space — scale
+        // Stored points live in the forest's scaled space - scale
         // the caller query so the bit-exact comparison matches.
         let scaled = self.scale_point_copy(point);
         let probe: &[f64; D] = &scaled;
-        // Bitmap dedup — same optimisation as `forensic_baseline`.
+        // Bitmap dedup - same optimisation as `forensic_baseline`.
         let capacity = self.point_store.capacity();
         let mut seen = vec![false; capacity];
         for (_, sampler, _) in &self.trees {
@@ -621,7 +621,7 @@ impl<const D: usize> RandomCutForest<D> {
         Ok(removed)
     }
 
-    /// Score `point` with an early-termination guard — walk trees
+    /// Score `point` with an early-termination guard - walk trees
     /// sequentially, break as soon as the running per-tree mean
     /// has converged tightly enough (standard error of the mean
     /// relative to `|mean|` drops below
@@ -629,11 +629,11 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Cuts inline detection latency on "obvious" points (clearly
     /// in-baseline or clearly anomalous) by 30-50 % on typical
-    /// forests. Ambiguous points walk every tree — the method
+    /// forests. Ambiguous points walk every tree - the method
     /// degrades gracefully to the full-ensemble answer when the
     /// per-tree scores disagree.
     ///
-    /// Sequential by design — parallel rayon fold cannot short-
+    /// Sequential by design - parallel rayon fold cannot short-
     /// circuit, so the early-term path deliberately bypasses the
     /// parallel score aggregator. Callers that want the full
     /// ensemble answer should stay with [`Self::score`].
@@ -646,7 +646,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///   leaf.
     /// - [`RcfError::InvalidConfig`] when `config.validate` rejects
     ///   the supplied early-term configuration.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_early_term(
         &self,
         point: &[f64; D],
@@ -730,7 +730,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// - [`RcfError::NaNValue`] when `point` contains a non-finite component.
     /// - [`RcfError::EmptyForest`] when no tree currently holds any leaf.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score(&self, point: &[f64; D]) -> RcfResult<AnomalyScore> {
         self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
@@ -763,12 +763,12 @@ impl<const D: usize> RandomCutForest<D> {
         Ok(score)
     }
 
-    /// Trimmed-mean variant of [`Self::score`] — sorts per-tree
+    /// Trimmed-mean variant of [`Self::score`] - sorts per-tree
     /// scores, drops the top and bottom `trim_fraction` fraction,
     /// averages the middle `1 - 2·trim_fraction`. Robust against
     /// single-tree poisoning: an adversary who manages to move one
     /// tree's score to the extreme tails (MITRE ATLAS
-    /// `AML.T0020` — reservoir poisoning) sees their contribution
+    /// `AML.T0020` - reservoir poisoning) sees their contribution
     /// trimmed out, capping the blast radius on the ensemble mean.
     ///
     /// Typical `trim_fraction` values: `0.10` (drop 10 %/10 %)
@@ -786,7 +786,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// - [`RcfError::EmptyForest`] when no tree holds any leaf.
     /// - [`RcfError::InvalidConfig`] when
     ///   `trim_fraction ∉ [0.0, 0.5)`.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_trimmed(&self, point: &[f64; D], trim_fraction: f64) -> RcfResult<AnomalyScore> {
         if !(0.0..0.5).contains(&trim_fraction) || !trim_fraction.is_finite() {
             return Err(RcfError::InvalidConfig(
@@ -875,7 +875,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// via [`crate::ScoreWithConfidence::ci`] /
     /// [`crate::ScoreWithConfidence::ci95`].
     ///
-    /// Always walks every tree (no early-term) — use this path when
+    /// Always walks every tree (no early-term) - use this path when
     /// SOC tuning needs the dispersion estimate on the full
     /// ensemble. [`Self::score_early_term`] reports a similar
     /// `stderr` for latency-bounded paths.
@@ -883,7 +883,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// # Errors
     ///
     /// Same as [`score`](Self::score).
-    /// Probe-based anomaly score — the "codisp" variant popularised
+    /// Probe-based anomaly score - the "codisp" variant popularised
     /// by `rrcf` and used by AWS's `getAnomalyScore` visitor.
     ///
     /// For each tree: insert the probe, locate the resulting leaf,
@@ -905,7 +905,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Mutating the forest means the call takes `&mut self`. Under
     /// `parallel`, the per-tree walks cannot run concurrently on
-    /// the same forest — this path is serial by design.
+    /// the same forest - this path is serial by design.
     ///
     /// # Errors
     ///
@@ -913,19 +913,19 @@ impl<const D: usize> RandomCutForest<D> {
     /// - [`RcfError::EmptyForest`] when no tree accepted the probe
     ///   (every tree's reservoir rejected it).
     /// - Propagates [`Self::update_indexed`] / [`Self::delete`] failures.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_codisp(&mut self, point: &[f64; D]) -> RcfResult<AnomalyScore> {
         self.ensure_finite_metered(point)?;
         let idx = self.update_indexed(*point)?;
 
         // Per-tree walks are read-only on the tree store once the
         // probe has been inserted. The only mutation is the outer
-        // insert/delete around the loop — already serial. Under
+        // insert/delete around the loop - already serial. Under
         // `parallel` the walks fan out across trees via rayon;
         // per-tree order is irrelevant to the final mean.
         let walk_result = codisp_walk_all_trees(&self.trees, idx);
 
-        // Always delete the probe — even on walk error — to keep
+        // Always delete the probe - even on walk error - to keep
         // the forest clean.
         let _ = self.delete(idx);
 
@@ -942,7 +942,7 @@ impl<const D: usize> RandomCutForest<D> {
         Ok(score)
     }
 
-    /// Stateless codisp score — descends every tree root → leaf
+    /// Stateless codisp score - descends every tree root → leaf
     /// along `cut.left_of(point)`, accumulates the maximum per-depth
     /// `sibling_mass / subtree_mass` ratio, and averages across the
     /// ensemble.
@@ -956,7 +956,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// AUC drifts from 0.69 (fresh forest) to 0.20 after ~5 k probes.
     ///
     /// `score_codisp_stateless` takes `&self`, never touches the
-    /// reservoir, and parallelises across trees under `parallel` —
+    /// reservoir, and parallelises across trees under `parallel` -
     /// same cost profile as [`Self::score`] plus a handful of mass
     /// lookups per depth. Matches the classical "frozen baseline"
     /// semantic AWS Java / rrcf claim but don't enforce.
@@ -997,7 +997,7 @@ impl<const D: usize> RandomCutForest<D> {
         Ok(score)
     }
 
-    /// Batched stateless codisp — aligns with the frozen-baseline
+    /// Batched stateless codisp - aligns with the frozen-baseline
     /// semantic by construction. Each probe is scored via
     /// [`Self::score_codisp_stateless`] (root → leaf walk, no
     /// reservoir mutation) and rayon fans out across probes on top
@@ -1012,7 +1012,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Semantic: identical to looping [`Self::score_codisp_stateless`]
     /// over the batch. Use this path whenever the caller needs the
-    /// codisp signal without mutating the baseline — forensic
+    /// codisp signal without mutating the baseline - forensic
     /// replay, SOC triage over a captured window, or any
     /// long-stream evaluation where drift is a concern.
     ///
@@ -1044,7 +1044,7 @@ impl<const D: usize> RandomCutForest<D> {
         }
     }
 
-    /// Batched probe-based codisp — amortises the per-probe
+    /// Batched probe-based codisp - amortises the per-probe
     /// insert / delete overhead by pre-inserting all `points` into
     /// every tree, walking leaf → root with a **shared-walk cache**
     /// keyed on leaf [`crate::NodeRef`], then bulk-deleting.
@@ -1057,7 +1057,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// - When probes converge on the same leaf (correlated traffic,
     ///   repeated near-duplicate flows), the leaf-cache collapses
     ///   the leaf → root walk to one `walk_codisp` call per unique
-    ///   leaf — the rest are O(1) cache hits.
+    ///   leaf - the rest are O(1) cache hits.
     ///
     /// # Semantic trade-off
     ///
@@ -1074,13 +1074,13 @@ impl<const D: usize> RandomCutForest<D> {
     /// (every probe's `leaf_of` misses in at least one tree once
     /// the pre-insert rewrite is complete). Callers that need
     /// frozen-baseline batched codisp on arbitrary-size batches
-    /// should prefer [`Self::score_codisp_stateless_many`] — same
+    /// should prefer [`Self::score_codisp_stateless_many`] - same
     /// semantic, no reservoir mutation, no drift.
     ///
     /// Secondary effect: batched inserts are more likely to evict
     /// reservoir points than one-at-a-time inserts would (a larger
     /// reservoir churn per call). Bulk-delete removes every probe
-    /// from storage but cannot restore evicted baseline points —
+    /// from storage but cannot restore evicted baseline points -
     /// same eviction semantic as the single-probe path, only more
     /// probes per call.
     ///
@@ -1105,7 +1105,7 @@ impl<const D: usize> RandomCutForest<D> {
 
         // Pre-insert every probe; record the freshly-assigned idx
         // per (tree-agnostic) point. Aborts mid-batch are possible
-        // if `update_indexed` fails — rewind by deleting whatever we
+        // if `update_indexed` fails - rewind by deleting whatever we
         // already inserted.
         let mut probe_indices: Vec<usize> = Vec::with_capacity(points.len());
         for p in points {
@@ -1134,7 +1134,7 @@ impl<const D: usize> RandomCutForest<D> {
             Err(e) => (vec![0.0_f64; n], vec![0_usize; n], Some(e)),
         };
 
-        // Always bulk-delete probes — even on walk error — so the
+        // Always bulk-delete probes - even on walk error - so the
         // forest returns to a clean state before the error surfaces.
         for idx in &probe_indices {
             let _ = self.delete(*idx);
@@ -1162,13 +1162,13 @@ impl<const D: usize> RandomCutForest<D> {
 
     /// Score `point` with per-tree dispersion statistics. Returns
     /// a [`crate::ScoreWithConfidence`] packing the ensemble mean,
-    /// sample stddev, stderr, and tree count — use `ci95` /
+    /// sample stddev, stderr, and tree count - use `ci95` /
     /// `ci(z)` for confidence-interval bands.
     ///
     /// # Errors
     ///
     /// Same as [`Self::score`].
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_with_confidence(
         &self,
         point: &[f64; D],
@@ -1226,7 +1226,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// # Errors
     ///
     /// Same as [`score`](Self::score).
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn attribution(&self, point: &[f64; D]) -> RcfResult<DiVector> {
         self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
@@ -1259,7 +1259,7 @@ impl<const D: usize> RandomCutForest<D> {
         Ok(accumulator)
     }
 
-    /// Single-walk score + attribution — when the caller needs both,
+    /// Single-walk score + attribution - when the caller needs both,
     /// this path traverses each tree **once** instead of twice. Saves
     /// the second round of cache loads, bounding-box probability
     /// SIMD passes, and rayon fan-out. Roughly the cost of a lone
@@ -1272,7 +1272,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// # Errors
     ///
     /// Same as [`Self::score`] / [`Self::attribution`].
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_and_attribution(&self, point: &[f64; D]) -> RcfResult<(AnomalyScore, DiVector)> {
         self.ensure_finite_metered(point)?;
         let scaled = self.scale_point_copy(point);
@@ -1312,7 +1312,7 @@ impl<const D: usize> RandomCutForest<D> {
         Ok((score, accumulator))
     }
 
-    /// Bulk-score a slice of points — under the `parallel` feature
+    /// Bulk-score a slice of points - under the `parallel` feature
     /// each point is fanned out to rayon workers across the batch
     /// while each individual score still parallelises across trees
     /// inside the thread pool. 2-3× speedup over a serial
@@ -1320,14 +1320,14 @@ impl<const D: usize> RandomCutForest<D> {
     /// (SOC forensic replay, offline backfill, periodic scan).
     ///
     /// Returns a `Vec` of scores in the same order as the input
-    /// slice. On the first error the whole batch aborts — the
+    /// slice. On the first error the whole batch aborts - the
     /// partial result set is dropped to keep the API pure.
     ///
     /// # Errors
     ///
     /// Propagates any [`Self::score`] error hit while processing
     /// the batch.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_many(&self, points: &[[f64; D]]) -> RcfResult<Vec<AnomalyScore>> {
         #[cfg(feature = "parallel")]
         {
@@ -1350,13 +1350,13 @@ impl<const D: usize> RandomCutForest<D> {
         }
     }
 
-    /// No-alloc bulk scoring — invoke `on_score(index, score)` for
+    /// No-alloc bulk scoring - invoke `on_score(index, score)` for
     /// every probe in order instead of collecting a `Vec`. Avoids
     /// the intermediate allocation on hot paths where the caller
     /// streams results directly into a writer, histogram, or alert
     /// pipeline.
     ///
-    /// Runs serially on purpose — the callback is invoked from the
+    /// Runs serially on purpose - the callback is invoked from the
     /// caller's thread in input order, so `Fn(usize, AnomalyScore)`
     /// does not need to be `Send + Sync`. For parallel batch work
     /// where the order / thread-affinity does not matter, keep
@@ -1378,7 +1378,7 @@ impl<const D: usize> RandomCutForest<D> {
         Ok(())
     }
 
-    /// Bulk early-termination scoring — same batch semantics as
+    /// Bulk early-termination scoring - same batch semantics as
     /// [`Self::score_many`] but each point goes through the
     /// sequential-per-tree short-circuit path. Best pick when the
     /// caller expects many points to early-stop (baseline-heavy
@@ -1388,7 +1388,7 @@ impl<const D: usize> RandomCutForest<D> {
     ///
     /// Propagates any [`Self::score_early_term`] error hit while
     /// processing the batch.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn score_many_early_term(
         &self,
         points: &[[f64; D]],
@@ -1419,7 +1419,7 @@ impl<const D: usize> RandomCutForest<D> {
         }
     }
 
-    /// Bulk per-feature attribution — same batch semantics as
+    /// Bulk per-feature attribution - same batch semantics as
     /// [`Self::score_many`].
     ///
     /// # Errors
@@ -1451,7 +1451,7 @@ impl<const D: usize> RandomCutForest<D> {
     /// Compute an imputation-like forensic baseline for `point`:
     /// per-dim mean / stddev / delta / z-score against every
     /// sample currently held in any tree's reservoir. Returns the
-    /// caller-facing result in *raw* point space — the internal
+    /// caller-facing result in *raw* point space - the internal
     /// `feature_scales` transform is inverted so SOC dashboards see
     /// the same coordinates they passed in.
     ///
@@ -1554,7 +1554,7 @@ impl<const D: usize> RandomCutForest<D> {
 ///
 /// One work unit ≈ one dimension visited in one tree, i.e.
 /// `num_trees × D`. A single tree walk at the AWS-default shape is
-/// ~300 ns — under rayon's task-dispatch floor, so splitting it
+/// ~300 ns - under rayon's task-dispatch floor, so splitting it
 /// across workers loses to the scheduling overhead. Measured on the
 /// crate's own `forest_update` / `forest_score` benches (20 cores):
 ///
@@ -1567,12 +1567,12 @@ impl<const D: usize> RandomCutForest<D> {
 /// | 6400 (100t, D=64) | 218.5 µs | 138.6 µs | rayon 1.6× |
 ///
 /// The crossover sits between 1600 and 3200; `2048` is the power of
-/// two inside that gap. Only per-tree fan-out is gated — batch entry
+/// two inside that gap. Only per-tree fan-out is gated - batch entry
 /// points (`score_many`, `attribution_many`, `score_codisp_stateless_many`)
 /// parallelise across *points*, where each task is a whole ensemble
 /// walk and the fan-out always pays.
 ///
-/// Known calibration limits — the threshold is correct for the shapes
+/// Known calibration limits - the threshold is correct for the shapes
 /// that matter (the AWS default at 1600 and below sit clearly on the
 /// serial side, `D = 64` clearly on the parallel side), but two points
 /// are unresolved:
@@ -1602,14 +1602,14 @@ fn fan_out_pays(num_trees: usize, d: usize) -> bool {
     num_trees.saturating_mul(d) >= PARALLEL_FANOUT_MIN_WORK
 }
 
-/// Per-tree insert work — returns the list of evicted point indices
+/// Per-tree insert work - returns the list of evicted point indices
 /// whose refcount just hit zero so the caller can finalise the slot
 /// freeing single-threaded after the (possibly parallel) block.
 ///
 /// Fans out over rayon `par_chunks_mut` when the `parallel` feature
 /// is on *and* the ensemble is large enough for the fan-out to pay
 /// ([`fan_out_pays`]); otherwise walks the trees on the calling
-/// thread. The point store is borrowed immutably from the closures —
+/// thread. The point store is borrowed immutably from the closures -
 /// refcount mutations are atomic, slot mutations happen only through
 /// `&mut PointStore` outside the parallel block.
 fn update_trees<const D: usize>(
@@ -1647,7 +1647,7 @@ fn update_trees<const D: usize>(
     Ok(out)
 }
 
-/// Per-tree delete — rayon `par_chunks_mut` across `trees` when the
+/// Per-tree delete - rayon `par_chunks_mut` across `trees` when the
 /// `parallel` feature is on *and* the ensemble clears
 /// [`fan_out_pays`], reducing the two bool flags
 /// `(removed_from_any, went_to_zero)` at the end; serial on the
@@ -1693,7 +1693,7 @@ fn delete_from_trees<const D: usize>(
     Ok((any, zero))
 }
 
-/// Per-tree delete step used by [`delete_from_trees`] — returns
+/// Per-tree delete step used by [`delete_from_trees`] - returns
 /// `(removed_here, store_hit_zero)`.
 fn process_tree_delete<const D: usize>(
     slot: &mut TreeSlot<D>,
@@ -1745,7 +1745,7 @@ fn process_tree_update<const D: usize>(
     Ok(freed)
 }
 
-/// Batched per-tree codisp walks with per-thread leaf cache —
+/// Batched per-tree codisp walks with per-thread leaf cache -
 /// rayon parallel across trees, component-wise reduce into
 /// `(totals[n_probes], counts[n_probes])`. Each worker builds its
 /// own `BTreeMap<NodeRef, f64>` so the shared-walk optimisation
@@ -1854,7 +1854,7 @@ fn codisp_walk_all_trees<const D: usize>(
     Ok((total, count))
 }
 
-/// Stateless codisp aggregation across trees — each tree computes
+/// Stateless codisp aggregation across trees - each tree computes
 /// `codisp_stateless(point)` and the forest averages the per-tree
 /// results. Serial fold or rayon parallel fold/reduce depending on
 /// the `parallel` cargo feature.
@@ -1905,7 +1905,7 @@ fn codisp_stateless_aggregate<const D: usize>(
 /// Score aggregation across trees. Serial fold or rayon parallel
 /// fold/reduce depending on the `parallel` cargo feature.
 /// Walk leaf → root on `tree.store()` computing the rrcf-style
-/// codisp — `max(sibling.mass / current_subtree.mass)` across
+/// codisp - `max(sibling.mass / current_subtree.mass)` across
 /// ancestors. Returns `0.0` when the leaf has no parent (single-
 /// leaf tree).
 fn walk_codisp<const D: usize>(
@@ -2051,7 +2051,7 @@ fn attribution_aggregate<const D: usize>(
     Ok((accumulator, count))
 }
 
-/// Combined score + attribution aggregation — single traversal per
+/// Combined score + attribution aggregation - single traversal per
 /// tree via [`ScoreAttributionVisitor`]. Rayon parallel fold/reduce
 /// when the `parallel` feature is on and the ensemble clears
 /// [`fan_out_pays`]; serial accumulate on the calling thread
@@ -2171,9 +2171,9 @@ mod tests {
         // Below the crossover the ensemble walk stays serial.
         assert!(!fan_out_pays(100, 4)); // 400
         assert!(!fan_out_pays(50, 16)); // 800
-        assert!(!fan_out_pays(100, 16)); // 1600 — AWS default
+        assert!(!fan_out_pays(100, 16)); // 1600 - AWS default
         // At or above it, the rayon fan-out pays for itself.
-        assert!(fan_out_pays(128, 16)); // 2048 — exact threshold
+        assert!(fan_out_pays(128, 16)); // 2048 - exact threshold
         assert!(fan_out_pays(200, 16)); // 3200
         assert!(fan_out_pays(100, 64)); // 6400
     }
@@ -2181,13 +2181,13 @@ mod tests {
     #[cfg(feature = "parallel")]
     #[test]
     fn fan_out_gate_does_not_overflow_on_extreme_dims() {
-        // `num_trees × D` must not wrap — AWS caps D at 10_000 but the
+        // `num_trees × D` must not wrap - AWS caps D at 10_000 but the
         // saturating multiply keeps any caller-supplied pair sound.
         assert!(fan_out_pays(usize::MAX, 2));
         assert!(!fan_out_pays(0, usize::MAX));
     }
 
-    /// Both arms of the fan-out gate must produce identical scores —
+    /// Both arms of the fan-out gate must produce identical scores -
     /// the threshold is a scheduling decision, never a numeric one.
     #[test]
     fn serial_and_parallel_arms_agree() {
@@ -2397,7 +2397,7 @@ mod tests {
         }
         let probe = [5.0, -3.0];
         let plain: f64 = f.score(&probe).unwrap().into();
-        // 25 % trim drops the extreme quartiles — trimmed mean
+        // 25 % trim drops the extreme quartiles - trimmed mean
         // must be finite, non-negative, and typically closer to
         // the distribution centre.
         let trimmed: f64 = f.score_trimmed(&probe, 0.25).unwrap().into();
@@ -2450,7 +2450,7 @@ mod tests {
             f.update([0.1, 0.2]).unwrap();
         }
         let out = f.score_codisp_stateless_many(&[]).unwrap();
-        assert!(out.is_empty());
+        assert_eq!(out.len(), 0);
     }
 
     #[test]
@@ -2536,7 +2536,7 @@ mod tests {
             f.update([0.1, 0.2]).unwrap();
         }
         let out = f.score_codisp_many(&[]).unwrap();
-        assert!(out.is_empty());
+        assert_eq!(out.len(), 0);
     }
 
     #[test]
@@ -2696,7 +2696,7 @@ mod tests {
         // (`f32` ULP ≈ 6e-8). Under the default `f64` cut every point is
         // distinct and gets isolated; under `packed-cut` the `f32` cut
         // cannot separate them so they collapse onto one leaf as
-        // duplicates. Either way `update` must succeed — never surface
+        // duplicates. Either way `update` must succeed - never surface
         // the "leaf reached without isolation" invariant error.
         let mut f = ForestBuilder::<4>::new().seed(7).build().unwrap();
         for i in 0..512 {
@@ -2704,7 +2704,7 @@ mod tests {
             let v = 1.0 + (i as f64) * 1e-10;
             f.update([v, v, v, v]).unwrap();
         }
-        // A clearly out-of-distribution probe still scores finite — the
+        // A clearly out-of-distribution probe still scores finite - the
         // forest stayed well-formed through the near-duplicate stream.
         let s = f.score(&[1000.0, 1000.0, 1000.0, 1000.0]).unwrap();
         assert!(f64::from(s).is_finite());

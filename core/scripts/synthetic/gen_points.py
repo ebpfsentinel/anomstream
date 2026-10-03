@@ -3,7 +3,7 @@
 
 Used as the shared input for every synthetic-corpus bench runner so the
 comparison is on identical bytes.  Deterministic via a caller-
-supplied seed — NumPy's default RNG is bit-reproducible across
+supplied seed - NumPy's default RNG is bit-reproducible across
 platforms for the same seed.
 
 Usage:

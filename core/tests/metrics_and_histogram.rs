@@ -122,7 +122,7 @@ fn drift_sink_records_cusum_and_fires() {
         }
     }
     let s_high_obs = sink.histogram(names::DRIFT_S_HIGH);
-    assert!(!s_high_obs.is_empty());
+    assert_ne!(s_high_obs.len(), 0);
     assert!(sink.counter(names::DRIFT_FIRES_TOTAL) >= 1);
 }
 
@@ -219,7 +219,7 @@ fn forest_sink_records_early_term_stops() {
         sink.counter(names::EARLY_TERM_STOPPED_TOTAL) >= 1,
         "loose early-term must have short-circuited at least once",
     );
-    assert!(!sink.histogram(names::EARLY_TERM_TREES).is_empty());
+    assert_ne!(sink.histogram(names::EARLY_TERM_TREES).len(), 0);
 }
 
 #[test]
@@ -281,7 +281,7 @@ fn pool_sink_records_tenant_created_and_capacity() {
     let mut rng = ChaCha8Rng::seed_from_u64(14);
     pool.process(&10, noisy(&mut rng)).unwrap();
     pool.process(&11, noisy(&mut rng)).unwrap();
-    pool.process(&10, noisy(&mut rng)).unwrap(); // repeat — no new tenant
+    pool.process(&10, noisy(&mut rng)).unwrap(); // repeat - no new tenant
 
     assert_eq!(sink.counter(names::TENANT_CREATED_TOTAL), 2);
     assert_eq!(sink.gauge(names::TENANT_CAPACITY), Some(4.0));

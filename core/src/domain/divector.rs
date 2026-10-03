@@ -90,7 +90,7 @@ impl DiVector {
     ///
     /// # Panics
     ///
-    /// Panics when `d >= self.dim()` — call sites size-check first.
+    /// Panics when `d >= self.dim()` - call sites size-check first.
     #[must_use]
     pub fn per_dim_total(&self, d: usize) -> f64 {
         self.high[d] + self.low[d]

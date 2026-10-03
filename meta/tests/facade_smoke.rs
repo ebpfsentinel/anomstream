@@ -1,4 +1,4 @@
-//! Smoke test — verify the `anomstream` facade re-exports from
+//! Smoke test - verify the `anomstream` facade re-exports from
 //! all three workspace members are reachable under several
 //! feature combinations and that types compose the way a real
 //! consumer would use them.
@@ -8,7 +8,7 @@
 //! re-export surfaces surface here rather than deep in a
 //! downstream consumer lockfile. Each test is `cfg`-gated so
 //! `cargo test --no-default-features --features <combo>` runs
-//! only the tests applicable to that combo — the same matrix CI
+//! only the tests applicable to that combo - the same matrix CI
 //! drives.
 
 #![allow(clippy::unwrap_used, clippy::panic)]
@@ -23,7 +23,7 @@
 
 /// Default features (`core + std`) must let consumers build a
 /// forest, score against it, and reach the bare cross-cuts
-/// (`MetricsSink`, `SeverityBands`) — the absolute minimum the
+/// (`MetricsSink`, `SeverityBands`) - the absolute minimum the
 /// crate's `default = ["core", "std"]` declaration commits to.
 #[test]
 fn default_features_build_score_via_facade() {
@@ -48,12 +48,12 @@ fn default_features_build_score_via_facade() {
 
 // --- Core-only smoke -----------------------------------------
 //
-// Exercised under every feature combo that includes `core` —
+// Exercised under every feature combo that includes `core` -
 // even the bare `core` feature without `std` must let consumers
 // instantiate the bare detectors and the cross-cutting
 // `MetricsSink` / `Severity` vocabulary.
 
-/// Detector primitive + cross-cut error type — the absolute
+/// Detector primitive + cross-cut error type - the absolute
 /// minimum the facade promises under bare `core`.
 #[cfg(feature = "core")]
 #[test]
@@ -125,7 +125,7 @@ fn core_per_feature_cusum_plus_severity_via_facade() {
 }
 
 /// `std`-gated detectors (Adwin, Bloom, Shingled) reachable
-/// when `std` is on. Only checks the type names compile —
+/// when `std` is on. Only checks the type names compile -
 /// behaviour is exercised in the owning member's own test
 /// suite.
 #[cfg(all(feature = "core", feature = "std"))]

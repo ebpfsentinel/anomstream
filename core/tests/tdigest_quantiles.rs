@@ -27,7 +27,7 @@ fn uniform_stream_quantiles_within_one_percent() {
 
 #[test]
 fn skewed_stream_tail_accurate() {
-    // 90 % small values + 10 % large — typical anomaly-score shape.
+    // 90 % small values + 10 % large - typical anomaly-score shape.
     // p95 lands well inside the upper mode, p99 near its middle.
     let mut d = TDigest::new(200.0).unwrap();
     for i in 0..90_000_u32 {

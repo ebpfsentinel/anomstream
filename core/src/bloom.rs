@@ -1,17 +1,17 @@
-//! Bloom filter — probabilistic set membership with a bounded
+//! Bloom filter - probabilistic set membership with a bounded
 //! false-positive rate (`fpr`) and zero false negatives.
 //!
 //! Sized from the pair `(n, p)` where `n` is the expected insert
 //! capacity and `p` the target `fpr`. Optimal parameters (Mitzenmacher,
 //! 2002):
 //!
-//! - `m = ⌈−n · ln(p) / (ln 2)²⌉` — bit count
-//! - `k = round((m / n) · ln 2)` — hash count
+//! - `m = ⌈−n · ln(p) / (ln 2)²⌉` - bit count
+//! - `k = round((m / n) · ln 2)` - hash count
 //!
 //! At the design load (`n` inserts) the filter reaches its target
 //! `p`; beyond that the false-positive rate grows geometrically.
 //! IOC-membership workloads typically sit near `p = 0.01` with `n`
-//! sized to the feed — e.g. 1 M IPs at `p = 0.01` costs ≈ 1.2 MiB
+//! sized to the feed - e.g. 1 M IPs at `p = 0.01` costs ≈ 1.2 MiB
 //! of bit state for 7 hashes per lookup.
 //!
 //! Hashing uses a single `SipHash` call per key, split into two
@@ -19,7 +19,7 @@
 //! double-hashing trick: `h_i(x) = h1(x) + i · h2(x)`. The two
 //! hashes are indistinguishable from independent hashes for any
 //! filter parameters that matter in practice (Kirsch & Mitzenmacher
-//! 2008 — *Less Hashing, Same Performance*).
+//! 2008 - *Less Hashing, Same Performance*).
 //!
 //! Gated behind `std` (uses [`std::hash::DefaultHasher`]).
 //!
@@ -37,16 +37,16 @@ use std::hash::DefaultHasher;
 
 use crate::error::{RcfError, RcfResult};
 
-/// Default target false-positive rate — 1 %.
+/// Default target false-positive rate - 1 %.
 pub const DEFAULT_FALSE_POSITIVE_RATE: f64 = 0.01;
 
 /// Maximum hash functions per query. Guards against pathological
 /// `(n, p)` pairs that would otherwise degenerate into `k > 64`
-/// hashes — the 64 cap is well past the useful regime
+/// hashes - the 64 cap is well past the useful regime
 /// (`p ≈ 2⁻⁶⁴`).
 pub const MAX_HASHES: u32 = 64;
 
-/// Maximum bit count — 1 Gibit = 128 MiB bit bank. Caps the
+/// Maximum bit count - 1 Gibit = 128 MiB bit bank. Caps the
 /// allocation an attacker-controlled `(capacity, fpr)` pair can
 /// request. `n = 10⁸` IOCs at `p = 0.01` already lands around
 /// 150 MiB of bit bank, which exceeds this cap; anything beyond
@@ -73,18 +73,18 @@ pub const MAX_NUM_BITS: usize = 1 << 30;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(try_from = "BloomFilterShadow"))]
 pub struct BloomFilter {
-    /// Bit bank — `ceil(num_bits / 64)` words.
+    /// Bit bank - `ceil(num_bits / 64)` words.
     bits: Vec<u64>,
     /// Configured bit count `m`.
     num_bits: usize,
     /// Hash function count `k`.
     num_hashes: u32,
-    /// Total `insert` calls — ops signal, also feeds the saturation
+    /// Total `insert` calls - ops signal, also feeds the saturation
     /// check in [`Self::effective_fpr`].
     total_added: u64,
 }
 
-/// Over-the-wire [`BloomFilter`] layout — mirrors the public type
+/// Over-the-wire [`BloomFilter`] layout - mirrors the public type
 /// field-for-field. Deserialization always lands here first so
 /// [`TryFrom`] can re-run the constructor's invariant checks
 /// (`num_bits > 0`, `num_hashes ∈ (0, MAX_HASHES]`, bit-bank
@@ -227,7 +227,7 @@ impl BloomFilter {
         self.num_hashes
     }
 
-    /// Total `insert` calls — ops signal.
+    /// Total `insert` calls - ops signal.
     #[must_use]
     pub fn total_added(&self) -> u64 {
         self.total_added
@@ -264,7 +264,7 @@ impl BloomFilter {
         self.insert_hash(h1, h2);
     }
 
-    /// Insert a raw byte key — skips generic `Hash` dispatch.
+    /// Insert a raw byte key - skips generic `Hash` dispatch.
     #[inline]
     pub fn insert_bytes(&mut self, key: &[u8]) {
         let (h1, h2) = double_hash(key);
@@ -272,7 +272,7 @@ impl BloomFilter {
     }
 
     /// Insert the caller-supplied `(h1, h2)` pair. Escape hatch for
-    /// callers with a stronger hasher — accuracy depends on the
+    /// callers with a stronger hasher - accuracy depends on the
     /// pair being uniform modulo `num_bits`.
     #[inline]
     pub fn insert_hash(&mut self, h1: u64, h2: u64) {
@@ -284,8 +284,8 @@ impl BloomFilter {
     }
 
     /// Query a `Hash`-able value. Returns `true` when every probed
-    /// bit is set — may be a false positive, never a false negative.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    /// bit is set - may be a false positive, never a false negative.
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     #[inline]
     pub fn contains<T: Hash + ?Sized>(&self, value: &T) -> bool {
         let (h1, h2) = double_hash(value);
@@ -293,7 +293,7 @@ impl BloomFilter {
     }
 
     /// Query a raw byte key.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     #[inline]
     pub fn contains_bytes(&self, key: &[u8]) -> bool {
         let (h1, h2) = double_hash(key);
@@ -301,7 +301,7 @@ impl BloomFilter {
     }
 
     /// Query with a caller-supplied `(h1, h2)` pair.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     #[inline]
     pub fn contains_hash(&self, h1: u64, h2: u64) -> bool {
         for i in 0..self.num_hashes {
@@ -371,7 +371,7 @@ impl BloomFilter {
     }
 }
 
-/// Derive the `(h1, h2)` pair from a single `SipHash` pass — splits
+/// Derive the `(h1, h2)` pair from a single `SipHash` pass - splits
 /// the 64-bit digest into `(low32, high32)` then expands each half
 /// back to 64 bits with a prime mix. Cheaper than two independent
 /// hasher passes; the double-hashing trick covers any residual
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn false_positive_rate_within_budget() {
-        // Insert n keys, query n fresh keys — fraction of hits is
+        // Insert n keys, query n fresh keys - fraction of hits is
         // the empirical FPR.  Tolerance 3× target to absorb noise.
         let target = 0.01_f64;
         let mut bf = BloomFilter::new(10_000, target).unwrap();

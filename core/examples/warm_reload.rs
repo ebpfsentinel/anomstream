@@ -45,7 +45,7 @@ fn main() -> Result<(), RcfError> {
             loaded
         }
         Err(e) => {
-            println!("no usable snapshot ({e}) — starting fresh");
+            println!("no usable snapshot ({e}) - starting fresh");
             build_fresh()?
         }
     };

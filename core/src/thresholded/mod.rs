@@ -2,7 +2,7 @@
 //!
 //! Where the bare forest returns a raw anomaly score in `[0, ∞)`,
 //! [`ThresholdedForest`] tracks the running distribution of those
-//! scores and emits a graded verdict — `is_anomaly: bool`,
+//! scores and emits a graded verdict - `is_anomaly: bool`,
 //! `grade ∈ [0, 1]`, and the `threshold` in effect at observation
 //! time. Callers no longer have to hand-pick a magic threshold per
 //! deployment: the detector adapts to the traffic it sees.

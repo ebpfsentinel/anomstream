@@ -1,12 +1,12 @@
 //! Tree algorithm primitives.
 //!
-//! - [`node::InternalData`] — raw internal-node record
-//! - [`node::LeafData`] — raw leaf-node record
-//! - [`node::NodeView`] / [`node::NodeViewMut`] — zero-copy enums
+//! - [`node::InternalData`] - raw internal-node record
+//! - [`node::LeafData`] - raw leaf-node record
+//! - [`node::NodeView`] / [`node::NodeViewMut`] - zero-copy enums
 //!   over references into the arenas
-//! - [`node::NodeRef`] — `u32` packed reference (high bit
+//! - [`node::NodeRef`] - `u32` packed reference (high bit
 //!   discriminates internal from leaf, low bits hold the slot index)
-//! - [`node_store::NodeStore`] — split-typed backing store, one
+//! - [`node_store::NodeStore`] - split-typed backing store, one
 //!   arena per node kind (`InternalData` vs `LeafData`) so leaves
 //!   don't pay the internal-variant worst case and fit more entries
 //!   per cache line

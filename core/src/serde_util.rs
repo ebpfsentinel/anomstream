@@ -16,7 +16,7 @@ pub mod fixed_array_f64 {
 
     use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
-    /// Write the array as a borrowed slice — the downstream encoder
+    /// Write the array as a borrowed slice - the downstream encoder
     /// decides the wire shape (JSON array, postcard varint length,
     /// etc.).
     ///

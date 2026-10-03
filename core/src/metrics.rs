@@ -7,15 +7,15 @@
 //! Three event types cover everything the forest / thresholded /
 //! pool / meta-drift layers emit:
 //!
-//! - **counter** — monotonically increasing event tallies
+//! - **counter** - monotonically increasing event tallies
 //!   (`rcf_updates_total`, `rcf_anomalies_fired_total`, …).
-//! - **gauge** — point-in-time values (`rcf_tenants_resident`,
+//! - **gauge** - point-in-time values (`rcf_tenants_resident`,
 //!   `rcf_threshold_current`, …).
-//! - **histogram observation** — an `f64` sample the sink should
+//! - **histogram observation** - an `f64` sample the sink should
 //!   bucket on its own (`rcf_score`, `rcf_grade`, …).
 //!
 //! Implementations must be `Send + Sync` so the sink can be shared
-//! across threads — every detector type holds an `Arc<dyn
+//! across threads - every detector type holds an `Arc<dyn
 //! MetricsSink>`. [`NoopSink`] is the default zero-cost fallback
 //! (every call is a `#[inline]` no-op).
 //!
@@ -25,7 +25,7 @@
 //! `.with_metrics_sink(Arc<dyn MetricsSink>)` that installs a sink.
 //! For [`crate::TenantForestPool`] the sink applies to the pool
 //! itself (tenant evictions, resident count); per-tenant detectors
-//! inherit nothing automatically — callers who want per-tenant
+//! inherit nothing automatically - callers who want per-tenant
 //! observability should install a sink on each detector through the
 //! pool's factory closure.
 
@@ -42,7 +42,7 @@ pub trait MetricsSink: Send + Sync + core::fmt::Debug {
     fn observe_histogram(&self, name: &str, value: f64);
 }
 
-/// Zero-cost [`MetricsSink`] implementation — every call is an
+/// Zero-cost [`MetricsSink`] implementation - every call is an
 /// inlined no-op. Default sink every detector ships with.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoopSink;
@@ -59,13 +59,13 @@ impl MetricsSink for NoopSink {
 /// Process-wide shared [`NoopSink`] Arc. Built once on first
 /// access and reused by every [`default_sink`] call so detector
 /// / sampler / channel constructors do not heap-allocate a fresh
-/// `Arc<NoopSink>` each time — the refcount bump is a single
+/// `Arc<NoopSink>` each time - the refcount bump is a single
 /// relaxed atomic RMW.
 #[cfg(feature = "std")]
 static SHARED_NOOP_SINK: LazyLock<Arc<dyn MetricsSink>> = LazyLock::new(|| Arc::new(NoopSink));
 
 /// Return the process-wide shared [`NoopSink`] handle. Clone of
-/// a lazily-initialised static — no heap allocation on the hot
+/// a lazily-initialised static - no heap allocation on the hot
 /// constructor path. The returned `Arc` coerces to
 /// `Arc<dyn MetricsSink>` so call sites can store it behind the
 /// same dynamic-dispatch sink handle every detector uses.
@@ -111,7 +111,7 @@ impl TestSink {
     /// # Panics
     ///
     /// Panics if another thread panicked while holding the internal
-    /// lock — the mutex is poisoned in that case and recovery is a
+    /// lock - the mutex is poisoned in that case and recovery is a
     /// test-only concern.
     #[must_use]
     pub fn snapshot(&self) -> TestSinkInner {
@@ -152,14 +152,14 @@ impl TestSink {
             .unwrap_or_default()
     }
 
-    /// Shared helper — acquires the inner guard and surfaces poison
+    /// Shared helper - acquires the inner guard and surfaces poison
     /// with an explicit message instead of an opaque `unwrap`.
     /// Poison can only happen if another thread panicked while the
     /// lock was held; callers already document this in `# Panics`.
     fn lock_inner(&self) -> std::sync::MutexGuard<'_, TestSinkInner> {
         self.inner
             .lock()
-            .expect("TestSink mutex poisoned — another thread panicked holding it")
+            .expect("TestSink mutex poisoned - another thread panicked holding it")
     }
 }
 
@@ -197,7 +197,7 @@ impl MetricsSink for TestSink {
 /// Every identifier in this module (`UPDATES_TOTAL`,
 /// `PROCESS_TOTAL`, …) carries a **`SemVer`-stable string value**.
 /// The value assigned to a const never changes across patch /
-/// minor releases — SOC dashboards, Prometheus recording rules,
+/// minor releases - SOC dashboards, Prometheus recording rules,
 /// and Grafana alert expressions that reference these identifiers
 /// or their string values keep working through any non-major
 /// bump. New metrics can be added freely; existing ones are
@@ -223,7 +223,7 @@ pub mod names {
     /// whose verdict was flagged `is_anomaly`.
     pub const ANOMALIES_FIRED_TOTAL: &str = "rcf_anomalies_fired_total";
     /// Counter: every [`crate::MetaDriftDetector::observe`] call
-    /// that returned `Some(DriftKind::*)` — aggregate of up + down.
+    /// that returned `Some(DriftKind::*)` - aggregate of up + down.
     pub const DRIFT_FIRES_TOTAL: &str = "rcf_drift_fires_total";
     /// Counter: CUSUM upward drift fires (`DriftKind::Upward`).
     pub const DRIFT_UP_TOTAL: &str = "rcf_drift_up_total";
@@ -236,8 +236,8 @@ pub mod names {
     /// that returned successfully.
     pub const ATTRIBUTION_TOTAL: &str = "rcf_attribution_total";
     /// Counter: inputs rejected because they contained a non-finite
-    /// component (NaN / ±inf). Bumped once per rejected public call
-    /// — upstream data-quality signal for SOC dashboards.
+    /// component (NaN / ±inf). Bumped once per rejected public call -
+    /// upstream data-quality signal for SOC dashboards.
     pub const REJECTED_NAN_TOTAL: &str = "rcf_rejected_nan_total";
     /// Counter: [`crate::RandomCutForest::score_early_term`] calls
     /// that short-circuited (walked fewer than `num_trees`). Pair
@@ -251,7 +251,7 @@ pub mod names {
     /// [`crate::TenantForestPool::evict_idle`]. Subset of
     /// [`TENANT_EVICTIONS_TOTAL`].
     pub const TENANT_IDLE_EVICTIONS_TOTAL: &str = "rcf_tenant_idle_evictions_total";
-    /// Counter: pool-factory invocations — a fresh tenant entered
+    /// Counter: pool-factory invocations - a fresh tenant entered
     /// the resident set. Diverges from `TENANT_EVICTIONS_TOTAL` so
     /// churn (create − evict) is observable.
     pub const TENANT_CREATED_TOTAL: &str = "rcf_tenant_created_total";
@@ -261,13 +261,13 @@ pub mod names {
     pub const BOOTSTRAP_SKIPPED_TOTAL: &str = "rcf_bootstrap_skipped_total";
     /// Counter: every `FeatureDriftDetector::observe` call.
     pub const FEATURE_DRIFT_OBSERVED_TOTAL: &str = "rcf_feature_drift_observed_total";
-    /// Counter: every `AlertClusterer::observe` call — total alerts
+    /// Counter: every `AlertClusterer::observe` call - total alerts
     /// ingested, pre-dedup.
     pub const ALERTS_OBSERVED_TOTAL: &str = "rcf_alerts_observed_total";
     /// Counter: alerts that opened a brand-new cluster (no existing
     /// cluster passed the similarity threshold).
     pub const ALERT_CLUSTERS_NEW_TOTAL: &str = "rcf_alert_clusters_new_total";
-    /// Counter: alerts merged into an existing cluster — the dedup
+    /// Counter: alerts merged into an existing cluster - the dedup
     /// win. Pair with `ALERTS_OBSERVED_TOTAL` to derive the dedup
     /// ratio.
     pub const ALERT_CLUSTERS_JOINED_TOTAL: &str = "rcf_alert_clusters_joined_total";
@@ -311,7 +311,7 @@ pub mod names {
     /// Histogram: downward CUSUM accumulator after each observation.
     pub const DRIFT_S_LOW: &str = "rcf_drift_s_low";
     /// Histogram: trees actually walked per
-    /// [`crate::RandomCutForest::score_early_term`] call — use with
+    /// [`crate::RandomCutForest::score_early_term`] call - use with
     /// [`FOREST_TREES`] to compute the latency savings distribution.
     pub const EARLY_TERM_TREES: &str = "rcf_early_term_trees";
 
@@ -425,15 +425,15 @@ mod tests {
         let s = TestSink::new();
         assert_eq!(s.counter("nope"), 0);
         assert!(s.gauge("nope").is_none());
-        assert!(s.histogram("nope").is_empty());
+        assert_eq!(s.histogram("nope").len(), 0);
     }
 
     #[test]
     fn default_sink_returns_shared_arc() {
         let a = default_sink();
         let b = default_sink();
-        // Both handles must reference the same backing allocation
-        // — the shared-static optimisation depends on it.
+        // Both handles must reference the same backing allocation -
+        // the shared-static optimisation depends on it.
         assert!(
             Arc::ptr_eq(&a, &b),
             "default_sink() should clone a process-wide shared Arc"

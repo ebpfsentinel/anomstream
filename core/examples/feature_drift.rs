@@ -13,7 +13,7 @@ use anomstream_core::feature_drift::{DriftLevel, FeatureDriftDetector};
 fn main() -> Result<(), RcfError> {
     let mut detector: FeatureDriftDetector<3> = FeatureDriftDetector::new(10)?;
 
-    // Baseline window — 2_000 points roughly uniform in [0, 1).
+    // Baseline window - 2_000 points roughly uniform in [0, 1).
     for i in 0..2_000 {
         let v = (f64::from(i) % 10.0) * 0.1;
         detector.observe(&[v, v, v])?;

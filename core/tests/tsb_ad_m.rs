@@ -10,7 +10,7 @@
     clippy::redundant_closure_for_method_calls,
     dead_code
 )]
-//! TSB-AD multivariate track — detection-quality regression guard on
+//! TSB-AD multivariate track - detection-quality regression guard on
 //! a modern, per-point-labeled time-series corpus.
 //!
 //! TSB-AD-M covers 200 multivariate series across 16 source datasets
@@ -21,7 +21,7 @@
 //! JSON is needed.
 //!
 //! Unlike NAB, TSB-AD-M exercises the **native multivariate** RCF
-//! path — no lag embedding, each feature column maps to one RCF dim.
+//! path - no lag embedding, each feature column maps to one RCF dim.
 //!
 //! `#[ignore]` by default: dataset is ~515 MB. Run manually:
 //!
@@ -32,8 +32,8 @@
 //! ```
 //!
 //! Coverage note: the dispatch whitelist is
-//! `{2, 3, 7, 8, 9, 12, 16, 17, 18, 19, 25, 29, 31, 38, 51, 55, 66}`
-//! — 192 / 200 files (96 %). The eight D=248 files are skipped so
+//! `{2, 3, 7, 8, 9, 12, 16, 17, 18, 19, 25, 29, 31, 38, 51, 55, 66}` -
+//! 192 / 200 files (96 %). The eight D=248 files are skipped so
 //! monomorphisation cost stays bounded; eBPFsentinel's production
 //! feature-vector dim is typically ≤ 64 anyway.
 
@@ -50,19 +50,19 @@ use rayon::prelude::*;
 /// per-dim mean / stddev used for z-score normalisation. The full
 /// warm split feeds the forest reservoir.
 const NUM_TREES: usize = 100;
-/// Reservoir size per tree — matches the NAB pipeline so the two
+/// Reservoir size per tree - matches the NAB pipeline so the two
 /// benchmarks are directly comparable at equal detector capacity.
 const SAMPLE_SIZE: usize = 256;
-/// EMA alpha applied to the raw score stream — same 0.02 value
+/// EMA alpha applied to the raw score stream - same 0.02 value
 /// tuned via the NAB ablation (`docs/performance.md`).
 const SMOOTH_ALPHA: f64 = 0.02;
 /// Seed pinned for reproducibility across runs.
 const SEED: u64 = 2026;
 /// Minimum positives required in the eval window for AUC to be
-/// meaningful — below this the file is reported but excluded from
+/// meaningful - below this the file is reported but excluded from
 /// the aggregate.
 const MIN_POSITIVES: u64 = 5;
-/// Stride-subsample cap for the codisp variant — matches the AWS
+/// Stride-subsample cap for the codisp variant - matches the AWS
 /// Java bench's max-eval so the two scorers land on identical row
 /// coverage. `score_codisp()` is ~30× slower than `score()` and
 /// mutates the forest per probe, so scanning 100 % of eval rows on
@@ -79,7 +79,7 @@ struct FileMeta {
     /// Source dataset label (`MSL`, `SMAP`, `SMD`, …). Used as the
     /// per-dataset aggregation key.
     dataset: String,
-    /// Feature-vector dimensionality — equals `header_cols - 1`.
+    /// Feature-vector dimensionality - equals `header_cols - 1`.
     dim: usize,
     /// Index of the last warm-split row (`tr_<N>` field).
     train_end: usize,
@@ -107,7 +107,7 @@ fn root() -> Option<PathBuf> {
 }
 
 /// Parse the filename into a [`FileMeta`]. Returns `None` on any
-/// shape mismatch — unrecognised files are skipped rather than
+/// shape mismatch - unrecognised files are skipped rather than
 /// crashing the whole test.
 fn parse_meta(path: &Path, dim: usize) -> Option<FileMeta> {
     let file = path.file_name()?.to_str()?.to_string();
@@ -125,7 +125,7 @@ fn parse_meta(path: &Path, dim: usize) -> Option<FileMeta> {
     })
 }
 
-/// Load a TSB-AD-M CSV. Returns `(features[], labels[])` — the
+/// Load a TSB-AD-M CSV. Returns `(features[], labels[])` - the
 /// feature matrix is row-major (`row * dim + d`) to avoid the
 /// const-generic tax of carrying `[f64; D]` through parsing; the
 /// const-generic forest pipeline copies into fixed-size arrays at
@@ -149,7 +149,7 @@ fn load_csv(path: &Path) -> (Vec<f64>, Vec<u8>, usize) {
             features.push(val_str.parse().expect("f64"));
             tail = rest;
         }
-        // Labels are stored as floats on some exports ("0.0") — parse
+        // Labels are stored as floats on some exports ("0.0") - parse
         // tolerantly and round to the nearest integer.
         let label_f: f64 = tail.parse().expect("label f64");
         labels.push(u8::from(label_f >= 0.5));
@@ -157,7 +157,7 @@ fn load_csv(path: &Path) -> (Vec<f64>, Vec<u8>, usize) {
     (features, labels, dim)
 }
 
-/// Trapezoidal ROC-AUC — shared with `tests/nab.rs`, duplicated to
+/// Trapezoidal ROC-AUC - shared with `tests/nab.rs`, duplicated to
 /// keep the file self-contained.
 fn auc(scores: &[f64], labels: &[u8]) -> f64 {
     assert_eq!(scores.len(), labels.len());
@@ -195,15 +195,15 @@ fn auc(scores: &[f64], labels: &[u8]) -> f64 {
 /// Which scoring API to exercise per-point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Scorer {
-    /// Isolation-depth `score()` — non-mutating, rayon-parallel,
+    /// Isolation-depth `score()` - non-mutating, rayon-parallel,
     /// full eval scan. Production hot-path API.
     IsolationDepth,
-    /// Probe-based `score_codisp()` — inserts + walks leaf→root +
+    /// Probe-based `score_codisp()` - inserts + walks leaf→root +
     /// deletes per call. ~30× slower than `score()`, matches the
     /// AWS Java `getAnomalyScore()` / rrcf `codisp()` semantic.
     /// Stride-subsampled eval to `CODISP_MAX_EVAL` rows.
     Codisp,
-    /// Stateless codisp — no reservoir mutation, preserves
+    /// Stateless codisp - no reservoir mutation, preserves
     /// frozen-baseline semantic across the full eval stream.
     CodispStateless,
 }
@@ -318,7 +318,7 @@ fn score_file<const D: usize>(
     (auc_val, positives, smoothed.len())
 }
 
-/// Central match-dispatch — every whitelisted `D` is monomorphised
+/// Central match-dispatch - every whitelisted `D` is monomorphised
 /// here. Unlisted dims fall through to `None` and are skipped.
 fn dispatch(
     features: &[f64],
@@ -340,14 +340,14 @@ fn dispatch(
     )
 }
 
-/// Shared test body — iterate the corpus with the selected scorer,
+/// Shared test body - iterate the corpus with the selected scorer,
 /// print the per-dataset AUC breakdown, return the aggregate
 /// positive-weighted AUC. The two `#[test]` entry points differ
 /// only in the scorer variant and the floor they assert.
 fn run_corpus(scorer: Scorer, label: &str) -> f64 {
     let Some(root_path) = root() else {
         panic!(
-            "RCF_TSB_AD_M_PATH not set — run scripts/tsb_ad/fetch.sh and \
+            "RCF_TSB_AD_M_PATH not set - run scripts/tsb_ad/fetch.sh and \
              export RCF_TSB_AD_M_PATH=<dir>/TSB-AD-M before running this ignored test"
         );
     };
@@ -369,7 +369,7 @@ fn run_corpus(scorer: Scorer, label: &str) -> f64 {
         root_path.display()
     );
 
-    // Parallelise at the file level — each file owns an independent
+    // Parallelise at the file level - each file owns an independent
     // `RandomCutForest`, so rayon can fan out across cores. The
     // per-file pipeline is still sequential (const-generic D dispatch,
     // `score_codisp` mutates the forest serially per probe), but 14
@@ -466,7 +466,7 @@ fn tsb_ad_m_aggregate_auc_above_floor() {
 #[ignore = "requires RCF_TSB_AD_M_PATH; codisp path is ~30× slower, runs ~1h at CODISP_MAX_EVAL=50k stride"]
 fn tsb_ad_m_codisp_aggregate_auc_above_floor() {
     let overall_auc = run_corpus(Scorer::Codisp, "score_codisp()");
-    // Codisp floor is independent of the isolation-depth floor —
+    // Codisp floor is independent of the isolation-depth floor -
     // mutation-per-probe plus stride subsampling drifts the number.
     assert!(
         overall_auc > 0.55,

@@ -1,4 +1,4 @@
-//! `ADWIN` (`ADaptive` `WINdowing`) — streaming change-point
+//! `ADWIN` (`ADaptive` `WINdowing`) - streaming change-point
 //! detector with automatic window sizing.
 //!
 //! Bifet & Gavaldà, *Learning from Time-Changing Data with
@@ -33,7 +33,7 @@
 //!
 //! # Use with anomstream-core
 //!
-//! `AdwinDetector` is a standalone trigger — feed it the anomaly
+//! `AdwinDetector` is a standalone trigger - feed it the anomaly
 //! score stream (or any scalar per-step signal) and route
 //! [`AdwinDetector::update`]'s `true` return into
 //! [`crate::DriftAwareForest::on_drift`] to spawn a shadow forest.
@@ -45,7 +45,7 @@ use std::sync::Arc;
 use crate::error::{RcfError, RcfResult};
 use crate::metrics::{MetricsSink, default_sink, names};
 
-/// Default confidence budget `δ` — lower values = stricter bound,
+/// Default confidence budget `δ` - lower values = stricter bound,
 /// fewer false-positive drift fires. `0.002` matches Bifet's
 /// reference `δ = 0.002` experiment setting.
 pub const DEFAULT_DELTA: f64 = 0.002;
@@ -55,7 +55,7 @@ pub const DEFAULT_DELTA: f64 = 0.002;
 pub const DEFAULT_WINDOW_CAP: usize = 4096;
 
 /// Minimum sub-window size required for a valid Hoeffding-bound
-/// comparison. Below this the detector stays silent — sub-window
+/// comparison. Below this the detector stays silent - sub-window
 /// means are too noisy to distinguish drift from sampling jitter.
 pub const MIN_SUBWINDOW_LEN: usize = 16;
 
@@ -64,9 +64,9 @@ pub const MIN_SUBWINDOW_LEN: usize = 16;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AdwinDetector {
     /// Caller-declared amplitude of the observed stream. Scales
-    /// the Hoeffding bound — bounded `[0, 1]` streams pass `1.0`.
+    /// the Hoeffding bound - bounded `[0, 1]` streams pass `1.0`.
     range: f64,
-    /// Confidence budget — lower δ => stricter threshold.
+    /// Confidence budget - lower δ => stricter threshold.
     delta: f64,
     /// Maximum items kept in the window.
     window_cap: usize,
@@ -74,7 +74,7 @@ pub struct AdwinDetector {
     buffer: Vec<f64>,
     /// Cumulative drift fires reported.
     drift_fires: u64,
-    /// Observability sink — serde-skipped, restored to the noop
+    /// Observability sink - serde-skipped, restored to the noop
     /// sink on round-trip.
     #[cfg_attr(
         feature = "serde",
@@ -121,7 +121,7 @@ impl AdwinDetector {
         })
     }
 
-    /// Install a metrics sink — every `update` emits an observed
+    /// Install a metrics sink - every `update` emits an observed
     /// counter, and every drift fire bumps a drift-fires counter.
     #[must_use]
     pub fn with_metrics_sink(mut self, sink: Arc<dyn MetricsSink>) -> Self {
@@ -140,7 +140,7 @@ impl AdwinDetector {
     ///
     /// # Panics
     ///
-    /// Never — the default values pass `new`'s validation.
+    /// Never - the default values pass `new`'s validation.
     #[must_use]
     pub fn default_bounded() -> Self {
         Self::new(1.0, DEFAULT_DELTA, DEFAULT_WINDOW_CAP).expect("default params valid")
@@ -181,14 +181,14 @@ impl AdwinDetector {
     /// Returns `false` otherwise (no drift on this update).
     ///
     /// Non-finite values are silently dropped.
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn update(&mut self, value: f64) -> bool {
         if !value.is_finite() {
             return false;
         }
         self.metrics.inc_counter(names::ADWIN_OBSERVED_TOTAL, 1);
         // Drop the oldest entry if we're at cap. Keeping this an
-        // `O(N)` front-removal is fine at N ≤ 4k — benchmarked
+        // `O(N)` front-removal is fine at N ≤ 4k - benchmarked
         // marginal vs `VecDeque` in the typical anomstream-core use case.
         if self.buffer.len() >= self.window_cap {
             self.buffer.remove(0);
@@ -243,7 +243,7 @@ impl AdwinDetector {
             let log_term = (4.0 * n as f64 / self.delta).ln();
             let eps_cut = self.range * (log_term / (2.0 * m)).sqrt();
             if (mean_l - mean_r).abs() > eps_cut {
-                // Drop the older sub-window — keep the right (newer)
+                // Drop the older sub-window - keep the right (newer)
                 // side which is assumed to reflect the new regime.
                 self.buffer.drain(..split);
                 self.drift_fires = self.drift_fires.saturating_add(1);
@@ -288,7 +288,7 @@ mod tests {
         for _ in 0..256 {
             let _ = d.update(0.1);
         }
-        // Shift to mean 0.9 — should trigger within a handful of
+        // Shift to mean 0.9 - should trigger within a handful of
         // post-shift samples.
         let mut fired = false;
         for _ in 0..128 {

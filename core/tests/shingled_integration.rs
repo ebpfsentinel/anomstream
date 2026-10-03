@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::panic, clippy::cast_precision_loss)]
-//! Integration coverage for `ShingledForest` — the contextual-
+//! Integration coverage for `ShingledForest` - the contextual-
 //! temporal anomaly fix for the NAB `rogue_agent_key_hold` = 0.145
 //! / `SWaT` = 0.282 failure modes documented in
 //! `docs/performance.md`. Isolation depth on a raw scalar stream
@@ -22,7 +22,7 @@ fn dwell_anomaly_shingle_scores_materially_above_baseline() {
         .build()
         .unwrap();
 
-    // Warm on a clean periodic baseline — only sine shingles land
+    // Warm on a clean periodic baseline - only sine shingles land
     // in the reservoir.
     let mut t = 0.0_f64;
     for _ in 0..512 {
@@ -89,7 +89,7 @@ fn stateless_codisp_scalar_survives_many_probes_without_drift() {
         forest.update_scalar(v).unwrap();
     }
     // Drift regression: the stateless codisp path must return the
-    // exact same score after N repeats — no reservoir mutation.
+    // exact same score after N repeats - no reservoir mutation.
     let first: f64 = forest.score_codisp_stateless_scalar(2.0).unwrap().into();
     for _ in 0..2_000 {
         let _ = forest.score_codisp_stateless_scalar(2.0).unwrap();

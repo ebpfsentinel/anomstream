@@ -23,7 +23,7 @@
 //! `process(point)` evaluates the point *before* inserting it into
 //! the forest. This avoids a self-referential bias where the freshly
 //! inserted point would be scored against a forest that already
-//! contains it — always shallow, always low-anomaly. The stats EMA
+//! contains it - always shallow, always low-anomaly. The stats EMA
 //! is updated with the pre-insert score so the threshold adapts to
 //! the distribution of scores the forest would assign to unseen
 //! points.
@@ -121,7 +121,7 @@ impl<const D: usize> ThresholdedForest<D> {
         })
     }
 
-    /// Install a [`crate::MetricsSink`] — every subsequent
+    /// Install a [`crate::MetricsSink`] - every subsequent
     /// `process` / `score_only` call emits counters and histograms
     /// into it. Does **not** propagate to the underlying forest;
     /// install on the forest separately if you also want low-level
@@ -188,7 +188,7 @@ impl<const D: usize> ThresholdedForest<D> {
             ThresholdMode::Quantile { p } => {
                 // Force a flush so the query sees every recorded
                 // score; `quantile` does the flush itself, but the
-                // `&self` borrow here forbids it — rely on the
+                // `&self` borrow here forbids it - rely on the
                 // periodic flushes `flush_buffer` does on `record`.
                 match self.tdigest_quantile_readonly(p) {
                     Some(q) => q,
@@ -199,7 +199,7 @@ impl<const D: usize> ThresholdedForest<D> {
         adaptive.max(self.thresholded.min_threshold)
     }
 
-    /// Immutable quantile lookup — equivalent to `TDigest::quantile`
+    /// Immutable quantile lookup - equivalent to `TDigest::quantile`
     /// but clones only the centroids + `min`/`max` so the detector
     /// can stay `&self`. Cheap when the buffer is empty (expected
     /// after any `record` call with `buffer_len > compression * 10`),
@@ -228,11 +228,11 @@ impl<const D: usize> ThresholdedForest<D> {
     ///   component.
     /// - Any error bubbled up from [`RandomCutForest::update`] or
     ///   [`RandomCutForest::score`].
-    #[must_use = "detector output should be checked — dropping it silently usually indicates a logic bug"]
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn process(&mut self, point: [f64; D]) -> RcfResult<AnomalyGrade> {
         ensure_finite(&point)?;
 
-        // Score against the forest BEFORE the insert — a post-insert
+        // Score against the forest BEFORE the insert - a post-insert
         // score would bias the result toward "seen" for the freshly
         // inserted point and distort the threshold-driving statistics.
         let score = match self.forest.score(&point) {
@@ -271,7 +271,7 @@ impl<const D: usize> ThresholdedForest<D> {
     ///
     /// On an empty forest (no points have been inserted yet), returns
     /// a warming-up verdict (`ready = false`, `is_anomaly = false`)
-    /// rather than an error — mirrors [`Self::process`]'s cold-start
+    /// rather than an error - mirrors [`Self::process`]'s cold-start
     /// handling so callers can query the detector during the warmup
     /// window without special-casing the empty case.
     ///
@@ -308,7 +308,7 @@ impl<const D: usize> ThresholdedForest<D> {
 
     /// Bulk-score a batch of points without touching the threshold
     /// layer's stats. Returns [`AnomalyGrade`]s graded against the
-    /// current adaptive threshold — identical to what
+    /// current adaptive threshold - identical to what
     /// [`Self::score_only`] would emit per point, but parallelised
     /// across the batch via rayon when the `parallel` feature is
     /// enabled.
@@ -356,7 +356,7 @@ impl<const D: usize> ThresholdedForest<D> {
     }
 
     /// Bulk early-termination scoring. Delegates to
-    /// [`RandomCutForest::score_many_early_term`] — the threshold
+    /// [`RandomCutForest::score_many_early_term`] - the threshold
     /// layer does not alter the scoring path.
     ///
     /// # Errors
@@ -370,7 +370,7 @@ impl<const D: usize> ThresholdedForest<D> {
         self.forest.score_many_early_term(points, config)
     }
 
-    /// Early-termination variant of the scoring path — delegates to
+    /// Early-termination variant of the scoring path - delegates to
     /// [`RandomCutForest::score_early_term`]. Does not update the
     /// thresholded layer's stats (this is a read path, not a
     /// training path).
@@ -387,7 +387,7 @@ impl<const D: usize> ThresholdedForest<D> {
     }
 
     /// Drop every statistic and warm-up sample. The underlying forest
-    /// is left untouched — callers who want a full reset should
+    /// is left untouched - callers who want a full reset should
     /// rebuild via the builder. Used by tests and by callers that
     /// want to re-enter a warmup phase after a major regime change.
     pub fn reset_stats(&mut self) {
@@ -397,7 +397,7 @@ impl<const D: usize> ThresholdedForest<D> {
 
     /// Retract a previously-observed point from the underlying forest
     /// by its `point_idx`. Delegates to
-    /// [`RandomCutForest::delete`] — the threshold layer's stats are
+    /// [`RandomCutForest::delete`] - the threshold layer's stats are
     /// left untouched (they already reflect the score that was
     /// emitted when the point was processed).
     ///
@@ -459,7 +459,7 @@ impl<const D: usize> ThresholdedForest<D> {
         Ok((idx, verdict))
     }
 
-    /// Timestamped variant of [`Self::process`] — tags the freshly
+    /// Timestamped variant of [`Self::process`] - tags the freshly
     /// inserted point with `timestamp` so callers can later prune
     /// history via [`RandomCutForest::delete_before`]. Returns the
     /// same graded verdict as [`Self::process`].
@@ -472,7 +472,7 @@ impl<const D: usize> ThresholdedForest<D> {
         Ok(verdict)
     }
 
-    /// Timestamped variant of [`Self::process_indexed`] — records
+    /// Timestamped variant of [`Self::process_indexed`] - records
     /// the caller-supplied `timestamp` against the fresh `point_idx`.
     ///
     /// # Errors
@@ -486,7 +486,7 @@ impl<const D: usize> ThresholdedForest<D> {
         let (idx, verdict) = self.process_indexed(point)?;
         // process_indexed may have called update_indexed, so the
         // side-map entry we tag here is attached to the correct
-        // fresh point_idx — even when the call path went through
+        // fresh point_idx - even when the call path went through
         // the cold-start warming-up branch.
         if self.forest.point_store().ref_count(idx) > 0 {
             self.forest.set_point_timestamp(idx, timestamp);
@@ -586,7 +586,7 @@ impl<const D: usize> ThresholdedForest<D> {
     }
 
     /// Fold `score` into both the EMA (always) and the `TDigest`
-    /// (always — a mode swap should see a populated digest). Kept
+    /// (always - a mode swap should see a populated digest). Kept
     /// private: every entry point that previously called
     /// `self.stats.update(f64::from(score))` must route through
     /// here instead.
