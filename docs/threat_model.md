@@ -61,7 +61,10 @@ longer flagged. Two vectors:
   `fetch_add` + cap-comparison sequence is two distinct atomics);
   size the cap with that slack baked in. Collisions are soft (by
   design - trades a little cross-prefix interference for constant
-  memory).
+  memory), and `PrefixRateCap::new_keyed` keeps them from being
+  aimed: the bucket is chosen through `SipHash-1-3` under a
+  per-instance key, so an attacker cannot pick prefixes that share
+  a victim's bucket and spend its window.
 - **LSH alert clusterer keyed hash**: `LshAlertClusterer::new`
   draws a fresh per-instance 128-bit hash secret from
   `getrandom` at construction so an offline-precomputed collision

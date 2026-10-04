@@ -762,11 +762,22 @@ struct PaddedBucket {
 /// hoping a fraction land in the reservoir via
 /// [`UpdateSampler::accept_hash`].
 ///
-/// Implementation: 256 atomic `u32` buckets indexed by
-/// `prefix_hash & 0xff`. Collisions are soft - the cap bounds
+/// Implementation: 256 atomic `u32` buckets indexed by the low
+/// byte of `prefix_hash`. Collisions are soft - the cap bounds
 /// across the *bucket*, not the exact prefix. This trades a small
 /// amount of cross-prefix interference for O(1) lock-free
 /// check-and-record with bounded memory.
+///
+/// # Keyed buckets
+///
+/// That interference is a weapon when the bucket is predictable:
+/// an attacker who knows which bucket a victim prefix lands in can
+/// spend the victim's whole window from prefixes of their own,
+/// and the victim's legitimate traffic is then capped. Build with
+/// [`Self::new_keyed`] for internet-facing ingress - the bucket
+/// becomes the low byte of `SipHash-1-3(prefix_hash)` under a
+/// per-instance key, so which prefixes share a bucket is unknown
+/// outside the process. [`Self::new`] keeps the unkeyed index.
 ///
 /// # Soft over-admission window
 ///
@@ -814,6 +825,9 @@ pub struct PrefixRateCap {
     /// Maximum admits per bucket per window. `0` means cap
     /// disabled - every call admits (set by [`Self::disabled`]).
     cap_per_window: u32,
+    /// `SipHash-1-3` key applied to `prefix_hash` before the bucket
+    /// is chosen; `None` indexes by the raw low byte.
+    bucket_key: Option<[u64; 2]>,
     /// Lifetime count of admits that hit the cap and were rejected.
     capped_total: AtomicU64,
     /// Lifetime count of admits passed through.
@@ -840,7 +854,59 @@ impl PrefixRateCap {
     /// caller wants the always-admit mode explicitly.
     #[must_use]
     pub fn new(cap_per_window: NonZeroU32, window_ms: NonZeroU64) -> Self {
-        Self::build(cap_per_window.get(), window_ms.get())
+        Self::build(cap_per_window.get(), window_ms.get(), None)
+    }
+
+    /// Keyed variant of [`Self::new`] - the bucket of a prefix is
+    /// chosen through `SipHash-1-3` under a key drawn from the OS
+    /// CSPRNG, so an attacker cannot pick prefixes that share a
+    /// victim's bucket. See the type-level `# Keyed buckets`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`getrandom::Error`] when the OS entropy source
+    /// is unavailable.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice - the two `try_into().expect(...)` calls
+    /// unwrap a compile-time known 8-byte slice taken from a
+    /// 16-byte buffer.
+    pub fn new_keyed(
+        cap_per_window: NonZeroU32,
+        window_ms: NonZeroU64,
+    ) -> Result<Self, getrandom::Error> {
+        let mut buf = [0_u8; 16];
+        getrandom::fill(&mut buf)?;
+        let k0 = u64::from_le_bytes(buf[0..8].try_into().expect("16 bytes"));
+        let k1 = u64::from_le_bytes(buf[8..16].try_into().expect("16 bytes"));
+        Ok(Self::new_keyed_with_seeds(
+            cap_per_window,
+            window_ms,
+            k0,
+            k1,
+        ))
+    }
+
+    /// Caller-supplied-key variant of [`Self::new_keyed`], for
+    /// environments without `getrandom` and for reproducible tests.
+    /// The same seed-sourcing advice as
+    /// [`UpdateSampler::new_keyed_with_seeds`] applies: a key the
+    /// attacker can guess gives the defence away.
+    #[must_use]
+    pub fn new_keyed_with_seeds(
+        cap_per_window: NonZeroU32,
+        window_ms: NonZeroU64,
+        k0: u64,
+        k1: u64,
+    ) -> Self {
+        Self::build(cap_per_window.get(), window_ms.get(), Some([k0, k1]))
+    }
+
+    /// Whether bucket selection is keyed.
+    #[must_use]
+    pub fn is_keyed(&self) -> bool {
+        self.bucket_key.is_some()
     }
 
     /// Always-admit mode - every [`Self::check_and_record`] call
@@ -849,12 +915,12 @@ impl PrefixRateCap {
     /// future-proofing - a re-enable path could repurpose it).
     #[must_use]
     pub fn disabled(window_ms: NonZeroU64) -> Self {
-        Self::build(0, window_ms.get())
+        Self::build(0, window_ms.get(), None)
     }
 
     /// Shared constructor - bypassed by [`Self::new`] /
     /// [`Self::disabled`] which guarantee the typed invariants.
-    fn build(cap_per_window: u32, window_ms: u64) -> Self {
+    fn build(cap_per_window: u32, window_ms: u64, bucket_key: Option<[u64; 2]>) -> Self {
         // Cannot use `[PaddedBucket { ... }; 256]` because the
         // inner AtomicU32 is !Copy. Build via closure.
         let buckets: [PaddedBucket; Self::BUCKETS] = core::array::from_fn(|_| PaddedBucket {
@@ -865,6 +931,7 @@ impl PrefixRateCap {
             window_start_ms: AtomicU64::new(0),
             window_ms,
             cap_per_window,
+            bucket_key,
             capped_total: AtomicU64::new(0),
             admitted_total: AtomicU64::new(0),
             admitted_flushed: AtomicU64::new(0),
@@ -941,8 +1008,12 @@ impl PrefixRateCap {
                 break;
             }
         }
+        let mixed = match self.bucket_key {
+            Some([k0, k1]) => siphash13_u64(k0, k1, prefix_hash),
+            None => prefix_hash,
+        };
         #[allow(clippy::cast_possible_truncation)]
-        let idx = ((prefix_hash & 0xff) as usize) & (Self::BUCKETS - 1);
+        let idx = (mixed as usize) & (Self::BUCKETS - 1);
         let prior = self.buckets[idx].inner.fetch_add(1, Ordering::Relaxed);
         if prior < self.cap_per_window {
             record_batched(
@@ -1405,6 +1476,31 @@ mod tests {
 
     fn nz_u32(n: u32) -> NonZeroU32 {
         NonZeroU32::new(n).expect("non-zero")
+    }
+
+    #[test]
+    fn keyed_prefix_cap_separates_prefixes_sharing_a_raw_bucket() {
+        // Unkeyed, prefixes 0x100 apart share a bucket, so one of
+        // them exhausts the other's window. Keyed, the bucket is
+        // chosen by the PRF and those prefixes scatter.
+        let unkeyed = PrefixRateCap::new(nz_u32(1), nz_u64(1_000));
+        assert!(unkeyed.check_and_record(0x100, 1));
+        assert!(!unkeyed.check_and_record(0x200, 1));
+
+        let keyed = PrefixRateCap::new_keyed_with_seeds(nz_u32(1), nz_u64(1_000), 7, 11);
+        assert!(keyed.is_keyed());
+        let admitted = (1_u64..=32)
+            .filter(|i| keyed.check_and_record(i << 8, 1))
+            .count();
+        assert!(
+            admitted > 16,
+            "only {admitted} of 32 raw-colliding prefixes admitted"
+        );
+        assert!(
+            PrefixRateCap::new_keyed(nz_u32(1), nz_u64(1_000))
+                .unwrap()
+                .is_keyed()
+        );
     }
 
     fn nz_u64(n: u64) -> NonZeroU64 {

@@ -1331,6 +1331,14 @@ cap-comparison sequence is two distinct atomics - design the
 operator-facing cap with that slack baked in by passing
 `cap_per_window = ceiling / 4`).
 
+`PrefixRateCap::new_keyed(cap, window)` (key from `getrandom`) or
+`new_keyed_with_seeds(cap, window, k0, k1)` picks the bucket through
+`SipHash-1-3` under a per-instance key. Unkeyed, the bucket is the
+low byte of the caller's hash, so an attacker who knows a victim's
+bucket can exhaust its window from prefixes of their own; keyed,
+which prefixes share a bucket is unknown outside the process. Use
+the keyed form on internet-facing ingress.
+
 Second defence line (alongside the keyed `UpdateSampler`)
 against reservoir-poisoning floods from a single compromised
 source - documented in `docs/threat_model.md`.

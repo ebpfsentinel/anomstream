@@ -73,6 +73,23 @@ fn bench_hot_path_prefix_cap(c: &mut Criterion) {
         });
     });
 
+    group.bench_function("check_and_record_keyed_100cap_1s", |b| {
+        let cap = PrefixRateCap::new_keyed_with_seeds(
+            NonZeroU32::new(100).expect("non-zero"),
+            NonZeroU64::new(1_000).expect("non-zero"),
+            0x0123_4567_89ab_cdef,
+            0xfedc_ba98_7654_3210,
+        );
+        let mut rng = ChaCha8Rng::seed_from_u64(2026);
+        let mut now_ms = 0_u64;
+        b.iter(|| {
+            let h: u64 = rng.random();
+            now_ms = now_ms.wrapping_add(1);
+            let v = cap.check_and_record(black_box(h), now_ms);
+            black_box(v);
+        });
+    });
+
     // Quantify the gain from batched metrics emission. With
     // METRICS_BATCH_SIZE = 64 the sink dispatch lands once per 64
     // ops on the noop sink path; this bench drives the bare hot
