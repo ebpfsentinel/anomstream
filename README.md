@@ -1,35 +1,12 @@
 # anomstream
 
-A composable Rust toolkit for **streaming anomaly detection**. Multiple detector families (multivariate, per-feature, score-level) plus the primitives needed to turn them into production pipelines - streaming stats, normalisation, probability calibration, alert clustering, feedback loops, SOC triage, hot-path ingress.
+A Rust toolkit for **streaming anomaly detection**: several detector families (multivariate, per-feature, score-level) and the primitives that turn them into a pipeline - streaming stats, sketches, calibration, alert clustering, SOC triage, hot-path ingress. Streaming, bounded memory, online update throughout.
 
-Among the detectors: an AWS-conformant Random Cut Forest implementation (Guha et al. ICML 2016) - one of several detectors.
+The Random Cut Forest is a focused port of Guha et al. (ICML 2016) within the AWS SageMaker bounds, not a feature match of `randomcutforest-by-aws`. The toolkit powers the ML pipeline of the **eBPFsentinel Enterprise** agent.
 
-Powers the ML detection pipeline of the **eBPFsentinel Enterprise** network security agent; designed to be reused anywhere a stream of high-dim observations needs online scoring.
+**Out of scope**: protocol parsers, IP-centric trackers, L7 intelligence; ONNX / torch runtimes, supervised training; rule synthesis, policy engines; density estimation, forecasting, GLAD, near-neighbour lists, `impute()` (the RCF imputation idea survives only as the `forensic_baseline` triage helper).
 
-## Scope
-
-**In scope** - streaming, bounded-memory, online-update primitives:
-
-- Multivariate anomaly detection (Random Cut Forest and variants)
-- Time-series discord / motif (Matrix Profile / STOMP - exact batch complement to the online shingled forest)
-- Evaluation metric (VUS-PR - threshold-free, length-aware AUC-PR for time-series) + TSB-AD-M CSV loader
-- Per-feature drift detectors (EWMA z-score, two-sided CUSUM, PSI / KL)
-- Score-level drift + regime-change (meta CUSUM, ADWIN, SPOT / DSPOT)
-- Streaming stats + sketches (Welford `OnlineStats`, t-digest, histograms, Count-Min Sketch, `HyperLogLog`, Space-Saving top-K, Bloom filter)
-- Normalisation (`Normalizer<D>` - min-max / z-score / identity)
-- Explanation + triage (per-dim attribution, SAGE Shapley, Platt calibration, severity bands, alert clustering, SOC feedback, audit trail, forensic baseline)
-- Hot-path ingress (sampler, rate cap, bounded MPSC channel, pluggable metrics sink)
-
-**Out of scope** - intentionally absent to keep the library focused:
-
-- Protocol parsers, IP-centric trackers, L7 intelligence
-- ONNX / torch runtimes, supervised model training
-- Rule synthesis, policy engines
-- Density estimation, forecasting, GLAD variant, near-neighbour list, feature-completion `impute()` (the RCF "imputation" idea is repurposed as a SOC-triage `forensic_baseline` helper).
-
-The Random Cut Forest implementation inside the toolkit is a focused port of the 2016 paper - not an attempt to match every feature of AWS's `randomcutforest-by-aws`.
-
-### Catalogue
+## Catalogue
 
 **Multivariate anomaly detectors** - operate on the joint `[f64; D]` distribution
 
@@ -59,11 +36,11 @@ The Random Cut Forest implementation inside the toolkit is a focused port of the
 - `OnlineStats` - Welford streaming mean + variance
 - `TDigest` - Dunning streaming quantile digest
 - `ScoreHistogram` - fixed-bin score histogram
-- `CountMinSketch` - probabilistic frequency sketch (std-gated)
-- `HyperLogLog` - probabilistic distinct-count / cardinality sketch (std-gated)
-- `SpaceSaving<K>` - deterministic `O(K)`-memory top-K heavy hitters (std-gated, complements `CountMinSketch`)
-- `BloomFilter` - probabilistic set-membership for IOC lookup (std-gated, zero false negatives, tunable FPR)
-- `Normalizer<D>` - per-feature `MinMax` / `ZScore` / `None` transforms (with `fit(&[[f64; D]])` learner)
+- `CountMinSketch` - probabilistic frequency sketch
+- `HyperLogLog` - distinct-count sketch
+- `SpaceSaving<K>` - deterministic top-K heavy hitters in `O(K)` memory
+- `BloomFilter` - set membership, zero false negatives, tunable FPR
+- `Normalizer<D>` - per-feature `MinMax` / `ZScore` / `None`, with a `fit` learner
 
 **Explanation + triage**
 
@@ -75,65 +52,51 @@ The Random Cut Forest implementation inside the toolkit is a focused port of the
 
 **SOC + ops**
 
-- `AlertClusterer` / `LshAlertClusterer` - cosine + LSH alert dedup (LSH carries per-instance random seed against collision-craft attacks)
-- `FeedbackStore` - SOC-label-driven score adjustment, capped at `MAX_CAPACITY = 65 536` labels
-- `AlertRecord` / `AlertContext` - immutable alert envelope (triage crate); `#[serde(deny_unknown_fields)]` rejects schema-drift splices
-- `AuditChain` / `AuditChainEntry` / `verify_audit_chain` - HMAC-SHA256-chained tamper-evident audit trail (`audit-integrity` feature)
+- `AlertClusterer` / `LshAlertClusterer` - cosine and LSH alert dedup (LSH seeded per instance)
+- `FeedbackStore` - SOC-label-driven score adjustment, at most `MAX_CAPACITY` (65 536) labels
+- `AlertRecord` / `AlertContext` - immutable alert envelope, unknown fields rejected
+- `AuditChain` / `verify_audit_chain` - HMAC-SHA256-chained tamper-evident audit trail
 - `ForensicBaseline` - post-hoc distance-to-sample summary
 
 **Hot-path ingress**
 
-- `hot_path::UpdateSampler` (`new` / `new_keyed` / `new_keyed_with_seeds`) - stride or per-flow-hash sampler, optional 128-bit per-instance secret (against MITRE ATLAS `AML.T0020`), with caller-supplied-seed variant for restricted environments where `getrandom` is unavailable
-- `hot_path::PrefixRateCap::new(NonZeroU32, NonZeroU64)` / `disabled(NonZeroU64)` - typed-cap 256-bucket atomic counter sketch, cache-line-padded buckets defeat false sharing across cores
-- `hot_path::update_channel` / `try_update_channel` - bounded MPSC channel (capacity `1..=MAX_CHANNEL_CAPACITY`, validated) for classifier/updater thread split; non-panicking `try_*` Result variants
-- `MetricsSink` - pluggable telemetry (`NoopSink` + your own impl); hot-path dispatch is **batched every `METRICS_BATCH_SIZE = 64` ops** (≈64× fewer vtable calls under line-rate load), call `flush_metrics()` at shutdown to drain residue
+- `UpdateSampler` - stride or per-flow-hash sampler, optionally keyed with a per-instance secret (MITRE ATLAS `AML.T0020`)
+- `PrefixRateCap` - per-prefix admission cap over 256 cache-padded buckets, optionally keyed
+- `update_channel` / `try_update_channel` - bounded MPSC channel for the classifier / updater split
+- `MetricsSink` - pluggable telemetry; hot-path dispatch batched every `METRICS_BATCH_SIZE` (64) calls, `flush_metrics()` on shutdown
 
 **Evaluation**
 
 - `vus_pr` / `vus_pr_with_buffer` / `range_auc_pr` - Volume Under Surface PR (Paparrizos VLDB 2022), threshold-free length-aware quality metric
 - `TsbAdMDataset` - CSV loader for the TSB-AD-M multivariate benchmark (Liu & Paparrizos NeurIPS 2024)
-- `examples/tsb_ad_m_eval.rs` - end-to-end runner: load one TSB-AD-M CSV, score with `DynamicForest`, report VUS-PR
 
-See [docs/features.md](docs/features.md) for the full module catalogue with per-feature rationale.
+Per-module detail: [docs/features.md](docs/features.md). Threat model: [docs/threat_model.md](docs/threat_model.md).
 
 ## Crate layout
 
-The toolkit ships as a Cargo workspace with four members. Consumers can depend on the `anomstream` meta-crate for the simple case or pick individual members when minimising dep graph matters.
-
-| Crate | Role | Publish |
-|---|---|---|
-| [`anomstream`](meta/) | Facade - feature-gated re-exports of the three members. **Primary public-facing crate.** | `anomstream` |
-| [`anomstream-core`](core/) | Detectors + streaming primitives + cross-cut contracts (`MetricsSink`, `SeverityBands`, `ForestSnapshot`). Targets SemVer 1.0 first. | `anomstream-core` |
-| [`anomstream-triage`](triage/) | SOC-opinionated higher-level layer - Platt, SAGE, alert clustering, feedback store, alert record. Depends on core. | `anomstream-triage` |
-| [`anomstream-hotpath`](hotpath/) | Opinionated eBPF-style ingress primitives - `UpdateSampler`, `PrefixRateCap`, bounded MPSC `channel`. Depends on core. | `anomstream-hotpath` |
-
-Three consumption patterns:
+| Crate                            | Role                                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [`anomstream`](meta/)            | Facade: feature-gated re-exports of the three members                                                |
+| [`anomstream-core`](core/)       | Detectors, streaming primitives, shared contracts (`MetricsSink`, `SeverityBands`, `ForestSnapshot`) |
+| [`anomstream-triage`](triage/)   | SOC layer: Platt, SAGE, alert clustering, feedback store, alert record                               |
+| [`anomstream-hotpath`](hotpath/) | Ingress: `UpdateSampler`, `PrefixRateCap`, `update_channel`                                          |
 
 ```toml
-# Default - core detectors + primitives, minimal dep graph.
-# Every other layer is an explicit opt-in so downstream consumers
-# do not pay for dependencies they never use.
+# Default: core detectors and primitives
 [dependencies]
 anomstream = "0.0.0-dev"
 
-# Full facade - core + triage + hotpath + parallel + serde + postcard.
-# Convenience for deployments that want everything wired in.
-[dependencies]
+# Everything, or pick layers
 anomstream = { version = "0.0.0-dev", features = ["full"] }
-
-# Fine-grained - pick the layers you need.
-[dependencies]
 anomstream = { version = "0.0.0-dev", features = ["core", "triage", "serde"] }
 
-# Member-direct - when you want per-member SemVer tracking.
+# Member crates directly, for per-member SemVer
 [dependencies]
 anomstream-core   = { version = "0.0.0-dev", features = ["parallel", "serde"] }
 anomstream-triage = { version = "0.0.0-dev" }
 ```
 
 ## Quickstart
-
-Two examples - one per detector family - to show the toolkit is more than its forest.
 
 ### Multivariate: Random Cut Forest
 
@@ -177,84 +140,63 @@ for point in stream_of_points {
 }
 ```
 
-The two detectors compose: feed the forest's scalar score into `MetaDriftDetector` for score-level regime change; run `PerFeatureCusum` alongside for per-feature attribution; wrap everything in `ThresholdedForest` for adaptive alerting.
+They compose: feed the forest score into `MetaDriftDetector` for regime change, run `PerFeatureCusum` alongside to name the drifting feature, wrap the forest in `ThresholdedForest` for adaptive alerting.
 
 ## Algorithms
 
-Each detector cites the paper it implements. Representative references by family:
-
-- **Random Cut Forest** - Guha, Mishra, Roy, Schrijvers, *Robust Random Cut Forest Based Anomaly Detection on Streams*, ICML 2016. Reservoir sampling without replacement: Park, Ostrouchov, Samatova, Geist - SIAM SDM 2004.
-- **EWMA** - Hunter, *The Exponentially Weighted Moving Average*, JQT 18(4), 1986.
-- **CUSUM** - Page, *Continuous Inspection Schemes*, Biometrika 41, 1954. Two-sided variant: Hawkins & Olwell, 1998.
-- **ADWIN** - Bifet, *Learning from Time-Changing Data with Adaptive Windowing*, SIAM SDM 2007.
-- **SPOT / DSPOT** - Siffer et al., *Anomaly Detection in Streams with Extreme Value Theory*, KDD 2017.
-- **t-digest** - Dunning, *Computing Extremely Accurate Quantiles using t-Digests*, 2019.
+- **Random Cut Forest** - Guha, Mishra, Roy, Schrijvers, _Robust Random Cut Forest Based Anomaly Detection on Streams_, ICML 2016. Reservoir sampling without replacement: Park, Ostrouchov, Samatova, Geist - SIAM SDM 2004.
+- **EWMA** - Hunter, _The Exponentially Weighted Moving Average_, JQT 18(4), 1986.
+- **CUSUM** - Page, _Continuous Inspection Schemes_, Biometrika 41, 1954. Two-sided variant: Hawkins & Olwell, 1998.
+- **ADWIN** - Bifet, _Learning from Time-Changing Data with Adaptive Windowing_, SIAM SDM 2007.
+- **SPOT / DSPOT** - Siffer et al., _Anomaly Detection in Streams with Extreme Value Theory_, KDD 2017.
+- **t-digest** - Dunning, _Computing Extremely Accurate Quantiles using t-Digests_, 2019.
 - **Count-Min Sketch** - Cormode & Muthukrishnan, JoA 55(1), 2005.
-- **HyperLogLog** - Flajolet, Fusy, Gandouet, Meunier - AofA 2007. *HyperLogLog in Practice*: Heule, Nunkesser, Hall, EDBT 2013.
-- **Space-Saving** - Metwally, Agrawal, El Abbadi, *Efficient Computation of Frequent and Top-k Elements in Data Streams*, ICDT 2005.
-- **Bloom filter** - Bloom, *Space/Time Trade-offs in Hash Coding with Allowable Errors*, CACM 13(7), 1970. Double-hashing: Kirsch & Mitzenmacher, *Less Hashing, Same Performance*, ESA 2006.
-- **Matrix Profile / STOMP** - Zhu, Zimmerman, Senobari, Yeh, Funning, Mueen, Brisk, Keogh, *Matrix Profile II: Exploiting a Novel Algorithm and GPUs…*, ICDM 2016. Original MP: Yeh et al., *Matrix Profile I*, ICDM 2016.
-- **VUS-PR** - Paparrizos, Boniol, Palpanas, Tsay, Elmore, Franklin, *Volume Under the Surface: A New Accuracy Evaluation Measure for Time-Series Anomaly Detection*, VLDB 2022.
-- **TSB-AD-M** - Liu, Paparrizos, *The Elephant in the Room: Towards A Reliable Time-Series Anomaly Detection Benchmark*, NeurIPS 2024.
-- **SAGE** - Covert, Lundberg, Lee, *Understanding Global Feature Contributions Through Additive Importance Measures*, NeurIPS 2020.
+- **HyperLogLog** - Flajolet, Fusy, Gandouet, Meunier - AofA 2007. _HyperLogLog in Practice_: Heule, Nunkesser, Hall, EDBT 2013.
+- **Space-Saving** - Metwally, Agrawal, El Abbadi, _Efficient Computation of Frequent and Top-k Elements in Data Streams_, ICDT 2005.
+- **Bloom filter** - Bloom, _Space/Time Trade-offs in Hash Coding with Allowable Errors_, CACM 13(7), 1970. Double-hashing: Kirsch & Mitzenmacher, _Less Hashing, Same Performance_, ESA 2006.
+- **Matrix Profile / STOMP** - Zhu, Zimmerman, Senobari, Yeh, Funning, Mueen, Brisk, Keogh, _Matrix Profile II: Exploiting a Novel Algorithm and GPUs…_, ICDM 2016. Original MP: Yeh et al., _Matrix Profile I_, ICDM 2016.
+- **VUS-PR** - Paparrizos, Boniol, Palpanas, Tsay, Elmore, Franklin, _Volume Under the Surface: A New Accuracy Evaluation Measure for Time-Series Anomaly Detection_, VLDB 2022.
+- **TSB-AD-M** - Liu, Paparrizos, _The Elephant in the Room: Towards A Reliable Time-Series Anomaly Detection Benchmark_, NeurIPS 2024.
+- **SAGE** - Covert, Lundberg, Lee, _Understanding Global Feature Contributions Through Additive Importance Measures_, NeurIPS 2020.
 - **Welford variance** - Welford, Technometrics 4(3), 1962.
 
-The Random Cut Forest implementation conforms to the AWS `SageMaker` hyperparameter bounds (`feature_dim`, `num_trees`, `num_samples_per_tree`, `time_decay`) - enforced at build time.
-
-Details: [docs/conformance_rcf.md](docs/conformance_rcf.md).
+RCF hyperparameter bounds follow AWS SageMaker and are enforced at build time: [docs/conformance_rcf.md](docs/conformance_rcf.md).
 
 ## Features
 
-| Cargo feature | Default | Role                                                     |
-| ------------- | ------- | -------------------------------------------------------- |
-| `core`        | ✅      | Re-export of `anomstream-core` (bare forest + primitives) |
-| `std`         | ✅      | Standard library support (unlocks the full module surface) |
-| `triage`      | ❌      | Re-export of `anomstream-triage` (Platt, SAGE, LSH, feedback, audit) |
-| `hotpath`     | ❌      | Re-export of `anomstream-hotpath` (sampler, rate cap, MPSC channel) |
-| `parallel`    | ❌      | Per-tree / batch parallelism via `rayon` (implies `std`) |
-| `serde`       | ❌      | State serialisation                                      |
-| `postcard`    | ❌      | Compact binary persistence (implies `serde`)             |
-| `serde_json`  | ❌      | JSON persistence (implies `serde`)                       |
-| `audit-integrity` | ❌  | HMAC-SHA256-chained tamper-evident `AuditChain` (pulls `hmac` + `sha2` + `subtle`; implies `triage + std + serde + postcard`) |
-| `full`        | ❌      | Convenience alias for `core + triage + hotpath + std + parallel + serde + postcard + serde_json + audit-integrity` |
+| Cargo feature     | Default | Role                                                                                                                          |
+| ----------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `core`            | ✅      | Re-export of `anomstream-core` (bare forest + primitives)                                                                     |
+| `std`             | ✅      | Standard library support (unlocks the full module surface)                                                                    |
+| `triage`          | ❌      | Re-export of `anomstream-triage` (Platt, SAGE, LSH, feedback, audit)                                                          |
+| `hotpath`         | ❌      | Re-export of `anomstream-hotpath` (sampler, rate cap, MPSC channel)                                                           |
+| `parallel`        | ❌      | Per-tree / batch parallelism via `rayon` (implies `std`)                                                                      |
+| `serde`           | ❌      | State serialisation                                                                                                           |
+| `postcard`        | ❌      | Compact binary persistence (implies `serde`)                                                                                  |
+| `serde_json`      | ❌      | JSON persistence (implies `serde`)                                                                                            |
+| `audit-integrity` | ❌      | HMAC-SHA256-chained tamper-evident `AuditChain` (pulls `hmac` + `sha2` + `subtle`; implies `triage + std + serde + postcard`) |
+| `full`            | ❌      | Convenience alias for `core + triage + hotpath + std + parallel + serde + postcard + serde_json + audit-integrity`            |
 
-The facade default is `["core", "std"]` - deliberately minimal so
-consumers pay only for what they import. Enable `full` for the
-"everything wired in" deployment or cherry-pick layers explicitly.
-
-The member crates (`anomstream-core`, `anomstream-triage`,
-`anomstream-hotpath`) ship with **`default = []`** so direct-dep
-consumers do not pay for `std` / `serde` / `postcard` they never
-use. The historical "everything on" set is still reachable via the
-facade's default features or by enabling `["std", "serde",
-"postcard"]` explicitly.
+The member crates ship `default = []`; enable `std`, `serde` and the rest explicitly when depending on them directly.
 
 ### Module availability table
 
-| Module / type                                   | Requires feature       |
-| ----------------------------------------------- | ---------------------- |
-| `RandomCutForest`, `ThresholdedForest`, `RcfConfig`, `ForestBuilder` | always (core, no_std + alloc) |
-| `OnlineStats`, `Normalizer`, `PerFeatureEwma`, `PerFeatureCusum`, `FeatureDriftDetector`, `MetaDriftDetector` | always (core, no_std + alloc) |
-| `TDigest`, `ScoreHistogram`, `ForensicBaseline`, `SeverityBands`, `AttributionStability`, `BootstrapReport` | always (core, no_std + alloc) |
-| `AdwinDetector`, `PotDetector`, `ensemble::fisher_combine` | `std`                  |
-| `CountMinSketch`, `HyperLogLog`, `SpaceSaving`, `BloomFilter` | `std`                  |
-| `ShingledForest`, `DynamicForest`, `DriftAwareForest`, `TenantForestPool`, `MatrixProfile` | `std`                  |
-| `TsbAdMDataset`, `vus_pr` / `range_auc_pr`      | `std`                  |
-| `AlertClusterer`, `AlertRecord`, `FeedbackStore`, `PlattCalibrator`, `SageEstimator`, `LshAlertClusterer` | `triage` (+ `std`) |
-| `AuditChain`, `AuditChainEntry`, `verify_audit_chain`, `AUDIT_CHAIN_*` consts | `audit-integrity` |
-| `UpdateSampler`, `PrefixRateCap`, `update_channel`, `try_update_channel`, `MetricsSink`, `MAX_CHANNEL_CAPACITY`, `METRICS_BATCH_SIZE` | `hotpath` (+ `std`) |
+| Module / type                                                                                                                         | Requires feature              |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `RandomCutForest`, `ThresholdedForest`, `RcfConfig`, `ForestBuilder`                                                                  | always (core, no_std + alloc) |
+| `OnlineStats`, `Normalizer`, `PerFeatureEwma`, `PerFeatureCusum`, `FeatureDriftDetector`, `MetaDriftDetector`                         | always (core, no_std + alloc) |
+| `TDigest`, `ScoreHistogram`, `ForensicBaseline`, `SeverityBands`, `AttributionStability`, `BootstrapReport`                           | always (core, no_std + alloc) |
+| `AdwinDetector`, `PotDetector`, `ensemble::fisher_combine`                                                                            | `std`                         |
+| `CountMinSketch`, `HyperLogLog`, `SpaceSaving`, `BloomFilter`                                                                         | `std`                         |
+| `ShingledForest`, `DynamicForest`, `DriftAwareForest`, `TenantForestPool`, `MatrixProfile`                                            | `std`                         |
+| `TsbAdMDataset`, `vus_pr` / `range_auc_pr`                                                                                            | `std`                         |
+| `AlertClusterer`, `AlertRecord`, `FeedbackStore`, `PlattCalibrator`, `SageEstimator`, `LshAlertClusterer`                             | `triage` (+ `std`)            |
+| `AuditChain`, `AuditChainEntry`, `verify_audit_chain`, `AUDIT_CHAIN_*` consts                                                         | `audit-integrity`             |
+| `UpdateSampler`, `PrefixRateCap`, `update_channel`, `try_update_channel`, `MetricsSink`, `MAX_CHANNEL_CAPACITY`, `METRICS_BATCH_SIZE` | `hotpath` (+ `std`)           |
 
 ### `no_std` + `alloc`
 
-`default-features = false` drops every `std`-gated module listed
-above. The always-available set - the bare forest, ring-buffer
-sampler, thresholded wrapper, meta / feature drift detectors,
-t-digest, histogram, forensic baseline, severity bands, and the
-companion primitives (`OnlineStats`, `Normalizer<D>`,
-`PerFeatureEwma<D>`, `PerFeatureCusum<D>`) - runs under
-`#![no_std]` with `alloc`. Transcendentals (`ln`, `sqrt`, `exp`,
-…) route through `num-traits` + `libm`; hashing-dependent code
-paths fall back to `alloc::collections::BTreeMap`.
+Everything marked "always" above runs under `#![no_std]` with `alloc`; transcendentals go through `libm`, hash maps fall back to `BTreeMap`.
 
 ```toml
 [dependencies]
@@ -263,25 +205,20 @@ anomstream = { version = "…", default-features = false, features = ["core"] }
 anomstream = { version = "…", default-features = false, features = ["core", "serde"] }
 ```
 
-The `no_std` configuration is gated in CI
-(`cargo check --no-default-features` + `--features serde`).
+CI checks `--no-default-features`, with and without `serde`.
 
 ## Performance
 
-See [docs/performance.md](docs/performance.md) for the full criterion bench matrix. Benches are split across the three member crates: `cargo bench -p anomstream-core --bench modules` (detectors + primitives), `cargo bench -p anomstream-triage --bench modules` (Platt, SAGE, LSH), `cargo bench -p anomstream-hotpath --bench modules` (sampler, rate cap, channel).
+Bench matrix, reference figures and how to run them: [docs/performance.md](docs/performance.md).
 
 ## Quality evaluation (TSB-AD-M)
 
-For detection-quality benchmarking, anomstream ships the VUS-PR metric (Paparrizos VLDB 2022) and a TSB-AD-M CSV loader. Dataset isn't bundled - download from [https://github.com/thedatumorg/TSB-AD](https://github.com/thedatumorg/TSB-AD) (≈ 1 GiB).
-
-Single-file run:
+The dataset is not bundled: [thedatumorg/TSB-AD](https://github.com/thedatumorg/TSB-AD) (~1 GiB).
 
 ```bash
 cargo run --release --example tsb_ad_m_eval -- /path/to/TSB-AD-M/MSL_1_001.csv
 # MSL_1_001.csv  n=2000  dim=55  pos=123  VUS-PR=0.4312  elapsed=218ms
 ```
-
-Loop over the full folder (bash):
 
 ```bash
 for f in /path/to/TSB-AD-M/*.csv; do
@@ -289,7 +226,7 @@ for f in /path/to/TSB-AD-M/*.csv; do
 done | tee vus_pr.log
 ```
 
-The example uses `DynamicForest<128>` with a 50 % calibration / 50 % scoring split. Swap in `MatrixProfile` or your own detector by editing `core/examples/tsb_ad_m_eval.rs`.
+`core/examples/tsb_ad_m_eval.rs` scores with `DynamicForest<128>` on a 50/50 calibration / scoring split; swap the detector there.
 
 ## License
 
