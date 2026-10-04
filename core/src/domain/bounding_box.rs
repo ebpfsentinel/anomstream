@@ -147,27 +147,15 @@ impl<const D: usize> BoundingBox<D> {
     #[must_use]
     #[inline]
     pub fn range_sum(&self) -> f64 {
-        let chunks = D / 4;
+        let (min_chunks, min_tail) = self.min.as_chunks::<4>();
+        let (max_chunks, max_tail) = self.max.as_chunks::<4>();
         let mut acc_simd = f64x4::splat(0.0);
-        for i in 0..chunks {
-            let off = i * 4;
-            let mn = f64x4::from([
-                self.min[off],
-                self.min[off + 1],
-                self.min[off + 2],
-                self.min[off + 3],
-            ]);
-            let mx = f64x4::from([
-                self.max[off],
-                self.max[off + 1],
-                self.max[off + 2],
-                self.max[off + 3],
-            ]);
-            acc_simd += mx - mn;
+        for (&mn, &mx) in min_chunks.iter().zip(max_chunks) {
+            acc_simd += f64x4::from(mx) - f64x4::from(mn);
         }
         let mut s = acc_simd.reduce_add();
-        for d in (chunks * 4)..D {
-            s += self.max[d] - self.min[d];
+        for (&mn, &mx) in min_tail.iter().zip(max_tail) {
+            s += mx - mn;
         }
         s
     }
@@ -305,34 +293,18 @@ impl<const D: usize> BoundingBox<D> {
     #[inline]
     #[must_use]
     pub fn augmented_range_sum(&self, point: &[f64]) -> f64 {
-        let chunks = D / 4;
+        let (p_chunks, p_tail) = point[..D].as_chunks::<4>();
+        let (min_chunks, min_tail) = self.min.as_chunks::<4>();
+        let (max_chunks, max_tail) = self.max.as_chunks::<4>();
         let mut acc_simd = f64x4::splat(0.0);
-        for i in 0..chunks {
-            let off = i * 4;
-            let p = f64x4::from([point[off], point[off + 1], point[off + 2], point[off + 3]]);
-            let mn = f64x4::from([
-                self.min[off],
-                self.min[off + 1],
-                self.min[off + 2],
-                self.min[off + 3],
-            ]);
-            let mx = f64x4::from([
-                self.max[off],
-                self.max[off + 1],
-                self.max[off + 2],
-                self.max[off + 3],
-            ]);
-            let lo = mn.fast_min(p);
-            let hi = mx.fast_max(p);
+        for ((&p, &mn), &mx) in p_chunks.iter().zip(min_chunks).zip(max_chunks) {
+            let p = f64x4::from(p);
+            let lo = f64x4::from(mn).fast_min(p);
+            let hi = f64x4::from(mx).fast_max(p);
             acc_simd += hi - lo;
         }
         let mut s = acc_simd.reduce_add();
-        let tail_start = chunks * 4;
-        for ((&p, &mn), &mx) in point[tail_start..D]
-            .iter()
-            .zip(self.min[tail_start..D].iter())
-            .zip(self.max[tail_start..D].iter())
-        {
+        for ((&p, &mn), &mx) in p_tail.iter().zip(min_tail).zip(max_tail) {
             let lo = mn.min(p);
             let hi = mx.max(p);
             s += hi - lo;
@@ -404,25 +376,14 @@ impl<const D: usize> BoundingBox<D> {
                 got: point.len(),
             });
         }
-        let chunks = D / 4;
+        let (p_chunks, p_tail) = point.as_chunks::<4>();
+        let (min_chunks, min_tail) = self.min.as_chunks::<4>();
+        let (max_chunks, max_tail) = self.max.as_chunks::<4>();
         let zero = f64x4::splat(0.0);
         let mut range_acc = f64x4::splat(0.0);
         let mut ext_acc = f64x4::splat(0.0);
-        for i in 0..chunks {
-            let off = i * 4;
-            let p = f64x4::from([point[off], point[off + 1], point[off + 2], point[off + 3]]);
-            let mn = f64x4::from([
-                self.min[off],
-                self.min[off + 1],
-                self.min[off + 2],
-                self.min[off + 3],
-            ]);
-            let mx = f64x4::from([
-                self.max[off],
-                self.max[off + 1],
-                self.max[off + 2],
-                self.max[off + 3],
-            ]);
+        for ((&p, &mn), &mx) in p_chunks.iter().zip(min_chunks).zip(max_chunks) {
+            let (p, mn, mx) = (f64x4::from(p), f64x4::from(mn), f64x4::from(mx));
             range_acc += mx - mn;
             let above = (p - mx).fast_max(zero);
             let below = (mn - p).fast_max(zero);
@@ -430,12 +391,7 @@ impl<const D: usize> BoundingBox<D> {
         }
         let mut range_sum = range_acc.reduce_add();
         let mut extension_sum = ext_acc.reduce_add();
-        let tail_start = chunks * 4;
-        for ((&p, &mn), &mx) in point[tail_start..D]
-            .iter()
-            .zip(self.min[tail_start..D].iter())
-            .zip(self.max[tail_start..D].iter())
-        {
+        for ((&p, &mn), &mx) in p_tail.iter().zip(min_tail).zip(max_tail) {
             range_sum += mx - mn;
             let above = p - mx;
             let below = mn - p;
