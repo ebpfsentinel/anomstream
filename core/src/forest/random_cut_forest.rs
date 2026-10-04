@@ -1753,8 +1753,7 @@ fn update_trees<const D: usize>(
             .map(|chunk| -> RcfResult<Vec<usize>> {
                 let mut local = Vec::new();
                 for slot in chunk {
-                    let mut freed = process_tree_update(slot, store, new_idx)?;
-                    local.append(&mut freed);
+                    local.extend(process_tree_update(slot, store, new_idx)?);
                 }
                 Ok(local)
             })
@@ -1768,8 +1767,7 @@ fn update_trees<const D: usize>(
 
     let mut out = Vec::new();
     for slot in trees.iter_mut() {
-        let mut local = process_tree_update(slot, store, new_idx)?;
-        out.append(&mut local);
+        out.extend(process_tree_update(slot, store, new_idx)?);
     }
     Ok(out)
 }
@@ -1840,14 +1838,15 @@ fn process_tree_delete<const D: usize>(
 /// Single-tree branch of [`update_trees`]: feeds the new index to
 /// the sampler, applies the resulting `Inserted` / `Replaced` /
 /// `Rejected` op to the tree + refcounts. Returns the evicted index
-/// when [`PointStore::decr_ref`] reports it just hit zero.
+/// when [`PointStore::decr_ref`] reports it just hit zero; a tree
+/// evicts at most one point per update, so no list is built.
 fn process_tree_update<const D: usize>(
     slot: &mut TreeSlot<D>,
     store: &PointStore<D>,
     new_idx: usize,
-) -> RcfResult<Vec<usize>> {
+) -> RcfResult<Option<usize>> {
     let (tree, sampler, rng) = slot;
-    let mut freed = Vec::new();
+    let mut freed = None;
     match sampler.accept(new_idx, rng) {
         SamplerOp::Inserted => {
             let p = store
@@ -1859,7 +1858,7 @@ fn process_tree_update<const D: usize>(
         SamplerOp::Replaced(evicted) => {
             tree.delete_with_survivors(evicted, store, sampler.iter_indices())?;
             if store.decr_ref(evicted)? {
-                freed.push(evicted);
+                freed = Some(evicted);
             }
             let p = store
                 .point(new_idx)
