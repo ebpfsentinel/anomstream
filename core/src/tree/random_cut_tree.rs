@@ -503,6 +503,28 @@ impl<const D: usize> RandomCutTree<D> {
     where
         P: PointAccessor<D> + ?Sized,
     {
+        self.delete_with_survivors(point_idx, points, core::iter::empty())
+    }
+
+    /// [`Self::delete`] with a hint for the duplicate-leaf case.
+    ///
+    /// A leaf of mass `> 1` resolves its coordinates through one of
+    /// the copies it absorbed. When that copy is the one retracted,
+    /// its slot in the point store may be freed and handed to an
+    /// unrelated point, so the leaf moves to a surviving copy first.
+    /// `survivors` lists indices still resident in this tree - the
+    /// forest passes its sampler, a few hundred entries - and the
+    /// reverse index is scanned only when none of them qualifies.
+    pub(crate) fn delete_with_survivors<P, I>(
+        &mut self,
+        point_idx: usize,
+        points: &P,
+        survivors: I,
+    ) -> RcfResult<()>
+    where
+        P: PointAccessor<D> + ?Sized,
+        I: IntoIterator<Item = usize>,
+    {
         let leaf = self.leaf_index_get(point_idx).ok_or_else(|| {
             RcfError::InvalidConfig(
                 format!("RandomCutTree::delete: point_idx {point_idx} not present").into(),
@@ -522,6 +544,18 @@ impl<const D: usize> RandomCutTree<D> {
             // represents the other copies of the point under their own
             // point_idx, but `point_idx` itself is gone.
             self.leaf_index_clear(point_idx);
+            if self.store.leaf(leaf)?.point_idx == point_idx {
+                let heir = survivors
+                    .into_iter()
+                    .find(|&i| i != point_idx && self.leaf_index_get(i) == Some(leaf))
+                    .or_else(|| self.leaf_index.iter().position(|e| *e == Some(leaf)))
+                    .ok_or_else(|| {
+                        RcfError::InvalidConfig(
+                            "RandomCutTree::delete: duplicate leaf has no surviving copy".into(),
+                        )
+                    })?;
+                self.store.leaf_mut(leaf)?.point_idx = heir;
+            }
             return Ok(());
         }
 
@@ -995,6 +1029,23 @@ mod tests {
         assert!(t.contains(0));
         assert_eq!(t.store().view(root).unwrap().mass(), 1);
         points.pop();
+    }
+
+    #[test]
+    fn delete_duplicate_representative_moves_leaf_to_survivor() {
+        let mut t = RandomCutTree::<2>::new(8).unwrap();
+        let p = [1.0_f64, 1.0];
+        let points = vec![p, p];
+        let mut rng = fresh_rng(1);
+        t.add(0, &p, &points, &mut rng).unwrap();
+        t.add(1, &p, &points, &mut rng).unwrap();
+        let root = t.root().unwrap();
+        assert_eq!(t.store().leaf(root).unwrap().point_idx, 0);
+        // No survivor hint: the reverse-index scan finds copy 1.
+        t.delete(0, &points).unwrap();
+        assert_eq!(t.store().leaf(root).unwrap().point_idx, 1);
+        assert!(t.contains(1));
+        assert!(!t.contains(0));
     }
 
     #[test]

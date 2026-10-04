@@ -18,7 +18,7 @@
 
 #![allow(clippy::cast_precision_loss, clippy::float_cmp)]
 
-use anomstream_core::{ForestBuilder, TenantForestPool, ThresholdedForestBuilder};
+use anomstream_core::{ForestBuilder, PointAccessor, TenantForestPool, ThresholdedForestBuilder};
 
 #[test]
 fn update_indexed_returns_fresh_indices() {
@@ -159,4 +159,40 @@ fn pool_delete_by_value_removes_per_tenant_matches() {
     let removed_b = pool.delete_by_value(&"b", &target).unwrap();
     assert!(removed_a > 0);
     assert_eq!(removed_b, 0, "tenant B never saw the target value");
+}
+
+#[test]
+fn deleting_the_representative_of_a_duplicate_leaf_keeps_the_leaf_on_a_live_point() {
+    // Two copies of the same point share one leaf. The leaf records
+    // the first copy's index; retracting that copy frees its slot,
+    // and the next update reuses it for a different point. The leaf
+    // must keep resolving to the surviving copy, not to the newcomer.
+    let mut f = ForestBuilder::<2>::new()
+        .num_trees(50)
+        .sample_size(64)
+        .seed(9)
+        .build()
+        .unwrap();
+    for i in 0_u32..16 {
+        let v = f64::from(i);
+        f.update([v, -v]).unwrap();
+    }
+    let first = f.update_indexed([3.5, 3.5]).unwrap();
+    let second = f.update_indexed([3.5, 3.5]).unwrap();
+    assert!(f.delete(first).unwrap());
+    let reused = f.update_indexed([100.0, 100.0]).unwrap();
+    assert_eq!(reused, first, "the freed slot is handed out again");
+    for (tree, _, _) in f.trees() {
+        let Some(leaf) = tree.leaf_of(second) else {
+            continue;
+        };
+        let anomstream_core::NodeView::Leaf(data) = tree.store().view(leaf).unwrap() else {
+            panic!("leaf_of returned an internal node");
+        };
+        assert_eq!(
+            f.point_store().point(data.point_idx).copied(),
+            Some([3.5, 3.5]),
+            "leaf must resolve to the surviving duplicate"
+        );
+    }
 }

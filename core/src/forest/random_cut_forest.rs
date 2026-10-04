@@ -1732,7 +1732,7 @@ fn process_tree_delete<const D: usize>(
 ) -> RcfResult<(bool, bool)> {
     let (tree, sampler, _) = slot;
     if sampler.remove(point_idx) {
-        tree.delete(point_idx, store)?;
+        tree.delete_with_survivors(point_idx, store, sampler.iter_indices())?;
         let hit_zero = store.decr_ref(point_idx)?;
         Ok((true, hit_zero))
     } else {
@@ -1760,7 +1760,7 @@ fn process_tree_update<const D: usize>(
             store.incr_ref(new_idx)?;
         }
         SamplerOp::Replaced(evicted) => {
-            tree.delete(evicted, store)?;
+            tree.delete_with_survivors(evicted, store, sampler.iter_indices())?;
             if store.decr_ref(evicted)? {
                 freed.push(evicted);
             }
