@@ -213,17 +213,36 @@ mod atomic {
         Ok(())
     }
 
-    /// Read the full byte content of `path`.
-    #[cfg(feature = "postcard")]
-    pub(super) fn read_all(path: &Path) -> RcfResult<Vec<u8>> {
-        std::fs::read(path)
-            .map_err(|e| RcfError::DeserializationFailed(format!("read {}: {e}", path.display())))
+    /// Read the full byte content of `path`, refusing anything
+    /// longer than `max` bytes before it is held in memory: the
+    /// length on disk is checked first, and the read itself stops at
+    /// `max + 1` bytes so a file that grows between the two still
+    /// cannot push the allocation past the cap.
+    pub(super) fn read_capped(path: &Path, max: usize, kind: &'static str) -> RcfResult<Vec<u8>> {
+        use std::io::Read;
+        let read_err = |e: std::io::Error| {
+            RcfError::DeserializationFailed(format!("read {}: {e}", path.display()))
+        };
+        let file = File::open(path).map_err(read_err)?;
+        let on_disk = file.metadata().map_err(read_err)?.len();
+        let on_disk = usize::try_from(on_disk).unwrap_or(usize::MAX);
+        super::enforce_size_cap(on_disk, max, kind)?;
+        let limit = u64::try_from(max).unwrap_or(u64::MAX).saturating_add(1);
+        let mut bytes = Vec::with_capacity(on_disk);
+        file.take(limit).read_to_end(&mut bytes).map_err(read_err)?;
+        super::enforce_size_cap(bytes.len(), max, kind)?;
+        Ok(bytes)
     }
 
-    /// Read the full text content of `path`.
+    /// Text counterpart of [`read_capped`]: same bound, then UTF-8
+    /// validation.
     #[cfg(feature = "serde_json")]
-    pub(super) fn read_all_string(path: &Path) -> RcfResult<String> {
-        std::fs::read_to_string(path)
+    pub(super) fn read_capped_string(
+        path: &Path,
+        max: usize,
+        kind: &'static str,
+    ) -> RcfResult<String> {
+        String::from_utf8(read_capped(path, max, kind)?)
             .map_err(|e| RcfError::DeserializationFailed(format!("read {}: {e}", path.display())))
     }
 }
@@ -335,7 +354,11 @@ impl<const D: usize> RandomCutForest<D> {
     /// integrity check (HMAC / signature) before this call.
     #[cfg(all(feature = "postcard", feature = "std"))]
     pub fn from_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
-        let bytes = atomic::read_all(path.as_ref())?;
+        let bytes = atomic::read_capped(
+            path.as_ref(),
+            MAX_DESERIALIZE_BYTES,
+            "RandomCutForest postcard file",
+        )?;
         Self::from_bytes(&bytes)
     }
 
@@ -426,7 +449,8 @@ impl<const D: usize> RandomCutForest<D> {
     /// Inherits the trust model of [`Self::from_json`].
     #[cfg(all(feature = "serde_json", feature = "std"))]
     pub fn from_json_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
-        let json = atomic::read_all_string(path.as_ref())?;
+        let json =
+            atomic::read_capped_string(path.as_ref(), MAX_JSON_BYTES, "RandomCutForest JSON file")?;
         Self::from_json(&json)
     }
 }
@@ -530,7 +554,11 @@ impl<const D: usize> ThresholdedForest<D> {
     /// Inherits the trust model of [`Self::from_bytes`].
     #[cfg(all(feature = "postcard", feature = "std"))]
     pub fn from_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
-        let bytes = atomic::read_all(path.as_ref())?;
+        let bytes = atomic::read_capped(
+            path.as_ref(),
+            MAX_DESERIALIZE_BYTES,
+            "ThresholdedForest postcard file",
+        )?;
         Self::from_bytes(&bytes)
     }
 
@@ -617,7 +645,11 @@ impl<const D: usize> ThresholdedForest<D> {
     /// Inherits the trust model of [`Self::from_json`].
     #[cfg(all(feature = "serde_json", feature = "std"))]
     pub fn from_json_path(path: impl AsRef<std::path::Path>) -> RcfResult<Self> {
-        let json = atomic::read_all_string(path.as_ref())?;
+        let json = atomic::read_capped_string(
+            path.as_ref(),
+            MAX_JSON_BYTES,
+            "ThresholdedForest JSON file",
+        )?;
         Self::from_json(&json)
     }
 }

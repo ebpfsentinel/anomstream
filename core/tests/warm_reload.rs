@@ -107,6 +107,22 @@ fn forest_from_path_missing_file_returns_deserialization_error() {
 }
 
 #[test]
+fn forest_from_path_refuses_oversized_file_before_reading_it() {
+    // Sparse file one byte past the cap: no disk blocks, so the
+    // assertion is that the length on disk is refused, not that a
+    // 256 MiB read was attempted and then rejected.
+    let path = unique_tmp_path("forest-oversized");
+    let cap = u64::try_from(anomstream_core::persistence::MAX_DESERIALIZE_BYTES).unwrap();
+    fs::File::create(&path).unwrap().set_len(cap + 1).unwrap();
+    let err = RandomCutForest::<4>::from_path(&path).unwrap_err();
+    cleanup(&path);
+    match err {
+        RcfError::DeserializationFailed(msg) => assert!(msg.contains("exceeds cap"), "{msg}"),
+        other => panic!("expected the size cap, got {other:?}"),
+    }
+}
+
+#[test]
 fn forest_from_path_truncated_file_rejected() {
     let path = unique_tmp_path("forest-trunc");
     fs::write(&path, [0_u8; 2]).unwrap();
