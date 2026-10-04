@@ -50,7 +50,55 @@ fn bench_hot_path_sampler(c: &mut Criterion) {
         });
     });
 
+    // One sampler shared by eight classifier threads, each hashing
+    // its own flows - the shape of a multi-queue ingress.
+    group.bench_function("accept_hash_contended_8threads", |b| {
+        let s = std::sync::Arc::new(UpdateSampler::new(8));
+        b.iter_custom(|iters| {
+            contended(iters, &s, |s, t, i| {
+                black_box(s.accept_hash(black_box(i.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ t)));
+            })
+        });
+    });
+
     group.finish();
+}
+
+/// Time `iters` calls of `op` on the foreground thread while seven
+/// background threads run the same `op` on the same shared value
+/// until the foreground finishes. `op` receives the thread number
+/// and the iteration number.
+fn contended<T: Send + Sync + 'static>(
+    iters: u64,
+    shared: &std::sync::Arc<T>,
+    op: fn(&T, u64, u64),
+) -> std::time::Duration {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let stop = Arc::new(AtomicBool::new(false));
+    let bg: Vec<_> = (1..8_u64)
+        .map(|t| {
+            let shared = Arc::clone(shared);
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                let mut i = 0_u64;
+                while !stop.load(Ordering::Relaxed) {
+                    op(&shared, t, i);
+                    i = i.wrapping_add(1);
+                }
+            })
+        })
+        .collect();
+    let start = std::time::Instant::now();
+    for i in 0..iters {
+        op(shared, 0, i);
+    }
+    let elapsed = start.elapsed();
+    stop.store(true, Ordering::Relaxed);
+    for h in bg {
+        h.join().expect("thread join");
+    }
+    elapsed
 }
 
 /// `PrefixRateCap::check_and_record` - 256-bucket atomic counter
@@ -174,6 +222,22 @@ fn bench_hot_path_channel(c: &mut Criterion) {
             }
             let ok = producer.try_enqueue(black_box(p));
             black_box(ok);
+        });
+        drop(producer);
+        let _ = drain.join();
+    });
+
+    // Eight producers on one channel. Dominated by the channel's own
+    // synchronisation; the stats counters ride along on every call.
+    group.bench_function("try_enqueue_contended_8threads", |b| {
+        let (producer, consumer) = update_channel::<16>(4096);
+        let drain = std::thread::spawn(move || while consumer.recv().is_some() {});
+        let producer = std::sync::Arc::new(producer);
+        b.iter_custom(|iters| {
+            contended(iters, &producer, |p, t, _| {
+                #[allow(clippy::cast_precision_loss)]
+                black_box(p.try_enqueue([t as f64; 16]));
+            })
         });
         drop(producer);
         let _ = drain.join();

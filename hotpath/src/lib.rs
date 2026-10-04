@@ -34,8 +34,11 @@
 //!
 //! All lifetime counters ([`UpdateSampler::accepted_total`],
 //! `rejected_total`, `UpdateProducer::enqueued`, `dropped_total`,
-//! [`PrefixRateCap::admitted_total`], `capped_total`) are plain
-//! `AtomicU64::fetch_add(1, Relaxed)`. Atomic `fetch_add` is
+//! [`PrefixRateCap::admitted_total`], `capped_total`) are striped:
+//! each thread does `AtomicU64::fetch_add(1, Relaxed)` on a cache
+//! line of its own among sixteen, and a read sums the stripes, so
+//! the totals are exact while threads stop contending for one line.
+//! The sums use wrapping addition and atomic `fetch_add` is
 //! wrapping by definition - `profile.release.overflow-checks` does
 //! not apply to atomic operations, so no panic can occur at
 //! wrap-around. At `10 Gpps` sustained load a `u64` wraps in
@@ -88,7 +91,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::panic))]
 
 use core::num::{NonZeroU32, NonZeroU64};
-use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 
@@ -118,45 +121,110 @@ pub const MAX_CHANNEL_CAPACITY: usize = 1 << 20;
 /// before shutdown to drain the residue.
 pub const METRICS_BATCH_SIZE: u64 = 64;
 
-/// Increment `counter` by 1 and flush `METRICS_BATCH_SIZE` units
-/// to `sink` every `METRICS_BATCH_SIZE` calls. Returns the
-/// post-increment counter value. `last_flushed` advances in
-/// lockstep with the sink emission so a subsequent
-/// [`flush_batched`] only drains the residue (last `< BATCH`
-/// increments) without double-counting.
+/// Number of cache-line stripes a [`StripedPair`] spreads its
+/// counts over. Threads are dealt stripes round-robin, so up to this
+/// many threads each write a line no other thread writes.
+const STRIPES: usize = 16;
+
+/// Hand the calling thread its stripe, assigned round-robin on the
+/// thread's first counted call and kept for its lifetime.
 #[inline]
-fn record_batched(
-    counter: &AtomicU64,
-    last_flushed: &AtomicU64,
-    sink: &Arc<dyn MetricsSink>,
-    metric: &'static str,
-) -> u64 {
-    let next = counter.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
-    if next.is_multiple_of(METRICS_BATCH_SIZE) {
-        sink.inc_counter(metric, METRICS_BATCH_SIZE);
-        last_flushed.fetch_add(METRICS_BATCH_SIZE, Ordering::Relaxed);
+fn stripe_index() -> usize {
+    /// Next stripe to deal.
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    thread_local! {
+        /// This thread's stripe.
+        static STRIPE: usize = NEXT.fetch_add(1, Ordering::Relaxed) % STRIPES;
     }
-    next
+    STRIPE.with(|s| *s)
 }
 
-/// Manually flush whatever residue (`counter - last_flushed`) has
-/// accumulated since the last batched emission. Idempotent on
-/// repeated calls - the second call emits nothing. Use to drain
-/// the trailing 0..[`METRICS_BATCH_SIZE`] increments at process
-/// shutdown or before exporting a metrics snapshot.
-#[inline]
-fn flush_batched(
-    counter: &AtomicU64,
-    last_flushed: &AtomicU64,
-    sink: &Arc<dyn MetricsSink>,
-    metric: &'static str,
-) {
-    let now = counter.load(Ordering::Relaxed);
-    let prev = last_flushed.swap(now, Ordering::Relaxed);
-    let delta = now.wrapping_sub(prev);
-    if delta > 0 {
-        sink.inc_counter(metric, delta);
+/// Which of the two counters of a [`StripedPair`] an event lands on:
+/// accepted or rejected, admitted or capped, enqueued or dropped.
+#[derive(Clone, Copy, Debug)]
+enum Slot {
+    /// The offer went through.
+    Pass = 0,
+    /// The offer was turned away.
+    Stop = 1,
+}
+
+/// Two `u64` counters alone on a 64-byte cache line.
+#[repr(C, align(64))]
+#[derive(Debug, Default)]
+struct PaddedPair {
+    /// Indexed by [`Slot`].
+    counts: [AtomicU64; 2],
+}
+
+/// A pass/stop pair of lifetime counters that many threads bump at
+/// line rate. A single `AtomicU64` written by every thread is one
+/// cache line bouncing between every core on every call, and a
+/// read-only field sharing that line is invalidated just as often;
+/// here each thread writes its own stripe and a read sums the
+/// stripes, so the totals stay exact while the writes stop
+/// contending. Each stripe that reaches a multiple of
+/// [`METRICS_BATCH_SIZE`] sends the sink everything unsent so far,
+/// and `flushed` records what it has been sent so
+/// [`Self::flush`] drains only the residue.
+#[derive(Debug, Default)]
+struct StripedPair {
+    /// Per-thread counts, see [`stripe_index`].
+    stripes: [PaddedPair; STRIPES],
+    /// Cumulative count already emitted to the sink, per [`Slot`].
+    flushed: PaddedPair,
+}
+
+impl StripedPair {
+    /// Count one event on `slot`, and every [`METRICS_BATCH_SIZE`]
+    /// events of this stripe hand the sink everything not yet sent
+    /// through [`Self::flush`], the one path that emits.
+    #[inline]
+    fn record(&self, slot: Slot, sink: &Arc<dyn MetricsSink>, metric: &'static str) {
+        let next = self.stripes[stripe_index()].counts[slot as usize]
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        if next.is_multiple_of(METRICS_BATCH_SIZE) {
+            self.flush(slot, sink, metric);
+        }
     }
+
+    /// Exact lifetime count on `slot`, summed over the stripes.
+    fn total(&self, slot: Slot) -> u64 {
+        self.stripes.iter().fold(0_u64, |acc, s| {
+            acc.wrapping_add(s.counts[slot as usize].load(Ordering::Relaxed))
+        })
+    }
+
+    /// Emit whatever `slot` has counted beyond what the sink has
+    /// already been sent. Each emission claims the range
+    /// `[prev, now)` by compare-and-swap on `flushed`, so two
+    /// concurrent callers never send the same events, and a caller
+    /// whose sum is already behind `flushed` sends nothing rather
+    /// than a wrapped delta. Idempotent.
+    fn flush(&self, slot: Slot, sink: &Arc<dyn MetricsSink>, metric: &'static str) {
+        let now = self.total(slot);
+        let flushed = &self.flushed.counts[slot as usize];
+        let mut prev = flushed.load(Ordering::Relaxed);
+        while now > prev {
+            match flushed.compare_exchange_weak(prev, now, Ordering::Relaxed, Ordering::Relaxed) {
+                Ok(_) => {
+                    sink.inc_counter(metric, now - prev);
+                    return;
+                }
+                Err(seen) => prev = seen,
+            }
+        }
+    }
+}
+
+/// A value alone on its 64-byte cache line, so writes to it do not
+/// invalidate the read-mostly fields declared beside it.
+#[repr(C, align(64))]
+#[derive(Debug, Default)]
+struct Padded<T> {
+    /// The wrapped value.
+    value: T,
 }
 
 /// One `SipRound` over the four-word state.
@@ -220,18 +288,13 @@ fn siphash13_u64(k0: u64, k1: u64, m: u64) -> u64 {
 pub struct UpdateSampler {
     /// Divisor: keep `1 / keep_every_n` offered updates.
     keep_every_n: u32,
-    /// Monotonic stride counter for [`Self::accept_stride`].
-    counter: AtomicU64,
-    /// Running total of accepted offers - observability signal.
-    accepted: AtomicU64,
-    /// Running total of rejected offers.
-    rejected: AtomicU64,
-    /// Sink-side cumulative emitted count for `accepted` - paired
-    /// with `accepted` to drain the residue on
-    /// [`Self::flush_metrics`] without double-counting.
-    accepted_flushed: AtomicU64,
-    /// Sink-side cumulative emitted count for `rejected`.
-    rejected_flushed: AtomicU64,
+    /// Monotonic stride counter for [`Self::accept_stride`]. One
+    /// sequence shared by every thread by definition, so it is kept
+    /// off the line holding the read-only configuration.
+    counter: Padded<AtomicU64>,
+    /// Accepted ([`Slot::Pass`]) and rejected ([`Slot::Stop`])
+    /// offers, striped per thread.
+    counts: StripedPair,
     /// Per-sampler 128-bit `SipHash-1-3` key used by
     /// [`Self::accept_hash`]. When set, the caller-supplied
     /// `flow_hash` goes through the keyed PRF before the modulo
@@ -261,11 +324,8 @@ impl UpdateSampler {
     pub fn new(keep_every_n: u32) -> Self {
         Self {
             keep_every_n,
-            counter: AtomicU64::new(0),
-            accepted: AtomicU64::new(0),
-            rejected: AtomicU64::new(0),
-            accepted_flushed: AtomicU64::new(0),
-            rejected_flushed: AtomicU64::new(0),
+            counter: Padded::default(),
+            counts: StripedPair::default(),
             mix_key: None,
             metrics: default_sink(),
         }
@@ -324,11 +384,8 @@ impl UpdateSampler {
     pub fn new_keyed_with_seeds(keep_every_n: u32, k1: u64, k2: u64) -> Self {
         Self {
             keep_every_n,
-            counter: AtomicU64::new(0),
-            accepted: AtomicU64::new(0),
-            rejected: AtomicU64::new(0),
-            accepted_flushed: AtomicU64::new(0),
-            rejected_flushed: AtomicU64::new(0),
+            counter: Padded::default(),
+            counts: StripedPair::default(),
             mix_key: Some([k1, k2]),
             metrics: default_sink(),
         }
@@ -365,28 +422,25 @@ impl UpdateSampler {
     /// Cheap (one atomic fetch-add) but not flow-aware.
     pub fn accept_stride(&self) -> bool {
         if self.keep_every_n <= 1 {
-            record_batched(
-                &self.accepted,
-                &self.accepted_flushed,
+            self.counts.record(
+                Slot::Pass,
                 &self.metrics,
                 names::HOT_PATH_SAMPLER_ACCEPTED_TOTAL,
             );
             return true;
         }
-        let n = self.counter.fetch_add(1, Ordering::Relaxed);
+        let n = self.counter.value.fetch_add(1, Ordering::Relaxed);
         let keep = u64::from(self.keep_every_n);
         let ok = n.is_multiple_of(keep);
         if ok {
-            record_batched(
-                &self.accepted,
-                &self.accepted_flushed,
+            self.counts.record(
+                Slot::Pass,
                 &self.metrics,
                 names::HOT_PATH_SAMPLER_ACCEPTED_TOTAL,
             );
         } else {
-            record_batched(
-                &self.rejected,
-                &self.rejected_flushed,
+            self.counts.record(
+                Slot::Stop,
                 &self.metrics,
                 names::HOT_PATH_SAMPLER_REJECTED_TOTAL,
             );
@@ -413,9 +467,8 @@ impl UpdateSampler {
     /// reservoir-poisoning sprays).
     pub fn accept_hash(&self, flow_hash: u64) -> bool {
         if self.keep_every_n <= 1 {
-            record_batched(
-                &self.accepted,
-                &self.accepted_flushed,
+            self.counts.record(
+                Slot::Pass,
                 &self.metrics,
                 names::HOT_PATH_SAMPLER_ACCEPTED_TOTAL,
             );
@@ -424,16 +477,14 @@ impl UpdateSampler {
         let mixed = self.keyed_mix(flow_hash);
         let ok = mixed.is_multiple_of(u64::from(self.keep_every_n));
         if ok {
-            record_batched(
-                &self.accepted,
-                &self.accepted_flushed,
+            self.counts.record(
+                Slot::Pass,
                 &self.metrics,
                 names::HOT_PATH_SAMPLER_ACCEPTED_TOTAL,
             );
         } else {
-            record_batched(
-                &self.rejected,
-                &self.rejected_flushed,
+            self.counts.record(
+                Slot::Stop,
                 &self.metrics,
                 names::HOT_PATH_SAMPLER_REJECTED_TOTAL,
             );
@@ -458,14 +509,14 @@ impl UpdateSampler {
     /// [`METRICS_BATCH_SIZE`] increments.
     #[must_use]
     pub fn accepted_total(&self) -> u64 {
-        self.accepted.load(Ordering::Relaxed)
+        self.counts.total(Slot::Pass)
     }
 
     /// Running total of rejected offers since construction.
     /// Bit-exact independent of sink-side batching.
     #[must_use]
     pub fn rejected_total(&self) -> u64 {
-        self.rejected.load(Ordering::Relaxed)
+        self.counts.total(Slot::Stop)
     }
 
     /// Drain the residue (≤ [`METRICS_BATCH_SIZE`] − 1 increments
@@ -475,15 +526,13 @@ impl UpdateSampler {
     /// the operator wants matched against [`Self::accepted_total`]
     /// / [`Self::rejected_total`].
     pub fn flush_metrics(&self) {
-        flush_batched(
-            &self.accepted,
-            &self.accepted_flushed,
+        self.counts.flush(
+            Slot::Pass,
             &self.metrics,
             names::HOT_PATH_SAMPLER_ACCEPTED_TOTAL,
         );
-        flush_batched(
-            &self.rejected,
-            &self.rejected_flushed,
+        self.counts.flush(
+            Slot::Stop,
             &self.metrics,
             names::HOT_PATH_SAMPLER_REJECTED_TOTAL,
         );
@@ -500,14 +549,10 @@ pub struct UpdateProducer<const D: usize> {
     tx: SyncSender<[f64; D]>,
     /// Capacity the channel was built with - surfaced for gauges.
     capacity: usize,
-    /// Lifetime enqueued count.
-    enqueued: Arc<AtomicU64>,
-    /// Lifetime dropped-on-full count.
-    dropped: Arc<AtomicU64>,
-    /// Sink-side cumulative emitted count for `enqueued`.
-    enqueued_flushed: Arc<AtomicU64>,
-    /// Sink-side cumulative emitted count for `dropped`.
-    dropped_flushed: Arc<AtomicU64>,
+    /// Enqueued ([`Slot::Pass`]) and dropped-on-full
+    /// ([`Slot::Stop`]) points, striped per thread and shared by
+    /// every clone of this producer.
+    counts: Arc<StripedPair>,
     /// Observability sink - shared with every clone of this
     /// producer so every classifier thread emits to the same
     /// endpoint. Emitted every [`METRICS_BATCH_SIZE`] hot-path
@@ -521,10 +566,7 @@ impl<const D: usize> Clone for UpdateProducer<D> {
         Self {
             tx: self.tx.clone(),
             capacity: self.capacity,
-            enqueued: Arc::clone(&self.enqueued),
-            dropped: Arc::clone(&self.dropped),
-            enqueued_flushed: Arc::clone(&self.enqueued_flushed),
-            dropped_flushed: Arc::clone(&self.dropped_flushed),
+            counts: Arc::clone(&self.counts),
             metrics: Arc::clone(&self.metrics),
         }
     }
@@ -537,17 +579,15 @@ impl<const D: usize> UpdateProducer<D> {
     #[must_use]
     pub fn try_enqueue(&self, point: [f64; D]) -> bool {
         if self.tx.try_send(point).is_ok() {
-            record_batched(
-                &self.enqueued,
-                &self.enqueued_flushed,
+            self.counts.record(
+                Slot::Pass,
                 &self.metrics,
                 names::HOT_PATH_QUEUE_ENQUEUED_TOTAL,
             );
             true
         } else {
-            record_batched(
-                &self.dropped,
-                &self.dropped_flushed,
+            self.counts.record(
+                Slot::Stop,
                 &self.metrics,
                 names::HOT_PATH_QUEUE_DROPPED_TOTAL,
             );
@@ -560,15 +600,13 @@ impl<const D: usize> UpdateProducer<D> {
     /// emitted to the [`MetricsSink`]. Idempotent - call before
     /// shutdown / metrics export.
     pub fn flush_metrics(&self) {
-        flush_batched(
-            &self.enqueued,
-            &self.enqueued_flushed,
+        self.counts.flush(
+            Slot::Pass,
             &self.metrics,
             names::HOT_PATH_QUEUE_ENQUEUED_TOTAL,
         );
-        flush_batched(
-            &self.dropped,
-            &self.dropped_flushed,
+        self.counts.flush(
+            Slot::Stop,
             &self.metrics,
             names::HOT_PATH_QUEUE_DROPPED_TOTAL,
         );
@@ -589,7 +627,7 @@ impl<const D: usize> UpdateProducer<D> {
     /// Lifetime count of successfully enqueued points.
     #[must_use]
     pub fn enqueued_total(&self) -> u64 {
-        self.enqueued.load(Ordering::Relaxed)
+        self.counts.total(Slot::Pass)
     }
 
     /// Lifetime count of points dropped because the queue was full.
@@ -598,7 +636,7 @@ impl<const D: usize> UpdateProducer<D> {
     /// channel / raise the sampler ratio.
     #[must_use]
     pub fn dropped_total(&self) -> u64 {
-        self.dropped.load(Ordering::Relaxed)
+        self.counts.total(Slot::Stop)
     }
 }
 
@@ -721,18 +759,11 @@ pub fn try_update_channel_with_sink<const D: usize>(
         ));
     }
     let (tx, rx) = sync_channel::<[f64; D]>(capacity);
-    let enqueued = Arc::new(AtomicU64::new(0));
-    let dropped = Arc::new(AtomicU64::new(0));
-    let enqueued_flushed = Arc::new(AtomicU64::new(0));
-    let dropped_flushed = Arc::new(AtomicU64::new(0));
     Ok((
         UpdateProducer {
             tx,
             capacity,
-            enqueued,
-            dropped,
-            enqueued_flushed,
-            dropped_flushed,
+            counts: Arc::new(StripedPair::default()),
             metrics: sink,
         },
         UpdateConsumer { rx },
@@ -829,14 +860,9 @@ pub struct PrefixRateCap {
     /// `SipHash-1-3` key applied to `prefix_hash` before the bucket
     /// is chosen; `None` indexes by the raw low byte.
     bucket_key: Option<[u64; 2]>,
-    /// Lifetime count of admits that hit the cap and were rejected.
-    capped_total: AtomicU64,
-    /// Lifetime count of admits passed through.
-    admitted_total: AtomicU64,
-    /// Sink-side cumulative emitted count for `admitted`.
-    admitted_flushed: AtomicU64,
-    /// Sink-side cumulative emitted count for `capped`.
-    capped_flushed: AtomicU64,
+    /// Admitted ([`Slot::Pass`]) and capped ([`Slot::Stop`]) calls,
+    /// striped per thread.
+    counts: StripedPair,
     /// Observability sink - emitted every [`METRICS_BATCH_SIZE`]
     /// hot-path calls (in-process atomic counters stay bit-exact
     /// every call).
@@ -933,10 +959,7 @@ impl PrefixRateCap {
             window_ms,
             cap_per_window,
             bucket_key,
-            capped_total: AtomicU64::new(0),
-            admitted_total: AtomicU64::new(0),
-            admitted_flushed: AtomicU64::new(0),
-            capped_flushed: AtomicU64::new(0),
+            counts: StripedPair::default(),
             metrics: default_sink(),
         }
     }
@@ -975,9 +998,8 @@ impl PrefixRateCap {
     /// admission across multiple [`PrefixRateCap`] instances).
     pub fn check_and_record(&self, prefix_hash: u64, now_ms: u64) -> bool {
         if self.cap_per_window == 0 {
-            record_batched(
-                &self.admitted_total,
-                &self.admitted_flushed,
+            self.counts.record(
+                Slot::Pass,
                 &self.metrics,
                 names::HOT_PATH_PREFIX_ADMITTED_TOTAL,
             );
@@ -1022,9 +1044,8 @@ impl PrefixRateCap {
         let idx = (mixed as usize) & (Self::BUCKETS - 1);
         let prior = self.buckets[idx].inner.fetch_add(1, Ordering::Relaxed);
         if prior < self.cap_per_window {
-            record_batched(
-                &self.admitted_total,
-                &self.admitted_flushed,
+            self.counts.record(
+                Slot::Pass,
                 &self.metrics,
                 names::HOT_PATH_PREFIX_ADMITTED_TOTAL,
             );
@@ -1034,9 +1055,8 @@ impl PrefixRateCap {
             // window roll doesn't accumulate forever on this
             // bucket.
             self.buckets[idx].inner.fetch_sub(1, Ordering::Relaxed);
-            record_batched(
-                &self.capped_total,
-                &self.capped_flushed,
+            self.counts.record(
+                Slot::Stop,
                 &self.metrics,
                 names::HOT_PATH_PREFIX_CAPPED_TOTAL,
             );
@@ -1050,15 +1070,13 @@ impl PrefixRateCap {
     /// [`Self::admitted_total`] / [`Self::capped_total`] stay
     /// bit-exact independent of this call.
     pub fn flush_metrics(&self) {
-        flush_batched(
-            &self.admitted_total,
-            &self.admitted_flushed,
+        self.counts.flush(
+            Slot::Pass,
             &self.metrics,
             names::HOT_PATH_PREFIX_ADMITTED_TOTAL,
         );
-        flush_batched(
-            &self.capped_total,
-            &self.capped_flushed,
+        self.counts.flush(
+            Slot::Stop,
             &self.metrics,
             names::HOT_PATH_PREFIX_CAPPED_TOTAL,
         );
@@ -1067,13 +1085,13 @@ impl PrefixRateCap {
     /// Lifetime admits that passed the cap.
     #[must_use]
     pub fn admitted_total(&self) -> u64 {
-        self.admitted_total.load(Ordering::Relaxed)
+        self.counts.total(Slot::Pass)
     }
 
     /// Lifetime admits rejected because the bucket was at cap.
     #[must_use]
     pub fn capped_total(&self) -> u64 {
-        self.capped_total.load(Ordering::Relaxed)
+        self.counts.total(Slot::Stop)
     }
 
     /// Window length in milliseconds.
@@ -1262,6 +1280,44 @@ mod tests {
         }
         fn set_gauge(&self, _: &str, _: f64) {}
         fn observe_histogram(&self, _: &str, _: f64) {}
+    }
+
+    #[test]
+    fn striped_counts_stay_exact_across_threads_and_flushes() {
+        // Eight writers on sixteen stripes, flushes racing the
+        // writes: the totals are exact, and once the writers stop a
+        // final flush leaves the sink holding exactly those totals,
+        // never a double-sent batch or a wrapped residue.
+        let sink = Arc::new(CountingSink::default());
+        let s = Arc::new(UpdateSampler::new(3).with_metrics_sink(sink.clone()));
+        let writers: Vec<_> = (0..8_u64)
+            .map(|t| {
+                let s = Arc::clone(&s);
+                std::thread::spawn(move || {
+                    for i in 0..10_007_u64 {
+                        let _ = s.accept_hash(i.wrapping_mul(31).wrapping_add(t));
+                    }
+                })
+            })
+            .collect();
+        for _ in 0..200 {
+            s.flush_metrics();
+        }
+        for w in writers {
+            w.join().unwrap();
+        }
+        s.flush_metrics();
+        s.flush_metrics();
+        assert_eq!(s.accepted_total() + s.rejected_total(), 8 * 10_007);
+        let units = sink.units.lock().unwrap();
+        assert_eq!(
+            units[names::HOT_PATH_SAMPLER_ACCEPTED_TOTAL],
+            s.accepted_total()
+        );
+        assert_eq!(
+            units[names::HOT_PATH_SAMPLER_REJECTED_TOTAL],
+            s.rejected_total()
+        );
     }
 
     #[test]
