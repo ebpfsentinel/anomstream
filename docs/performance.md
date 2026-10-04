@@ -73,19 +73,11 @@ would time cross-crate call boundaries the shipped binary does not have.
   machine, `performance` power profile and energy-performance preference,
   `intel_pstate` active, every other workload stopped. Ratios are stable;
   absolutes move with thermal state.
-- **Hybrid CPU** - the reference CPU mixes six P-cores (up to 5.2 GHz,
-  CPUs 0-11) and eight E-cores (3.9 GHz, CPUs 12-19), and the scheduler
-  places the bench thread and rayon's workers on either. Single-probe
-  walks at or above the fan-out threshold are the most exposed: on
-  2026-10-04 the same binary read `forest_score` `(100, 256, 16)` at 24
-  µs on one run and 33 µs on the next, and still moved 10-15 % pinned to
-  the P-cores with `taskset -c 0-11`. The forest tables below come from
-  an earlier session and were not replaced by that day's slower reading:
-  the tree before and after that day's changes, alternated binary
-  against binary in one session, measured the same update and score
-  times, so the gap was the machine and not the code. Compare a change
-  against a baseline taken in the same session, never against a number
-  on this page.
+- **Hybrid CPU** - six P-cores (CPUs 0-11) and eight E-cores (CPUs
+  12-19); the scheduler puts the bench thread and rayon's workers on
+  either, so parallel single-probe walks swing up to ~40 % run to run
+  (10-15 % even under `taskset -c 0-11`). Compare a change against a
+  baseline from the same session, never against a number on this page.
 - **Parallel ceiling** - `score_many` reaches 5-8× on 14 cores and stops
   there, memory-bandwidth-bound once the working set spills L3.
 - **Fan-out threshold** - single-probe ops below `num_trees × D = 1024`
@@ -115,8 +107,7 @@ would time cross-crate call boundaries the shipped binary does not have.
   `attribution` separately (one traversal, `34/57 ≈ 0.60`).
 - Fused bbox SIMD kernel (`total_probability_of_cut`) saves one
   `min`/`max` pass per internal node.
-- Typed-arena refactor (persistence v4) cut leaf-arena memory **−90 %**
-  (~320 B → ~40 B / slot).
+- Leaf arena is typed: ~40 B per slot.
 
 Across shapes:
 
@@ -138,25 +129,17 @@ variance above: the `(100, 256, 14)` update reads slower than the
 
 ### Ensemble fan-out threshold
 
-Per-tree work is small - roughly `D × depth`, a few hundred nanoseconds
-at the AWS-default shape. That is close to rayon's task-dispatch floor,
-so splitting a _single_ ensemble walk across workers only pays once there
-are enough trees and dimensions to amortise it. The fan-out is gated on
-estimated work, `num_trees × D >= 1024` (`PARALLEL_FANOUT_MIN_WORK` in
-`forest/random_cut_forest.rs`): below it the walk stays on the calling
-thread, at or above it rayon fans out. Every single-probe walk - update,
-delete, score, attribution and the fused and aggregate variants - reads
-the same threshold.
+Per-tree work (~`D × depth`, a few hundred ns) is near rayon's dispatch
+floor, so a _single_ ensemble walk fans out only when
+`num_trees × D >= 1024` (`PARALLEL_FANOUT_MIN_WORK`). Every single-probe
+walk (update, delete, score, attribution, fused and aggregate) reads the
+same threshold.
 
-**Why one threshold and not one per walk.** Measured op by op in a tight
-loop of that op alone, the crossovers differ: an update-only loop stays
-faster serial up to about 3200 units, a score-only loop crosses near 1400
-and an attribution-only loop already near 400. A real stream does not run
-one op in a loop, though; it interleaves an update with a read on every
-point. When those two walks take different arms, the parallel one starts
-from parked workers each time and pays to wake them, and the mixed stream
-is slower than both pure arms up to 3200 units and never beats the faster
-one at any shape measured. `forest_stream`
+**One threshold, not one per walk.** Each op alone crosses over at a
+different point (update ~3200, score ~1400, attribution ~400), but a
+stream interleaves an update and a read on every point, and two walks on
+different arms pay to wake parked workers each time: the mixed stream
+never beats the faster pure arm. `forest_stream`
 (update then read on each iteration, µs, both walks serial / both walks
 parallel / update serial and read parallel):
 
@@ -171,46 +154,29 @@ parallel / update serial and read parallel):
 | 6400 `(400, 256, 16)` | 359.1 / **98.1** / 322.1  | 473.1 / **192.8** / 373.8 | 286.2 / **139.2** / 307.1 |
 | 6400 `(100, 256, 64)` | 194.3 / **106.8** / 288.6 | 373.2 / **197.7** / 348.1 | 142.7 / **120.0** / 276.7 |
 
-The right column never wins, so every walk of a stream must take the same
-arm, and the crossover of the two pure arms for update plus score and
-update plus attribution sits between 800 and 1400 units. `1024` is that
-crossover: at 1400 attribution pays 6 % for being parallel, at 800 both
-reads pay 2× for not being serial. `update_indexed` followed by `delete`
-gives the same picture (serial / parallel: 144.8 / 81.4 µs at 400, 67.7 /
-60.3 at 800, 198.0 / 95.3 at 1600, 400.6 / 149.7 at 3200, with the mixed
-arm slower than both at each), so delete reads the shared threshold too.
+The pure arms cross between 800 and 1400 units, hence `1024`: at 1400
+attribution pays 6 % for being parallel, at 800 both reads pay 2× for not
+being serial. `update_indexed` + `delete` shows the same picture (serial
+/ parallel: 144.8 / 81.4 µs at 400, 67.7 / 60.3 at 800, 198.0 / 95.3 at
+1600, 400.6 / 149.7 at 3200).
 
-**Codisp counts trees, not dimensions.** The stateless codisp walk visits
-one leaf-to-root path per tree and its cost barely moves with `D` (7.2 µs
-at `(100, 256, 4)`, 12.2 µs at `(100, 256, 64)`), so a `trees × D` gate
-would send it parallel on dimension count alone. It is gated on
-`num_trees >= 200` instead (`CODISP_FANOUT_MIN_TREES`), where its own
-serial and parallel arms cross: single probe, serial / parallel, 4.3 /
-16.6 µs at 50 trees, 11.7 / 22.7 at 100, 30.2 / 29.1 at 200, 85.6 / 41.0
-at 400. Its documented use is scoring against a frozen baseline with no
-update in between, so it does not interleave with the update walk; when
-it does, as in the right-hand column above, the serial codisp still wins
-below 200 trees whatever the update did.
+**Codisp counts trees.** The stateless codisp walk barely moves with `D`
+(7.2 µs at `D = 4`, 12.2 µs at `D = 64`), so it fans out on
+`num_trees >= 200` (`CODISP_FANOUT_MIN_TREES`), where its own arms cross
+(serial / parallel: 4.3 / 16.6 µs at 50 trees, 11.7 / 22.7 at 100, 30.2 /
+29.1 at 200, 85.6 / 41.0 at 400).
 
-**What it costs.** A loop that only updates, with no read in between,
-pays for the shared threshold between 1024 and about 3200 units: at
-`(100, 256, 16)` it runs 15.7 µs serial against 35.1 µs parallel, and
-`DriftAwareForest::update` without a shadow measures 23.5 µs against 15.9
-µs with the gate forced serial. That is a warm-up pattern; once a
-detector scores what it ingests, the stream table is the one that
-applies.
+**Cost.** An update-only loop (warm-up) pays for the shared threshold
+between 1024 and ~3200 units: 15.7 µs serial vs 35.1 µs parallel at
+`(100, 256, 16)`.
 
-**Consumer shape** - the eBPFsentinel Enterprise RCF detector runs
-`D = 14` at the default 100 trees / 256 samples = 1400 units, above the
-threshold, so it takes the parallel arm for both its `update` and its
-`score`, which the 1400 row shows to be the faster pair. It calls only
-single-probe entry points (no batch), and keeps the `parallel` feature
-enabled; a compile-time feature flip could not follow `num_trees`.
+**Consumer shape** - eBPFsentinel Enterprise runs `D = 14` at 100 trees,
+1400 units: parallel for both `update` and `score`, the faster pair in
+that row.
 
-This affects only per-tree fan-out. Batch entry points (`score_many`,
-`attribution_many`, `score_codisp_stateless_many`) parallelise across
-_points_ - each task is a whole ensemble walk, so the fan-out always
-pays and is never gated.
+Batch entry points (`score_many`, `attribution_many`,
+`score_codisp_stateless_many`) parallelise across _points_ and are never
+gated.
 
 ### Batch scoring
 
@@ -246,8 +212,8 @@ For frozen-baseline batches at any size prefer **`score_codisp_stateless_many`**
 
 Stateless is ~2.2× faster than non-mutating `score()` single-probe (one
 leaf-to-root path per tree, serial below 200 trees) and **~28× faster
-than mutating batched codisp** (183 µs vs 5.14 ms @ k=64) - which is why
-NAB eval dropped 12.6 s → 1.09 s after the switch.
+than mutating batched codisp** (183 µs vs 5.14 ms @ k=64): full NAB eval
+in 1.09 s against 12.6 s.
 
 Single probe across shapes, which shows the gate on tree count:
 
@@ -291,15 +257,9 @@ reservoir's cheaper amortised eviction.
 
 ## Forest design decisions
 
-Optimisations explored against the ~6× memory-bandwidth plateau.
-
-### Cache-aware probe reordering - reverted
-
-A `score_many_locality_sorted` variant quantised leading dims into a
-Morton-lite key and sorted batches before dispatch. At `k=1024, D=16`
-(correlated cluster): plain 5.10 ms vs sorted 5.69 ms - the `O(N log N)`
-sort + double-gather beat the locality gain on uniform batches. Reverted;
-callers can re-order their own batches if their workload benefits.
+Locality-sorting a batch before `score_many` (Morton key on the leading
+dims) was tried and dropped: the sort costs more than the cache gain
+(5.69 ms sorted vs 5.10 ms plain at `k=1024, D=16`).
 
 ### Packed cut (`u8` dim + `f32` value) - shipped, opt-in
 
@@ -555,21 +515,17 @@ Per-call overhead on the classifier hot path:
 | `metrics::default_sink()` shared-Arc clone               | 9.7 ns        | ~103 M/s       |
 
 - `accept_hash` beats `accept_stride` (skips the counter atomic; admission
-  is multiply + mod). Keyed adds ~4 ns: `SipHash-1-3` over one block,
-  five rounds, the price of a PRF over the keyed bijection it replaced.
-  A keyed `PrefixRateCap` pays the same hash on its bucket index, ~2.5 ns.
+  is multiply + mod). Keyed adds ~4 ns of `SipHash-1-3`; a keyed
+  `PrefixRateCap` pays the same hash on its bucket index, ~2.5 ns.
 - `PrefixRateCap` 9.9 ns reflects the Acquire-load short-circuit on the
   valid-window case + batched metrics (1 sink call / 64 ops); the CAS
   loop fires once per window roll, not per packet. Buckets are
   `#[repr(C, align(64))]` (16 KiB) to avoid false sharing.
 - The lifetime counters are striped across sixteen padded cache lines,
-  one per thread, and summed on read. Eight threads on one sampler went
-  from 209 to 20 ns a call and eight on one rate cap from 257 to 38 ns,
-  both about −88 %; a single thread pays a few tenths of a nanosecond
-  for the stripe lookup. The rate cap's earlier "~8.5 µs" contended
-  figure was not contention: the bench drives a clock stuck at zero, and
-  a window opened at time zero read as never opened, so every call reset
-  every bucket. A window now stores its start plus one.
+  one per thread, and summed on read: eight threads on one sampler or
+  one rate cap cost 20 and 38 ns a call against 209 and 257 ns for a
+  single shared counter. A single thread pays a few tenths of a
+  nanosecond for the stripe lookup.
 - Channel throughput is `sync_channel`-lock-bound; 6.6 M/s per producer
   covers typical TC/XDP rates. Eight producers on one channel queue on
   its lock, which the striped counters do not change.
@@ -705,13 +661,10 @@ to eBPFsentinel's production feature mix.
   `score()`; matches AWS Java / rrcf semantics - SOC triage, not hot path.
 - **AUC**: identical within precision (0.992 rrcf, 1.000 others).
 
-Ratios are portable; absolute numbers vary with thermal state (an earlier
-cool-CPU session hit ~32k/203k for `score()`). This table was not re-run
-with the current threshold and toolchain: the Java, rrcf and scikit-learn
-baselines are not installed on the reference machine, and the
-`anomstream-core` rows alone would have nothing to be compared against.
-The NAB and TSB-AD-M tables above were re-run and reproduce to the third
-decimal.
+Ratios are portable; absolutes move with thermal state. This table
+predates the current threshold and toolchain (the Java, rrcf and
+scikit-learn baselines are not installed on the reference machine); the
+NAB and TSB-AD-M tables above are current.
 
 ### Reproduce
 
