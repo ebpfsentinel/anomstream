@@ -111,12 +111,14 @@ fn pool_bootstrap_is_per_tenant_isolated() {
     // Tenant A is ready; a live B has never been touched.
     let v_a = pool
         .score_only(&"a", &[0.05_f64, 0.05, 0.05, 0.05])
+        .unwrap()
         .unwrap();
     let v_b = pool
         .score_only(&"b", &[0.05_f64, 0.05, 0.05, 0.05])
         .unwrap();
     assert!(v_a.ready(), "tenant A should be hot");
-    assert!(!v_b.ready(), "tenant B should still be warming up");
+    assert!(v_b.is_none(), "tenant B has no detector to score against");
+    assert!(!pool.contains(&"b"), "a read does not create tenant B");
 }
 
 #[test]

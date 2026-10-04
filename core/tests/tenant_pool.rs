@@ -145,7 +145,7 @@ fn warm_reload_roundtrips_every_tenant() {
     }
 
     for (key, expected_score) in &expected {
-        let verdict = reloaded.score_only(&key.clone(), &probe).unwrap();
+        let verdict = reloaded.score_only(&key.clone(), &probe).unwrap().unwrap();
         assert!(
             (f64::from(verdict.score()) - expected_score).abs() < f64::EPSILON,
             "tenant {key} score drifted after reload: expected {expected_score}, got {}",
@@ -189,16 +189,22 @@ fn factory_error_does_not_corrupt_pool() {
 
 #[test]
 fn score_only_on_unseen_tenant_returns_none() {
-    // score_only / attribution do not auto-create - they only touch
-    // existing tenants and leave the pool undisturbed when the
-    // tenant is absent.
-    //
-    // (The pool's current `score_only` auto-creates the tenant to
-    // give it warming-up semantics; this test therefore verifies the
-    // current contract - the tenant shows up in the pool *and* the
-    // verdict is warming-up.)
-    let mut pool = TenantForestPool::<&'static str, 4>::new(4, build_factory()).unwrap();
-    let verdict = pool.score_only(&"unknown", &[0.0, 0.0, 0.0, 0.0]).unwrap();
-    assert!(!verdict.ready());
-    assert!(pool.contains(&"unknown"));
+    // Reads never create a tenant: a full pool probed with unknown
+    // keys keeps every resident baseline.
+    let mut pool = TenantForestPool::<&'static str, 4>::new(1, build_factory()).unwrap();
+    pool.process(&"resident", [0.0, 0.0, 0.0, 0.0]).unwrap();
+    let probe = [0.0, 0.0, 0.0, 0.0];
+    assert!(pool.score_only(&"unknown", &probe).unwrap().is_none());
+    assert!(pool.attribution(&"unknown", &probe).unwrap().is_none());
+    assert!(
+        pool.score_many_early_term(
+            &"unknown",
+            &[probe],
+            anomstream_core::EarlyTermConfig::default()
+        )
+        .unwrap()
+        .is_none()
+    );
+    assert!(!pool.contains(&"unknown"));
+    assert!(pool.contains(&"resident"));
 }

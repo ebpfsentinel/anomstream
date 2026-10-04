@@ -386,27 +386,27 @@ where
     }
 
     /// Score a point against the tenant's detector without mutating
-    /// the underlying forest or its statistics. Creates the detector
-    /// on first use just like [`Self::process`] so the very first
-    /// call for a tenant is not surprising - the detector exists
-    /// but returns a warming-up verdict (no observations yet).
+    /// the underlying forest or its statistics. Returns `None` when
+    /// the tenant is absent: a read never creates a detector, so a
+    /// caller probing keys it does not own cannot fill the pool with
+    /// empty tenants and evict the ones carrying a baseline.
     ///
     /// # Errors
     ///
-    /// Propagates factory errors and [`ThresholdedForest::score_only`]
-    /// errors.
-    pub fn score_only(&mut self, key: &K, point: &[f64; D]) -> RcfResult<AnomalyGrade> {
-        self.touch_or_create(key)?.score_only(point)
+    /// Propagates [`ThresholdedForest::score_only`] errors.
+    pub fn score_only(&mut self, key: &K, point: &[f64; D]) -> RcfResult<Option<AnomalyGrade>> {
+        self.get_mut(key).map(|d| d.score_only(point)).transpose()
     }
 
     /// Per-feature attribution for a tenant's view of a point.
+    /// Returns `None` when the tenant is absent, without creating it
+    /// - see [`Self::score_only`].
     ///
     /// # Errors
     ///
-    /// Propagates factory errors and
-    /// [`ThresholdedForest::attribution`] errors.
-    pub fn attribution(&mut self, key: &K, point: &[f64; D]) -> RcfResult<DiVector> {
-        self.touch_or_create(key)?.attribution(point)
+    /// Propagates [`ThresholdedForest::attribution`] errors.
+    pub fn attribution(&mut self, key: &K, point: &[f64; D]) -> RcfResult<Option<DiVector>> {
+        self.get_mut(key).map(|d| d.attribution(point)).transpose()
     }
 
     /// Bulk-score a batch of points through the tenant's detector
@@ -422,14 +422,14 @@ where
         key: &K,
         points: &[[f64; D]],
     ) -> RcfResult<Option<Vec<AnomalyGrade>>> {
-        match self.get_mut(key) {
-            Some(detector) => Ok(Some(detector.score_only_many(points)?)),
-            None => Ok(None),
-        }
+        self.get_mut(key)
+            .map(|d| d.score_only_many(points))
+            .transpose()
     }
 
     /// Bulk early-termination scoring on a tenant's detector.
-    /// Auto-creates the tenant (consistent with `process`).
+    /// Returns `None` when the tenant is absent, without creating it
+    /// - see [`Self::score_only`].
     ///
     /// # Errors
     ///
@@ -439,9 +439,10 @@ where
         key: &K,
         points: &[[f64; D]],
         config: crate::early_term::EarlyTermConfig,
-    ) -> RcfResult<Vec<crate::early_term::EarlyTermScore>> {
-        self.touch_or_create(key)?
-            .score_many_early_term(points, config)
+    ) -> RcfResult<Option<Vec<crate::early_term::EarlyTermScore>>> {
+        self.get_mut(key)
+            .map(|d| d.score_many_early_term(points, config))
+            .transpose()
     }
 
     /// Cross-tenant what-if scoring - pipe the **same** `point`
@@ -1215,11 +1216,13 @@ mod tests {
     }
 
     #[test]
-    fn score_only_auto_creates_but_leaves_stats_empty() {
+    fn score_only_never_creates_a_tenant() {
         let mut p = TenantForestPool::<&'static str, 2>::new(4, factory_2d()).unwrap();
-        let verdict = p.score_only(&"a", &[0.0, 0.0]).unwrap();
-        assert!(!verdict.ready(), "brand-new detector should warming-up");
-        assert!(p.contains(&"a"));
+        assert!(p.score_only(&"a", &[0.0, 0.0]).unwrap().is_none());
+        assert!(!p.contains(&"a"));
+        p.process(&"a", [0.0, 0.0]).unwrap();
+        let verdict = p.score_only(&"a", &[0.0, 0.0]).unwrap().unwrap();
+        assert!(!verdict.ready(), "one point leaves the detector warming up");
     }
 
     #[test]

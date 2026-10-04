@@ -238,6 +238,12 @@ API: `process`, `score_only`, `attribution`, `peek`, `get`,
 `get_mut`, `insert`, `remove`, `clear`, `iter`, `iter_mut`,
 `tenants`, `evict_lru`, `evict_idle`.
 
+Only `process` and `bootstrap` create a tenant. The read paths -
+`score_only`, `score_only_many`, `attribution`,
+`score_many_early_term` - return `None` for an absent key, so a
+caller probing keys it does not own cannot fill the pool with empty
+detectors and push trained ones out through LRU eviction.
+
 `evict_lru` sheds on capacity pressure (replace oldest when full).
 `evict_idle(ttl)` sheds on wall-clock staleness (evict every tenant
 whose last access is older than `ttl`) - intended for SaaS / MSSP
