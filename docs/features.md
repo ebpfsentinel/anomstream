@@ -12,23 +12,23 @@ Most entries in this catalogue live in `anomstream-core`; a handful
 live in sibling crates (`anomstream-triage`, `anomstream-hotpath`)
 so their SemVer can evolve at their own cadence:
 
-| Section | Owning crate |
-|---|---|
-| Multivariate anomaly detectors | `anomstream-core` |
-| Per-feature univariate detectors | `anomstream-core` |
-| Score-level drift & regime change | `anomstream-core` |
-| Streaming stats & sketches | `anomstream-core` |
-| Forest scoring operations | `anomstream-core` |
-| Explanation & triage → `SeverityBands`, `DiVector`, `AttributionStability`, `ForensicBaseline`, `FeatureGroups` | `anomstream-core` |
-| Explanation & triage → `SageEstimator`, `PlattCalibrator` | **`anomstream-triage`** |
-| SOC & ops → `AlertClusterer`, `LshAlertClusterer`, `FeedbackStore`, `AlertRecord` | **`anomstream-triage`** |
-| Training & retention | `anomstream-core` |
-| Persistence | `anomstream-core` |
-| Observability → `MetricsSink` + metric names table | `anomstream-core` |
-| Hot-path integration (eBPF ingress) → `UpdateSampler`, `PrefixRateCap`, `channel` | **`anomstream-hotpath`** |
-| Security & threat model | `anomstream-core` |
-| Multi-tenancy | `anomstream-core` |
-| Quality | `anomstream-core` |
+| Section                                                                                                         | Owning crate             |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Multivariate anomaly detectors                                                                                  | `anomstream-core`        |
+| Per-feature univariate detectors                                                                                | `anomstream-core`        |
+| Score-level drift & regime change                                                                               | `anomstream-core`        |
+| Streaming stats & sketches                                                                                      | `anomstream-core`        |
+| Forest scoring operations                                                                                       | `anomstream-core`        |
+| Explanation & triage → `SeverityBands`, `DiVector`, `AttributionStability`, `ForensicBaseline`, `FeatureGroups` | `anomstream-core`        |
+| Explanation & triage → `SageEstimator`, `PlattCalibrator`                                                       | **`anomstream-triage`**  |
+| SOC & ops → `AlertClusterer`, `LshAlertClusterer`, `FeedbackStore`, `AlertRecord`                               | **`anomstream-triage`**  |
+| Training & retention                                                                                            | `anomstream-core`        |
+| Persistence                                                                                                     | `anomstream-core`        |
+| Observability → `MetricsSink` + metric names table                                                              | `anomstream-core`        |
+| Hot-path integration (eBPF ingress) → `UpdateSampler`, `PrefixRateCap`, `update_channel`                        | **`anomstream-hotpath`** |
+| Security & hardening                                                                                            | `anomstream-core`        |
+| Multi-tenancy                                                                                                   | `anomstream-core`        |
+| Quality                                                                                                         | `anomstream-core`        |
 
 Consumers using the [`anomstream`](../meta/) meta-crate see every
 type re-exported under a single import path regardless of the owning
@@ -85,10 +85,11 @@ Examples: `examples/quickstart.rs` (minimal 30-line demo),
 Tracks an EMA of the anomaly-score stream and derives a
 continuously updated `mean + z · stddev` threshold. Callers
 receive an `AnomalyGrade` (`score` + `threshold` + `grade ∈ [0, 1]`
-+ `is_anomaly` + `ready`) instead of comparing a raw score against
-a magic constant. Inspired by AWS's `TRCF` in
-`randomcutforest-parkservices`, kept light (no short/long-term
-duality, no near-threshold heuristics).
+
+- `is_anomaly` + `ready`) instead of comparing a raw score against
+  a magic constant. Inspired by AWS's `TRCF` in
+  `randomcutforest-parkservices`, kept light (no short/long-term
+  duality, no near-threshold heuristics).
 
 Built via `ThresholdedForestBuilder<D>`. API: `process`,
 `process_indexed`, `score_only`, `current_threshold`, `stats`,
@@ -97,7 +98,7 @@ Built via `ThresholdedForestBuilder<D>`. API: `process`,
 **Two threshold modes** (see `ThresholdMode`):
 
 - `ZSigma { z_factor }` (default, back-compat): `threshold =
-  max(min_threshold, mean + z_factor × stddev)` on the EMA stats.
+max(min_threshold, mean + z_factor × stddev)` on the EMA stats.
   Good for Gaussian-like scores (lag-embedded streams with
   symmetric noise).
 - `Quantile { p }`: `threshold = tdigest.quantile(p)` of the
@@ -106,7 +107,7 @@ Built via `ThresholdedForestBuilder<D>`. API: `process`,
   alert-rate budget (`p = 0.99` ≈ 1 % firing rate in steady
   state; `0.999` ≈ 0.1 %). Uses the shipped `TDigest` primitive
   - no extra deps. Enable via `.quantile_threshold(p)` on the
-  builder.
+    builder.
 
 Source: `src/thresholded/`.
 
@@ -182,12 +183,12 @@ Types: `MatrixProfile`, `MATRIX_PROFILE_MIN_WINDOW`.
 References:
 
 1. Y. Zhu, Z. Zimmerman, N. Senobari, C. Yeh, G. Funning,
-   A. Mueen, P. Brisk, E. Keogh, *Matrix Profile II: Exploiting a
+   A. Mueen, P. Brisk, E. Keogh, _Matrix Profile II: Exploiting a
    Novel Algorithm and GPUs to Break the One Hundred Million
-   Barrier for Time Series Motifs and Joins*, ICDM 2016.
+   Barrier for Time Series Motifs and Joins_, ICDM 2016.
 2. C. Yeh, Y. Zhu, L. Ulanova, N. Begum, Y. Ding, H. A. Dau,
-   D. F. Silva, A. Mueen, E. Keogh, *Matrix Profile I: All Pairs
-   Similarity Joins for Time Series*, ICDM 2016.
+   D. F. Silva, A. Mueen, E. Keogh, _Matrix Profile I: All Pairs
+   Similarity Joins for Time Series_, ICDM 2016.
 
 Source: `src/matrix_profile.rs`.
 
@@ -264,7 +265,7 @@ Example: `examples/tenant_pool.rs`.
 
 ## Per-feature univariate detectors
 
-One accumulator per dimension - answer *which* feature drifted.
+One accumulator per dimension - answer _which_ feature drifted.
 Complementary to multivariate detectors: the forest catches joint
 anomalies the per-feature detectors miss, the per-feature
 detectors attribute drift the forest reduces to a single scalar.
@@ -277,7 +278,7 @@ variance with geometric decay `α`. After a warmup budget,
 across dims. Policy-free - returns raw z-scores; caller maps
 `max_z` to alert severity via `SeverityBands` or a custom rule.
 
-Scoring runs *before* the accumulator update so the current
+Scoring runs _before_ the accumulator update so the current
 observation is judged against the prior distribution (textbook
 EWCD / EWMA-Z convention) - without this a large step folds into
 the mean in the same tick and the alert is missed.
@@ -299,8 +300,8 @@ snapshot.
 Types: `PerFeatureEwma<D>`, `PerFeatureEwmaConfig`,
 `PerFeatureEwmaResult<D>`, `EwmaAccumulator`.
 
-Reference: J. S. Hunter, *The Exponentially Weighted Moving
-Average*, JQT 18(4), 1986.
+Reference: J. S. Hunter, _The Exponentially Weighted Moving
+Average_, JQT 18(4), 1986.
 
 Source: `src/per_feature_ewma.rs`.
 
@@ -331,16 +332,16 @@ returns - no warmup gate, just empty alerts until trip) +
 
 Orthogonal to `MetaDriftDetector` (scalar CUSUM on the score
 stream): this module is per-feature CUSUM on **raw observations**
-so the caller can answer *which feature drifted and in which
-direction*. Use both - they serve different triage paths.
+so the caller can answer _which feature drifted and in which
+direction_. Use both - they serve different triage paths.
 
 Types: `PerFeatureCusum<D>`, `PerFeatureCusumConfig`,
 `PerFeatureCusumResult<D>`, `PerFeatureCusumAlert`,
 `DriftDirection`, `PerFeatureCusumAccumulator`.
 
-References: E. S. Page, *Continuous Inspection Schemes*,
-Biometrika 41, 1954. D. M. Hawkins & D. H. Olwell, *Cumulative
-Sum Charts and Charting for Quality Improvement*, Springer, 1998.
+References: E. S. Page, _Continuous Inspection Schemes_,
+Biometrika 41, 1954. D. M. Hawkins & D. H. Olwell, _Cumulative
+Sum Charts and Charting for Quality Improvement_, Springer, 1998.
 
 Source: `src/per_feature_cusum.rs`.
 
@@ -350,8 +351,8 @@ Pins a baseline per-dim histogram, folds live traffic into a mirror
 histogram with identical bin edges, and reports Population
 Stability Index (`Σ (Q − P) · ln(Q/P)`) and KL divergence
 `D_KL(Q || P)` per feature. CUSUM on the score stream catches the
-detector *re-centring*; PSI on the features catches the data
-*itself drifting*. Industry thresholds wired into
+detector _re-centring_; PSI on the features catches the data
+_itself drifting_. Industry thresholds wired into
 `DriftLevel::{Stable, Watch, Alert}` (`< 0.10`, `0.10..0.25`,
 `≥ 0.25`). `argmax_psi()` pins the offending dim;
 `reset_production()` starts a fresh monitoring window without
@@ -456,12 +457,12 @@ captures the canonical sizing for the `1 000 000`-distinct-key
 regime typical of day-scale network-security ingest; scale proportionally for
 larger feeds.
 
-| Sketch | Params for 1 M keys | Per-instance memory | Accuracy bound | Constructor |
-|---|---|---|---|---|
-| `CountMinSketch` | `width = 2048`, `depth = 4` | ~64 KiB counter bank | `ε ≈ 1.33 × 10⁻³` (`e/w`), `δ ≈ 1.83 × 10⁻²` (`(1/e)^d`) | `CountMinSketch::new(2048, 4)` |
-| `HyperLogLog` | `precision = 12` | 4 KiB register bank | ≈ 1.625 % relative std error | `HyperLogLog::with_default_precision()` |
-| `BloomFilter` | `capacity = 1_000_000`, `fpr = 0.01` | ~1.2 MiB bit bank (`m ≈ 9 585 059`, `k = 7`) | 1 % false-positive rate, 0 false negatives | `BloomFilter::new(1_000_000, 0.01)` |
-| `SpaceSaving<K>` | `capacity = 1024` | ~32 KiB (16-byte keys × table × 2 for open-addressing) | Guaranteed retention of keys with true frequency `> N / K`; worst-case overestimate `≤ N / K` | `SpaceSaving::new(1024)` |
+| Sketch           | Params for 1 M keys                  | Per-instance memory                                    | Accuracy bound                                                                                | Constructor                             |
+| ---------------- | ------------------------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `CountMinSketch` | `width = 2048`, `depth = 4`          | ~64 KiB counter bank                                   | `ε ≈ 1.33 × 10⁻³` (`e/w`), `δ ≈ 1.83 × 10⁻²` (`(1/e)^d`)                                      | `CountMinSketch::new(2048, 4)`          |
+| `HyperLogLog`    | `precision = 12`                     | 4 KiB register bank                                    | ≈ 1.625 % relative std error                                                                  | `HyperLogLog::with_default_precision()` |
+| `BloomFilter`    | `capacity = 1_000_000`, `fpr = 0.01` | ~1.2 MiB bit bank (`m ≈ 9 585 059`, `k = 7`)           | 1 % false-positive rate, 0 false negatives                                                    | `BloomFilter::new(1_000_000, 0.01)`     |
+| `SpaceSaving<K>` | `capacity = 1024`                    | ~32 KiB (16-byte keys × table × 2 for open-addressing) | Guaranteed retention of keys with true frequency `> N / K`; worst-case overestimate `≤ N / K` | `SpaceSaving::new(1024)`                |
 
 Rules of thumb:
 
@@ -471,13 +472,13 @@ Rules of thumb:
 - **CMS**: memory is `width · depth · 8 B`. Pick `width` from the
   additive-error budget `ε · N`; add rows until `δ` fits your
   confidence floor (usually 4-8 already gets you `(1/e)⁸ ≈
-  3 × 10⁻⁴`).
+3 × 10⁻⁴`).
 - **HLL** is cardinality-insensitive by design - `p = 12` holds
   to `~10⁹` distinct elements at 1.6 % std error; bump to
   `p = 14` (16 KiB) when sub-percent error matters.
 - **`SpaceSaving`** keeps exactly `K` entries - `K = 2 · target_topk`
   is a safe cushion; the theoretical guarantee is tight at `K =
-  target_topk / ε` for relative-error `ε`.
+target_topk / ε` for relative-error `ε`.
 
 ### `OnlineStats` - Welford mean + variance
 
@@ -493,13 +494,13 @@ any downstream consumer that needs a cheap streaming
 per-feature arrays on top.
 
 API: `new()` + `update(value: f64)` + `variance()` + `std_dev()`
-+ Default.
+
+- Default.
 
 Types: `OnlineStats`.
 
-Reference: B. P. Welford, *Note on a Method for Calculating
-Corrected Sums of Squares and Products*, Technometrics 4(3),
-1962.
+Reference: B. P. Welford, _Note on a Method for Calculating
+Corrected Sums of Squares and Products_, Technometrics 4(3), 1962.
 
 Source: `src/online_stats.rs`.
 
@@ -558,21 +559,22 @@ parameters.
 Gated behind `std`.
 
 API: `new(capacity, fpr)` + `with_capacity(capacity)` (`fpr = 0.01`)
-+ `with_params(num_bits, num_hashes)` (exact control) +
-`insert<T: Hash>(&T)` + `insert_bytes(&[u8])` + `insert_hash(u64,
+
+- `with_params(num_bits, num_hashes)` (exact control) +
+  `insert<T: Hash>(&T)` + `insert_bytes(&[u8])` + `insert_hash(u64,
 u64)` (escape hatch) + matching `contains*` variants + `union(&Self)`
-(bitwise OR for cross-shard merge) + `reset()` + accessors
-(`num_bits`, `num_hashes`, `memory_bytes`, `total_added`,
-`effective_fpr`, `is_empty`).
+  (bitwise OR for cross-shard merge) + `reset()` + accessors
+  (`num_bits`, `num_hashes`, `memory_bytes`, `total_added`,
+  `effective_fpr`, `is_empty`).
 
 Types: `BloomFilter`, `BLOOM_DEFAULT_FPR`, `BLOOM_MAX_HASHES`.
 
 References:
 
-1. B. Bloom, *Space/Time Trade-offs in Hash Coding with Allowable
-   Errors*, CACM 13(7), 1970.
-2. A. Kirsch, M. Mitzenmacher, *Less Hashing, Same Performance:
-   Building a Better Bloom Filter*, ESA 2006.
+1. B. Bloom, _Space/Time Trade-offs in Hash Coding with Allowable
+   Errors_, CACM 13(7), 1970.
+2. A. Kirsch, M. Mitzenmacher, _Less Hashing, Same Performance:
+   Building a Better Bloom Filter_, ESA 2006.
 
 Source: `src/bloom.rs`.
 
@@ -594,13 +596,14 @@ Gated behind `std` because the row hashes rely on
 `no_std + alloc` surface is unaffected.
 
 API: `new(width, depth)` + `increment(&[u8], u64)` (saturating)
-+ `estimate(&[u8]) → u64` + `total()` + `reset()` +
-`memory_bytes()` + `width()` / `depth()` accessors.
+
+- `estimate(&[u8]) → u64` + `total()` + `reset()` +
+  `memory_bytes()` + `width()` / `depth()` accessors.
 
 Types: `CountMinSketch`.
 
-Reference: G. Cormode, S. Muthukrishnan, *An Improved Data Stream
-Summary: The Count-Min Sketch and its Applications*, Journal of
+Reference: G. Cormode, S. Muthukrishnan, _An Improved Data Stream
+Summary: The Count-Min Sketch and its Applications_, Journal of
 Algorithms 55(1), 2005.
 
 Source: `src/count_min_sketch.rs`.
@@ -623,22 +626,23 @@ Gated behind `std` (uses `std::hash::DefaultHasher` - SipHash).
 
 API: `new(p)` + `with_default_precision()` (`p=12`) +
 `add<T: Hash>(&mut self, v: &T)` + `add_bytes(&mut self, &[u8])`
-+ `add_hash(&mut self, u64)` (escape hatch for keyed hashers) +
-`estimate(&self) -> u64` + `merge(&mut self, &Self)` (cross-shard
-aggregation - per-register max) + `reset()` + accessors
-(`register_count`, `precision`, `memory_bytes`, `total_added`).
+
+- `add_hash(&mut self, u64)` (escape hatch for keyed hashers) +
+  `estimate(&self) -> u64` + `merge(&mut self, &Self)` (cross-shard
+  aggregation - per-register max) + `reset()` + accessors
+  (`register_count`, `precision`, `memory_bytes`, `total_added`).
 
 Types: `HyperLogLog`, `HLL_DEFAULT_PRECISION`,
 `HLL_MIN_PRECISION`, `HLL_MAX_PRECISION`.
 
 References:
 
-1. P. Flajolet, É. Fusy, O. Gandouet, F. Meunier, *HyperLogLog:
+1. P. Flajolet, É. Fusy, O. Gandouet, F. Meunier, _HyperLogLog:
    the analysis of a near-optimal cardinality estimation
-   algorithm*, AofA 2007.
-2. S. Heule, M. Nunkesser, A. Hall, *HyperLogLog in Practice:
+   algorithm_, AofA 2007.
+2. S. Heule, M. Nunkesser, A. Hall, _HyperLogLog in Practice:
    Algorithmic Engineering of a State of the Art Cardinality
-   Estimation Algorithm*, EDBT 2013.
+   Estimation Algorithm_, EDBT 2013.
 
 Source: `src/hyperloglog.rs`.
 
@@ -673,16 +677,17 @@ API: `new(capacity)` + `with_default_capacity()` (`K = 128`) +
 `observe(K)` + `observe_weighted(K, u64)` (byte-count heavy
 hitters) + `estimate(&K) -> Option<HeavyHitterEntry>` +
 `top_k(n) -> Vec<HeavyHitter<K>>` (ranked descending) + `iter()`
-+ `reset()` + accessors (`capacity`, `len`, `is_empty`, `total`,
-`error_bound`).
+
+- `reset()` + accessors (`capacity`, `len`, `is_empty`, `total`,
+  `error_bound`).
 
 Types: `SpaceSaving<K>`, `HeavyHitter<K>`, `HeavyHitterEntry`,
 `SPACE_SAVING_DEFAULT_CAPACITY`.
 
 References:
 
-1. A. Metwally, D. Agrawal, A. El Abbadi, *Efficient Computation
-   of Frequent and Top-k Elements in Data Streams*, ICDT 2005.
+1. A. Metwally, D. Agrawal, A. El Abbadi, _Efficient Computation
+   of Frequent and Top-k Elements in Data Streams_, ICDT 2005.
 
 Source: `src/space_saving.rs`.
 
@@ -757,8 +762,7 @@ leaf → root in every tree accumulating
 `max(sibling.mass / subtree.mass)` per level, then deletes the
 probe. Matches the rrcf / AWS Java `codisp` semantic - captures
 contextual displacement better than pure isolation depth on
-wide-window anomalies. ~25× slower than `score()` post the
-rayon-per-tree parallel walk + delete refactor; mutates the
+wide-window anomalies. ~25× slower than `score()`; mutates the
 reservoir per probe (baseline drifts on long eval streams, see
 stateless variant below). On NAB `realKnownCause` lifts
 aggregate AUC from 0.719 (`score()`) to 0.776 - beats rrcf
@@ -770,13 +774,14 @@ walks once per unique leaf, bulk-deletes. Saturates the
 reservoir past batch ≥ sample_size → `EmptyForest`.
 
 `score_codisp_stateless(&point)` / `score_codisp_stateless_many`
+
 - **drift-free** codisp estimate via root → leaf descent along
-stored cuts, `max(sibling_mass / subtree_mass)` per depth, zero
-reservoir mutation. Takes `&self`, parallel across trees,
-preserves the frozen baseline exactly. Aggregate AUC 0.763 on
-NAB, 0.751 on TSB-AD-M - ~0.01-0.02 below the mutating variant
-but 12× faster on NAB (1.09 s full corpus vs 12.6 s). Preferred
-for long eval streams.
+  stored cuts, `max(sibling_mass / subtree_mass)` per depth, zero
+  reservoir mutation. Takes `&self`, parallel across trees,
+  preserves the frozen baseline exactly. Aggregate AUC 0.763 on
+  NAB, 0.751 on TSB-AD-M - ~0.01-0.02 below the mutating variant
+  but 12× faster on NAB (1.09 s full corpus vs 12.6 s). Preferred
+  for long eval streams.
 
 Source: `src/forest/random_cut_forest.rs`, `src/tree/random_cut_tree.rs`.
 
@@ -834,7 +839,7 @@ Example: `examples/cross_tenant.rs`.
 
 ## Explanation & triage
 
-*Why* did this point score high, and *how confident* is the
+_Why_ did this point score high, and _how confident_ is the
 answer? These primitives turn scalar scores into analyst-
 actionable narratives.
 
@@ -880,6 +885,7 @@ across both. Caller supplies a baseline point (warm-phase mean
 or synthetic null); estimator samples `K` random permutations,
 computes each dim's marginal contribution as it joins the
 coalition, averages. Cost `O(K · D)` forest scores per probe
+
 - batch / forensic replay, not hot-path.
 
 Types: `SageEstimator<D>`, `SageExplanation<D>`,
@@ -900,8 +906,9 @@ where a raw score is meaningless in compliance paperwork.
 
 Online update via `PlattCalibrator::update_online(score, label,
 lr)` applies one SGD step on the logistic loss per observation
+
 - refine the fit as SOC feedback accumulates without re-running
-the batch Newton-Raphson solver.
+  the batch Newton-Raphson solver.
 
 Types: `PlattCalibrator`, `PlattFitConfig`.
 
@@ -930,14 +937,14 @@ Example: `examples/severity.rs`.
 
 ### `ForensicBaseline<D>` - imputation-like post-hoc baseline
 
-`forensic_baseline(&point)` answers *"what would this dim have
-looked like if the point were normal?"*. Returns
+`forensic_baseline(&point)` answers _"what would this dim have
+looked like if the point were normal?"_. Returns
 `ForensicBaseline<D>` with per-dim `expected` / `stddev` /
 `delta` / `zscore` / `live_points` against every live sample in
 the forest's reservoirs, plus `argmax_abs_zscore()`. Baseline
 returned in raw caller coordinates - the internal `feature_scales`
 transform is inverted. Great for SOC triage: alert table can
-display *observed* vs *normal expected* per dim.
+display _observed_ vs _normal expected_ per dim.
 
 Types: `ForensicBaseline`.
 
@@ -1013,8 +1020,8 @@ Source: `src/lsh_cluster.rs`.
 ### `FeedbackStore<D>` - SOC-label-driven score adjustment
 
 `FeedbackStore<D>` (in `anomstream_core::feedback`) - bounded
-ledger of analyst-labelled points. Das et al., *Incorporating
-Feedback into Tree-based Anomaly Detection*, `arXiv:1708.09441`.
+ledger of analyst-labelled points. Das et al., _Incorporating
+Feedback into Tree-based Anomaly Detection_, `arXiv:1708.09441`.
 API: `label(point, FeedbackLabel::Benign | Confirmed)`,
 `adjust(probe, raw_score) -> adjusted`. The adjustment adds a
 Gaussian-kernel-weighted sum of every stored label's sign to the
@@ -1188,74 +1195,71 @@ adapter against the trait.
 
 Canonical metric names (`metrics::names::*`):
 
-| Type | Name | Source |
-|---|---|---|
-| counter | `rcf_updates_total` | every `RandomCutForest::update` |
-| counter | `rcf_deletes_total` | every `delete` that actually removed a point |
-| counter | `rcf_attribution_total` | every successful `attribution` |
-| counter | `rcf_rejected_nan_total` | per-call NaN/±inf rejection, data-quality signal |
-| counter | `rcf_early_term_stopped_total` | `score_early_term` short-circuits |
-| counter | `rcf_process_total` | every `ThresholdedForest::process` |
-| counter | `rcf_anomalies_fired_total` | `process` whose verdict was `is_anomaly` |
-| counter | `rcf_drift_fires_total` | aggregate CUSUM fire (up + down) |
-| counter | `rcf_drift_up_total` | CUSUM upward drift fires |
-| counter | `rcf_drift_down_total` | CUSUM downward drift fires |
-| counter | `rcf_tenant_evictions_total` | pool eviction (LRU + TTL, aggregate) |
-| counter | `rcf_tenant_idle_evictions_total` | TTL-driven eviction subset |
-| counter | `rcf_tenant_created_total` | pool factory invocation (fresh tenant) |
-| counter | `rcf_bootstrap_points_total` | bootstrap-ingested points |
-| counter | `rcf_bootstrap_skipped_total` | bootstrap points skipped (non-finite) |
-| counter | `rcf_alerts_observed_total` | every `AlertClusterer::observe` |
-| counter | `rcf_alert_clusters_new_total` | new cluster opened |
-| counter | `rcf_alert_clusters_joined_total` | alert merged into existing cluster |
-| counter | `rcf_alert_clusters_pruned_total` | cluster dropped by window prune |
-| gauge | `rcf_alert_clusters_active` | active clusters in `AlertClusterer` |
-| counter | `rcf_feature_drift_observed_total` | every `FeatureDriftDetector::observe` |
-| gauge | `rcf_feature_drift_max_psi` | max per-dim PSI on `psi()` call |
-| gauge | `rcf_forest_trees` | tree count of a forest |
-| gauge | `rcf_threshold_current` | TRCF adaptive threshold |
-| gauge | `rcf_ema_mean` | TRCF score-stream EMA mean |
-| gauge | `rcf_ema_stddev` | TRCF score-stream EMA stddev |
-| gauge | `rcf_observations_seen` | TRCF EMA observation count (warmup progress) |
-| gauge | `rcf_tenants_resident` | live tenants in pool |
-| gauge | `rcf_tenant_capacity` | configured pool capacity |
-| histogram | `rcf_score` | raw anomaly score per scored point |
-| histogram | `rcf_grade` | graded verdict `[0, 1]` per processed point |
-| histogram | `rcf_drift_s_high` | CUSUM upward accumulator |
-| histogram | `rcf_drift_s_low` | CUSUM downward accumulator |
-| histogram | `rcf_early_term_trees` | trees walked per `score_early_term` |
-| counter | `rcf_hot_path_sampler_accepted_total` | `UpdateSampler::accept_*` admitted |
-| counter | `rcf_hot_path_sampler_rejected_total` | `UpdateSampler::accept_*` rejected |
-| counter | `rcf_hot_path_queue_enqueued_total` | `UpdateProducer::try_enqueue` landed |
-| counter | `rcf_hot_path_queue_dropped_total` | `UpdateProducer::try_enqueue` dropped on full |
-| counter | `rcf_hot_path_prefix_admitted_total` | `PrefixRateCap::check_and_record` admitted |
-| counter | `rcf_hot_path_prefix_capped_total` | `PrefixRateCap::check_and_record` capped |
-| counter | `rcf_drift_aware_swaps_total` | `DriftAwareForest` shadow → primary swap |
-| counter | `rcf_drift_aware_on_drift_total` | `DriftAwareForest::on_drift` actually spawned a shadow |
-| gauge | `rcf_drift_aware_shadow_active` | 1.0 while shadow warming, 0.0 otherwise |
-| counter | `rcf_adwin_observed_total` | `AdwinDetector::update` folded a finite value |
-| counter | `rcf_adwin_drift_fires_total` | `AdwinDetector::update` detected drift |
-| counter | `rcf_lsh_alerts_observed_total` | `LshAlertClusterer::observe` call |
-| counter | `rcf_lsh_clusters_new_total` | LSH alert opened a new bucket |
-| counter | `rcf_lsh_clusters_joined_total` | LSH alert merged into existing bucket |
-| gauge | `rcf_lsh_clusters_active` | distinct active LSH cluster hashes |
-| counter | `rcf_feedback_labels_observed_total` | `FeedbackStore::label` accepted |
-| counter | `rcf_feedback_labels_benign_total` | label verdict `Benign` |
-| counter | `rcf_feedback_labels_confirmed_total` | label verdict `Confirmed` |
-| counter | `rcf_spot_observations_total` | `PotDetector::record` folded a finite value |
-| counter | `rcf_spot_peaks_total` | value above the SPOT/DSPOT threshold `u` |
+| Type      | Name                                  | Source                                                 |
+| --------- | ------------------------------------- | ------------------------------------------------------ |
+| counter   | `rcf_updates_total`                   | every `RandomCutForest::update`                        |
+| counter   | `rcf_deletes_total`                   | every `delete` that actually removed a point           |
+| counter   | `rcf_attribution_total`               | every successful `attribution`                         |
+| counter   | `rcf_rejected_nan_total`              | per-call NaN/±inf rejection, data-quality signal       |
+| counter   | `rcf_early_term_stopped_total`        | `score_early_term` short-circuits                      |
+| counter   | `rcf_process_total`                   | every `ThresholdedForest::process`                     |
+| counter   | `rcf_anomalies_fired_total`           | `process` whose verdict was `is_anomaly`               |
+| counter   | `rcf_drift_fires_total`               | aggregate CUSUM fire (up + down)                       |
+| counter   | `rcf_drift_up_total`                  | CUSUM upward drift fires                               |
+| counter   | `rcf_drift_down_total`                | CUSUM downward drift fires                             |
+| counter   | `rcf_tenant_evictions_total`          | pool eviction (LRU + TTL, aggregate)                   |
+| counter   | `rcf_tenant_idle_evictions_total`     | TTL-driven eviction subset                             |
+| counter   | `rcf_tenant_created_total`            | pool factory invocation (fresh tenant)                 |
+| counter   | `rcf_bootstrap_points_total`          | bootstrap-ingested points                              |
+| counter   | `rcf_bootstrap_skipped_total`         | bootstrap points skipped (non-finite)                  |
+| counter   | `rcf_alerts_observed_total`           | every `AlertClusterer::observe`                        |
+| counter   | `rcf_alert_clusters_new_total`        | new cluster opened                                     |
+| counter   | `rcf_alert_clusters_joined_total`     | alert merged into existing cluster                     |
+| counter   | `rcf_alert_clusters_pruned_total`     | cluster dropped by window prune                        |
+| gauge     | `rcf_alert_clusters_active`           | active clusters in `AlertClusterer`                    |
+| counter   | `rcf_feature_drift_observed_total`    | every `FeatureDriftDetector::observe`                  |
+| gauge     | `rcf_feature_drift_max_psi`           | max per-dim PSI on `psi()` call                        |
+| gauge     | `rcf_forest_trees`                    | tree count of a forest                                 |
+| gauge     | `rcf_threshold_current`               | TRCF adaptive threshold                                |
+| gauge     | `rcf_ema_mean`                        | TRCF score-stream EMA mean                             |
+| gauge     | `rcf_ema_stddev`                      | TRCF score-stream EMA stddev                           |
+| gauge     | `rcf_observations_seen`               | TRCF EMA observation count (warmup progress)           |
+| gauge     | `rcf_tenants_resident`                | live tenants in pool                                   |
+| gauge     | `rcf_tenant_capacity`                 | configured pool capacity                               |
+| histogram | `rcf_score`                           | raw anomaly score per scored point                     |
+| histogram | `rcf_grade`                           | graded verdict `[0, 1]` per processed point            |
+| histogram | `rcf_drift_s_high`                    | CUSUM upward accumulator                               |
+| histogram | `rcf_drift_s_low`                     | CUSUM downward accumulator                             |
+| histogram | `rcf_early_term_trees`                | trees walked per `score_early_term`                    |
+| counter   | `rcf_hot_path_sampler_accepted_total` | `UpdateSampler::accept_*` admitted                     |
+| counter   | `rcf_hot_path_sampler_rejected_total` | `UpdateSampler::accept_*` rejected                     |
+| counter   | `rcf_hot_path_queue_enqueued_total`   | `UpdateProducer::try_enqueue` landed                   |
+| counter   | `rcf_hot_path_queue_dropped_total`    | `UpdateProducer::try_enqueue` dropped on full          |
+| counter   | `rcf_hot_path_prefix_admitted_total`  | `PrefixRateCap::check_and_record` admitted             |
+| counter   | `rcf_hot_path_prefix_capped_total`    | `PrefixRateCap::check_and_record` capped               |
+| counter   | `rcf_drift_aware_swaps_total`         | `DriftAwareForest` shadow → primary swap               |
+| counter   | `rcf_drift_aware_on_drift_total`      | `DriftAwareForest::on_drift` actually spawned a shadow |
+| gauge     | `rcf_drift_aware_shadow_active`       | 1.0 while shadow warming, 0.0 otherwise                |
+| counter   | `rcf_adwin_observed_total`            | `AdwinDetector::update` folded a finite value          |
+| counter   | `rcf_adwin_drift_fires_total`         | `AdwinDetector::update` detected drift                 |
+| counter   | `rcf_lsh_alerts_observed_total`       | `LshAlertClusterer::observe` call                      |
+| counter   | `rcf_lsh_clusters_new_total`          | LSH alert opened a new bucket                          |
+| counter   | `rcf_lsh_clusters_joined_total`       | LSH alert merged into existing bucket                  |
+| gauge     | `rcf_lsh_clusters_active`             | distinct active LSH cluster hashes                     |
+| counter   | `rcf_feedback_labels_observed_total`  | `FeedbackStore::label` accepted                        |
+| counter   | `rcf_feedback_labels_benign_total`    | label verdict `Benign`                                 |
+| counter   | `rcf_feedback_labels_confirmed_total` | label verdict `Confirmed`                              |
+| counter   | `rcf_spot_observations_total`         | `PotDetector::record` folded a finite value            |
+| counter   | `rcf_spot_peaks_total`                | value above the SPOT/DSPOT threshold `u`               |
 
 Every detector exposing these ships a `.with_metrics_sink(Arc<dyn
 MetricsSink>)` chain-style builder; default is `NoopSink`.
-
-Metric names keep the `rcf_` prefix for continuity with existing
-deployments that pre-date the toolkit-framing scope expansion.
 
 Source: `src/metrics.rs`.
 
 ## Hot-path integration (eBPF ingress)
 
-### `UpdateSampler` + `channel` MPSC split
+### `UpdateSampler` + `update_channel` MPSC split
 
 `anomstream_core::hot_path::UpdateSampler` drops low-value updates
 before any RCF work. Two decision modes:
@@ -1266,7 +1270,7 @@ before any RCF work. Two decision modes:
   baseline shape per flow rather than slicing any single flow.
 
 Build via `UpdateSampler::new(keep)` (unkeyed, deterministic
-admission - back-compatible), **`UpdateSampler::new_keyed(keep)`**
+admission), **`UpdateSampler::new_keyed(keep)`**
 (128-bit secret from `getrandom`, `SipHash-1-3` under that key
 applied before the modulo), or
 **`UpdateSampler::new_keyed_with_seeds(keep, k1, k2)`**
@@ -1292,12 +1296,10 @@ its own cadence.
 
 `MetricsSink` dispatch on `accept_*` / `try_enqueue` /
 `check_and_record` is **batched every `METRICS_BATCH_SIZE = 64`
-hot-path calls** - line-rate load no longer pays the per-call
-`Arc<dyn>` vtable cost (≈13 ns × 12.5 Mpps ≈ 160 ms / s of
-clock burned on dispatch). The in-process atomic counters
-(`accepted_total`, `enqueued_total`, `admitted_total`, …) stay
-bit-exact every call; the sink view lags by ≤ 64 increments.
-Call `flush_metrics()` on shutdown to drain the residue.
+hot-path calls**, so line rate does not pay an `Arc<dyn>` vtable
+call per packet. The in-process counters stay exact; the sink view
+lags by at most 64 increments. Call `flush_metrics()` on shutdown
+to drain the residue.
 
 Types: `UpdateSampler`, `UpdateProducer<D>`, `UpdateConsumer<D>`,
 `MAX_CHANNEL_CAPACITY`, `METRICS_BATCH_SIZE`. Functions:
@@ -1311,19 +1313,12 @@ Source: `src/lib.rs` (anomstream-hotpath crate).
 `PrefixRateCap::new(cap: NonZeroU32, window: NonZeroU64)` bounds
 how many admissions a single source-prefix hash bucket can push
 into the reservoir within a rolling window. Both arguments are
-`NonZero` typed so the previous footgun pair (`window_ms == 0`
-panicked, `cap_per_window == 0` silently disabled the cap) is
-impossible to express; use `PrefixRateCap::disabled(window)` for
-the explicit always-admit mode.
+`NonZero`, so a zero window or a zero cap cannot be expressed; use
+`PrefixRateCap::disabled(window)` for the always-admit mode.
 
 Fixed 256-bucket counter sketch, lock-free `check_and_record`.
 Each bucket is **cache-line padded** (`#[repr(C, align(64))]`,
-16 KiB total vs 1 KiB unpadded) so concurrent `fetch_add`s on
-different buckets do not bounce a shared cache line through
-MOESI/MESI - multi-core throughput stays close to the single
-thread cost. The bench
-`hot_path_prefix_cap/check_and_record_contended_8threads`
-quantifies the gain.
+16 KiB total) so threads on different buckets never share a line.
 
 Soft over-admission window of ≈ `4 × cap_per_window` per bucket
 per window under heavy concurrent load (the `fetch_add` +
@@ -1345,286 +1340,119 @@ source - documented in `docs/threat_model.md`.
 
 Types: `PrefixRateCap`.
 
-## Security & threat model
+## Security & hardening
 
-See [`docs/threat_model.md`](threat_model.md) for the full
-adversarial threat model covering reservoir poisoning,
-evasion via contextual shift, model extraction, and classifier-
-side resource exhaustion - with the MITRE ATLAS technique IDs
-and the defences shipped in-crate for each.
+[`threat_model.md`](threat_model.md) covers reservoir poisoning,
+evasion via contextual shift, model extraction and classifier-side
+resource exhaustion, with the MITRE ATLAS technique IDs and the
+defence shipped in-crate for each.
 
-### SemVer hygiene (v1)
+### Allocation caps
 
-Public enums expected to grow carry `#[non_exhaustive]` so additive
-variants do not require a major version bump - callers must use a
-`_` wildcard arm. Enums tagged: `DriftLevel`, `DriftDirection`,
-`DriftKind`, `Severity`, `ThresholdMode`, `ClusterDecision`,
-`FeedbackLabel`, `LshClusterDecision`.
+Every sizing parameter that drives an allocation is bounded at
+construction, so a caller-controlled `new(...)` cannot force an OOM
+or a compute bomb:
 
-Public structs with `pub` fields carry `#[non_exhaustive]` so
-additional fields can be added without breaking downstream literal
-construction: `RcfConfig`, `AlertRecord`, `UpdateSampler`,
-`UpdateProducer`, `UpdateConsumer`, `PrefixRateCap`. Assemble
-`AlertRecord` through `AlertRecord::new(...)` /
-`AlertRecord::from_forest(...)` / `AlertRecord::from_thresholded(...)`
-rather than a struct literal.
+| Call                                             | Bound                                                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `CountMinSketch::new(width, depth)`              | `MAX_WIDTH` (262 144), `MAX_DEPTH` (16): ~32 MiB of counters; returns `RcfResult<Self>`                                         |
+| `BloomFilter::with_params(num_bits, num_hashes)` | `MAX_NUM_BITS` (1 Gibit = 128 MiB), `MAX_HASHES` (64)                                                                           |
+| `SageEstimator::new(_, permutations, _)`         | `MAX_PERMUTATIONS` (65 536): ~4 s per `explain()` at `D = 16`                                                                   |
+| `AlertClusterer`                                 | `DEFAULT_MAX_CLUSTERS` (16 384), `with_max_clusters(max)`; the oldest cluster is LRU-evicted on cap                             |
+| `MatrixProfile`                                  | `MAX_WINDOW` (10 000); series up to `MATRIX_PROFILE_MAX_SERIES_LEN` (65 536, ~12 s), `compute_with_max_len` for a larger budget |
+| `update_channel(capacity)`                       | `1..=MAX_CHANNEL_CAPACITY` (`1 << 20`)                                                                                          |
 
-Every `.score*()` on `RandomCutForest`, every `ForestBuilder` /
-`ShingledForestBuilder` / `ThresholdedForestBuilder` build method,
-and every `.observe()` / `.update()` / `.record()` /
-`.process()` / `.adjust()` / `.explain()` returning a non-unit
-verdict is `#[must_use = "…"]`. Drops in hot paths must use
-`let _ = detector.observe(x);` explicitly.
+### Deserialization
 
-### v1 polish batch
-
-Grab-bag of pre-release cleanups driven by the audit:
-
-- **Cross-crate inlining hints.** Hot sketch helpers -
-  `BloomFilter::{insert,insert_bytes,insert_hash,contains,
-  contains_bytes,contains_hash,combined_index,set_bit,get_bit}`,
-  `HyperLogLog::{add_hash,add_bytes}`, `CountMinSketch::{increment,
-  estimate,hash_to_col}`, `SpaceSaving::{observe,observe_weighted}`
-  - carry `#[inline]` so `rustc` inlines them across the
-  anomstream-core / anomstream-hotpath crate boundary. Measured:
-  **bloom `contains_bytes` -11 %** (32.0 → 28.8 ns), **`insert_hash`
-  -12 %** (18.5 → 16.8 ns). Other sketches stay flat within
-  noise - they were already reachable through mono-generic
-  dispatch that rustc inlines regardless.
-- **Bounded `Debug` on large stateful types.** `CountMinSketch`
-  and `RandomCutForest<D>` now implement a manual `fmt::Debug`
-  that prints `width / depth / memory` and `num_trees /
-  sample_size / live_points` summaries respectively. The derived
-  impls were dumping up to tens of MiB of counter / tree state
-  on a single `{:?}` call - a trap for anyone inadvertently
-  logging `debug!("{forest:?}")`.
-- **`MatrixProfile` window cap.** `MAX_WINDOW = 10_000`; the
-  first-column seed is `O(n · m)` and doubling `m` doubles the
-  cost, so a runaway `window` turned forensic calls into
-  compute bombs. The public docstring now carries a
-  `# Complexity` note with practical wall-clock numbers.
-- **`MatrixProfile` series cap.** The join is `O(n²)` in the series
-  length, so the window cap alone left a few million points with a
-  small window at hours of CPU per call. `compute` refuses a series
-  longer than `MATRIX_PROFILE_MAX_SERIES_LEN = 65_536` (about twelve
-  seconds on a modern core); `compute_with_max_len` takes an
-  explicit bound for a caller who has budgeted a longer capture.
-- **`AlertClusterer` tenant key.** Docstring updated to
-  recommend `AlertClusterer::<u64, D>` for deployments that
-  carry numeric tenant identifiers; the default `K = String`
-  stays for JSON ergonomics but incurs a string-hash + heap
-  allocation per tenant-set insert.
-- **`deny.toml`: MPL-2.0 removed from the blanket allow list.**
-  Static-link redistribution from an Apache-2.0 product into a
-  proprietary binary stays safe only when MPL source is
-  unmodified; consumers needing per-crate exceptions add them
-  to the `exceptions` list with a written justification.
-- **`MetricsSink` name stability.** Module-level docstring on
-  `metrics::names` now carries an explicit `SemVer` guarantee:
-  identifiers and their string values never change across patch
-  / minor releases, so Prometheus / Grafana queries referencing
-  them survive every non-major bump. Explains why
-  `inc_counter` takes `&str` rather than an enum
-  (integrator-supplied dynamic names).
-- **Facade `SemVer` scope documented.** `meta/src/lib.rs`
-  module doc draws the line between the committed public surface
-  (the catalogue of ~80 types printed in `README.md` / this file)
-  and the glob-reachable transitive set. Consumers who want
-  strict compile-time pinning should import from member crates
-  directly.
-
-### Supply-chain + build hygiene
-
-- **`RcfError::InvalidConfig(Box<str>)`** - the hot-path variant
-  drops from 24 B to 16 B on 64-bit targets by switching the
-  payload from `String` to `Box<str>`. The `Display` impl,
-  `.contains(..)` checks, and every existing callsite keep
-  working via `Deref<Target = str>`.
-  `SerializationFailed` / `DeserializationFailed` stay `String`
-  because their emission sites always allocate a fresh message
-  from upstream errors - forcing a `String → Box<str>` hop would
-  spend the saved 8 B and more.
-- **Intra-doc links are strict.** Every member-crate doc link
-  uses an absolute `[\`crate::X\`]` path or an in-scope
-  identifier, so rustdoc resolves cleanly under both the member
-  and the facade namespaces. The former blanket `#![allow(
-  rustdoc::broken_intra_doc_links)]` is gone; CI runs
-  `RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links"` and fails
-  on new breakage.
-- **CI MSRV + minimal-versions pin.** `dtolnay/rust-toolchain` is
-  now version-pinned (`@1.12.0`) so a compromised upstream push
-  cannot swap the toolchain download under CI. A new
-  `minimal_versions` job runs `cargo +nightly update -Z
-  minimal-versions && cargo check --workspace --all-features`;
-  loose `foo = "1"` requirements that rely on features only
-  added in `1.x.y+n` trip this job.
-- **`deny.toml` acknowledges dev-only `getrandom 0.4`.** The
-  duplicate comes exclusively from `proptest → tempfile →
-  rusty-fork`, all dev-dependencies; the release graph still
-  links a single `getrandom 0.3`. Revisit when proptest ships an
-  update pinning tempfile on the same major as `rand`.
-
-### Calibration + feedback quality
-
-- **Platt skew fallback** - `PlattCalibrator::fit` now detects
-  class imbalance greater than `DEFAULT_SKEW_THRESHOLD = 100` and
-  skips the Newton-Raphson path whose Hessian goes near-singular
-  at that regime. Skew cases initialise `(a, b)` from the smoothed
-  prior (`a = 0`, `b = ln((N− + 1) / (N+ + 1))`) and then run
-  `DEFAULT_SKEW_SGD_EPOCHS = 16` passes of online logistic SGD at
-  `DEFAULT_SKEW_SGD_LR = 0.01`. The returned calibrator carries a
-  `high_skew()` flag so SOC dashboards can surface the fallback
-  condition - extreme imbalance is typically a labelling-pipeline
-  regression the calibrator cannot fix on its own. Regression
-  test `severe_skew_triggers_sgd_fallback_and_still_separates`
-  pins the 200:1 separability floor.
-- **`PlattCalibrator::update_online` gradient sign fix** - the
-  SGD step subtracts `lr · (y − p) · s` (derived from
-  `dL/da = (y − p) · s` for the Platt parameterisation
-  `p = 1 / (1 + exp(a · s + b))`). The earlier code flipped the
-  sign and drifted the calibrator in the ascent direction under
-  sustained online updates. Behavioural break for callers relying
-  on the previous wrong direction; pre-v1 so intentional.
-- **`FeedbackStore::adjust` kernel-weighted mean** - the
-  Gaussian-kernel-weighted sum is now normalised by the sum of
-  kernel weights, yielding a bias in `[-1, 1]` regardless of
-  stored-label count. Previously `500` Confirmed labels at a
-  probe added `500 · strength` to the raw score; now they add at
-  most `strength`. Mixed labels interpolate - `k` Confirmed / `m`
-  Benign at a probe give bias `(k − m) / (k + m)`. Regression
-  tests pin both the hard-bound and the mixed-label interpolation
-  semantics.
-
-### Default sink allocation
-
-`metrics::default_sink()` (used by every `UpdateSampler::new` /
-`update_channel` / detector constructor) now clones a
-process-wide `LazyLock<Arc<dyn MetricsSink>>` instead of building
-a fresh `Arc::new(NoopSink)` per call. First call initialises
-the static; every subsequent call is a single relaxed-atomic
-refcount bump - measured **12 ns** on a modern core. No
-observable behavioural change (the noop sink is stateless); the
-shared-Arc identity is enforced by a regression test
-(`Arc::ptr_eq`).
-
-### Hotpath correctness
-
-- **Sampler key** - `UpdateSampler::new_keyed` draws a 128-bit
-  `SipHash-1-3` key and uses it as drawn: every key is valid, so
-  there is no sentinel value and no adjustment that could swap in
-  a publicly-known constant. Whether the sampler is keyed is a
-  separate `Option`, not a property of the key bits.
-- **PrefixRateCap rollover** - window reset is a
-  `compare_exchange_weak` loop with `AcqRel` on success and
-  `Acquire` on the rollover-side load. Happens-before order
-  guarantees that the bucket zero-fill completes before any peer
-  thread's subsequent `fetch_add`. Closes the soft-over-admission
-  window the earlier `load` → `compare_exchange` code had, with
-  no perf regression (measured **8.9 ns** per `check_and_record`,
-  -60 % vs the earlier code - the `Acquire` load short-circuits
-  the common "window still valid" case).
-- **Counter semantics** - every `*_total` counter
-  (`UpdateSampler::accepted_total`, `UpdateProducer::enqueued`,
-  `PrefixRateCap::admitted_total`, etc.) is striped over sixteen
-  cache lines, one per thread dealt round-robin, and read as the
-  sum of the stripes: exact totals, and eight threads on one
-  sampler or rate cap no longer queue for one line (about 88 %
-  less per call in the contended benches). Each stripe is an
-  `AtomicU64::fetch_add(1, Relaxed)`; atomic `fetch_add` is
-  wrapping by definition - `overflow-checks` does not apply to
-  atomic operations. At 10 Gpps sustained load a `u64` wraps in
-  ~58 years; export cadence is an ops choice, not a correctness
-  requirement.
-- **`channel` rename** - the free function that built the MPSC
-  pair is now `anomstream_hotpath::update_channel` (previously
-  `channel`); the old name shadowed `std::sync::mpsc::channel`
-  in use-star imports. Paired
-  `update_channel_with_sink(capacity, sink)`.
-
-### Release discipline
-
-CI is split across two workflows:
-
-- `.github/workflows/ci.yml` - fires **weekly** (Monday 03:00 UTC)
-  and on `workflow_dispatch`. Runs fmt, clippy, `no_std` checks,
-  feature-matrix build, workspace tests on stable + MSRV, doc,
-  `cargo bench --no-run`, examples, `cargo audit`, `cargo deny`,
-  `cargo machete`, CycloneDX SBOM. Does **not** fire per-commit -
-  the weekly cadence catches supply-chain drift without burning
-  runner minutes on noise.
-Publication happens elsewhere. The release repository builds every
-component of the product from one run, at the commits its release
-manifest pins, so this repository has no release workflow of its
-own. That run re-checks fmt / clippy / tests / audit / deny against
-the stamped tree, dry-runs the publish, then publishes the four
-members in dependency order (`core → triage → hotpath →
-anomstream`) and attests the packaged `.crate` files.
-
-### Hot-path allocation scrub
-
-Three hot-path sites are now alloc-free:
-
-- `FeedbackStore<D>` - label storage switched from `Vec` to
-  `VecDeque`. Oldest-first eviction on capacity pressure is
-  `O(1)` via `pop_front`; the old `Vec::remove(0)` memmoved the
-  full ring per label (`O(capacity)`), a measurable cost at the
-  default 512-cap under sustained SOC labelling.
-- `RandomCutForest::score_trimmed` - per-call `Vec::with_capacity`
-  scratch replaced by a `thread_local!` `RefCell<Vec<f64>>`
-  reused across calls. Per-packet scoring on a network-security hot path no
-  longer allocates. Falls back to a fresh `Vec` under `no_std`
-  where `thread_local!` is unavailable.
-- `LshAlertClusterer::hash_divector` / `observe` - bucket key
-  changed from a `format!`-built hex `String` to a `u128`
-  FNV-1a fold of the per-dim quantised buckets. Measured:
-  hash_divector 430 ns → 73 ns (−82 %), observe 480 ns → 95 ns
-  (−80 %). Zero heap allocations per-alert on the MSSP hot
-  path. Breaking API: `observe` now returns `(u128,
-  LshClusterDecision)` and `cluster_size` takes `u128` by value.
-
-### Allocation caps (DoS hardening)
-
-Caller-supplied sizing parameters on types that allocate
-proportionally to their inputs are bounded by `MAX_*` constants
-at construction so an attacker-controlled
-`new(width, depth, …)` call cannot force an OOM:
-
-- `CountMinSketch::new(width, depth)` - `width ≤ MAX_WIDTH` (262 144)
-  and `depth ≤ MAX_DEPTH` (16). Caps worst-case allocation at
-  ~32 MiB of counter table. `new` now returns `RcfResult<Self>`.
-- `BloomFilter::with_params(num_bits, num_hashes)` -
-  `num_bits ≤ MAX_NUM_BITS` (1 Gibit = 128 MiB of bit bank),
-  `num_hashes ≤ MAX_HASHES` (64). Deserialize path enforces the
-  same cap via `BloomFilterShadow`'s `TryFrom`.
-- `SageEstimator::new(baseline, permutations, seed)` -
-  `permutations ≤ MAX_PERMUTATIONS` (65 536). Each permutation
-  triggers `D + 1` forest scores; the cap bounds the worst-case
-  `explain()` cost at ~4 s for `D = 16` on a modern core.
-- `AlertClusterer` - active-cluster pool bounded by
-  `DEFAULT_MAX_CLUSTERS` (16 384) and overridable via
-  `with_max_clusters(max)`. On cap hit, the oldest cluster
-  (smallest `last_seen_ms`) is LRU-evicted before a new one opens.
-  Protects against adversarial high-cardinality attribution
-  streams that would otherwise keep opening fresh clusters
-  within `window_ms`.
-
-### Serde deserialization hardening
-
-All stateful public types that derive `Deserialize` route through
-a private `<Name>Shadow` struct with plain derive, and a
-`TryFrom<Shadow>` impl that re-runs the constructor's invariant
-checks before a live value escapes. Attacker-controlled
-`postcard::from_bytes(bytes)` therefore cannot produce a
-`BloomFilter` with `num_hashes > MAX_HASHES`, a `HyperLogLog`
-whose register bank length disagrees with `precision`, a
+Every stateful type that derives `Deserialize` goes through a
+private `<Name>Shadow` struct and a `TryFrom<Shadow>` that re-runs
+the constructor's checks, so `postcard::from_bytes` on attacker
+bytes cannot yield a `BloomFilter` over `MAX_HASHES`, a
+`HyperLogLog` whose registers disagree with `precision`, a
 `ScoreHistogram` with NaN bounds, an `RcfConfig` outside the AWS
-SageMaker bounds, a `PerFeatureCusumAccumulator` seeded with
-NaN/Inf, or an `AlertRecord` with a mismatched
-`ALERT_RECORD_VERSION`. Types hardened this way:
+SageMaker bounds, a NaN-seeded `PerFeatureCusumAccumulator` or an
+`AlertRecord` of the wrong `ALERT_RECORD_VERSION`. Covered:
 `BloomFilter`, `HyperLogLog`, `HistogramConfig`, `ScoreHistogram`,
 `RcfConfig`, `PerFeatureCusumAccumulator`, `PerFeatureCusumConfig`,
-`AlertRecord`. Adversarial-deserialize regression tests live
-alongside the roundtrip tests in each module.
+`AlertRecord`. Adversarial-input tests sit beside each roundtrip
+test.
+
+### Hot-path guarantees
+
+- **Sampler key** - `UpdateSampler::new_keyed` uses the drawn
+  128-bit `SipHash-1-3` key as is: every key is valid, so no
+  sentinel value can swap in a public constant. Keyed-or-not is a
+  separate `Option`.
+- **`PrefixRateCap` rollover** - window reset is a
+  `compare_exchange_weak` loop (`AcqRel` on success, `Acquire` on
+  the load), so the bucket zero-fill happens-before any peer's
+  next `fetch_add`.
+- **Counters** - every `*_total` counter is striped over sixteen
+  cache lines, one per thread dealt round-robin, and read as the
+  sum: exact totals with no shared line under contention. Atomic
+  `fetch_add` wraps by definition; a `u64` at 10 Gpps wraps in ~58
+  years.
+- **No per-call allocation** - `score_trimmed` reuses a
+  `thread_local!` scratch buffer (fresh `Vec` under `no_std`),
+  `FeedbackStore` evicts in `O(1)` from a `VecDeque`,
+  `LshAlertClusterer` keys buckets by a `u128` FNV-1a fold, and
+  `metrics::default_sink()` clones one process-wide `Arc`.
+- **Bounded `Debug`** - `CountMinSketch` and `RandomCutForest`
+  print a size summary, never their tables, so
+  `debug!("{forest:?}")` cannot dump tens of MiB.
+
+### Calibration + feedback semantics
+
+- **Platt skew fallback** - `PlattCalibrator::fit` skips
+  Newton-Raphson when class imbalance exceeds
+  `DEFAULT_SKEW_THRESHOLD = 100` (the Hessian goes near-singular),
+  starts from the smoothed prior `a = 0`,
+  `b = ln((N- + 1) / (N+ + 1))` and runs
+  `DEFAULT_SKEW_SGD_EPOCHS = 16` passes of logistic SGD at
+  `DEFAULT_SKEW_SGD_LR = 0.01`. `high_skew()` flags the fallback;
+  extreme imbalance usually means a broken labelling pipeline.
+- **`PlattCalibrator::update_online`** steps by `-lr · (y - p) · s`
+  for `p = 1 / (1 + exp(a · s + b))`.
+- **`FeedbackStore::adjust`** normalises the Gaussian-kernel sum
+  by the kernel weights, so the bias stays in `[-1, 1]` whatever
+  the label count: `k` Confirmed and `m` Benign at a probe give
+  `(k - m) / (k + m)`.
+
+### API stability
+
+- Public enums expected to grow are `#[non_exhaustive]`
+  (`DriftLevel`, `DriftDirection`, `DriftKind`, `Severity`,
+  `ThresholdMode`, `ClusterDecision`, `FeedbackLabel`,
+  `LshClusterDecision`), as are structs with `pub` fields
+  (`RcfConfig`, `AlertRecord`, `UpdateSampler`, `UpdateProducer`,
+  `UpdateConsumer`, `PrefixRateCap`). Build `AlertRecord` through
+  `new`, `from_forest` or `from_thresholded`.
+- Every `.score*()`, every builder `build`, and every
+  `.observe()` / `.update()` / `.record()` / `.process()` /
+  `.adjust()` / `.explain()` returning a verdict is `#[must_use]`;
+  discard with `let _ =`.
+- Metric names in `metrics::names` never change outside a major
+  release. `inc_counter` takes `&str` so integrators can add
+  dynamic names.
+- The facade's committed surface is the catalogue in `README.md`
+  and this file, not everything a glob import reaches; pin from
+  member crates for strict compile-time stability.
+- `RcfError::InvalidConfig` carries a `Box<str>` (16 B variant).
+
+### Build and supply chain
+
+- Hot sketch helpers carry `#[inline]` so they inline across the
+  core / hotpath crate boundary.
+- Rustdoc runs with `-D rustdoc::broken_intra_doc_links`.
+- `deny.toml` keeps MPL-2.0 out of the blanket allow list; a
+  consumer needing an MPL crate adds a justified exception.
+- `.github/workflows/ci.yml` runs weekly (Monday 03:00 UTC) and on
+  `workflow_dispatch`: fmt, clippy, `no_std`, feature matrix, tests
+  on stable and MSRV, doc, `cargo bench --no-run`, examples,
+  `cargo audit`, `cargo deny`, `cargo machete`, CycloneDX SBOM.
+- Publication happens in the release repository, which re-runs the
+  gates on the stamped tree, publishes `core → triage → hotpath →
+anomstream` and attests the `.crate` files.
 
 ## Multi-tenancy
 
@@ -1679,7 +1507,7 @@ detection. For each buffer size `l ∈ [0, L]` the metric inflates
 the anomaly mask by `l` positions on both sides (precision side)
 and dilates the prediction set by `l` positions (recall side),
 computes `RangeAUCPR(l)`, then trapezoidally integrates over `l`.
-Rewards detectors whose scores peak *near* the true anomaly
+Rewards detectors whose scores peak _near_ the true anomaly
 instead of exactly on it - the key weakness of point-wise AUC on
 TS workloads.
 
