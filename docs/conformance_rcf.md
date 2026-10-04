@@ -67,10 +67,6 @@ subtree_mass)` per depth. Takes `&self`, rayon-parallel across
 - `score_with_confidence` - mean + per-tree dispersion
   (`stddev`, `stderr`), `ci95()` / `ci(z)` helpers for Gaussian
   confidence intervals.
-- `score_many_locality_sorted` + `locality_bucket` - opt-in
-  cache-aware batch scoring (sort by quantised leading-dim key,
-  score, un-permute). Wins only on strongly-correlated batches;
-  do not swap blindly - bench your workload.
 - `DynamicForest<MAX_D>` (`dynamic_forest`) - runtime-dim wrapper
   for heterogeneous multi-tenant / MSSP deployments. Zero-pads
   inputs shorter than `MAX_D`; preserves the const-generic
