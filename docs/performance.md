@@ -32,11 +32,19 @@ Five Criterion harnesses across the workspace:
 | `hotpath/benches/modules.rs`        | sampler, prefix rate cap, bounded MPSC channel                                                                                                      |
 
 ```bash
-cargo bench --workspace                                             # full
+cargo bench -p anomstream-core                                      # core harnesses
+cargo bench -p anomstream-triage --features std                     # triage harness
+cargo bench -p anomstream-triage --features std,audit-integrity,postcard -- audit_chain
+cargo bench -p anomstream-hotpath                                   # hotpath harness
 cargo bench -p anomstream-core --bench modules                      # single harness
-cargo bench --workspace -- --sample-size 10 --measurement-time 2    # quick
+cargo bench -p anomstream-core -- --sample-size 10 --measurement-time 2  # quick
 cargo bench -p anomstream-core --bench modules -- per_feature_ewma/ # single group
 ```
+
+`cargo bench --workspace` builds every crate with its default features,
+which leaves the triage harness out (it needs `std`) and the audit-chain
+group out (it needs `audit-integrity` and `postcard`); run those two
+explicitly.
 
 Criterion HTML reports land in `target/criterion/`.
 
@@ -46,24 +54,25 @@ Criterion HTML reports land in `target/criterion/`.
 | --------- | -------------------------------------------------- |
 | CPU       | Intel Core i7-1370P (13th gen), 14C/20T, L3 24 MiB |
 | Memory    | 32 GB DDR5                                         |
-| Kernel    | Linux 6.17                                         |
+| Kernel    | Linux 7.0                                          |
 | Allocator | mimalloc 0.1 (pinned in bench harness)             |
-| Compiler  | rustc 1.95 stable                                  |
+| Compiler  | rustc 1.99 stable                                  |
 
 ### Caveats
 
 - **Cross-group variance** - `b.iter()` mutates a persistent forest and
   Criterion picks batch sizes per-op, so reservoir state drifts across
   groups. Trust ratios _within_ a group.
-- **Cross-session variance** - numbers here are warm-CPU (`performance`
-  governor). A cool / powersave session ran the single-probe hot path
-  25-30 % faster. Ratios are stable; absolutes are not.
-- **Parallel ceiling** - `score_many` plateaus at ~6× on 14 cores,
-  memory-bandwidth-bound once the working set spills L3.
-- **Fan-out threshold** - single-probe ops below `num_trees × D = 2048`
-  run the ensemble serially even with the `parallel` feature on; see
-  [Ensemble fan-out threshold](#ensemble-fan-out-threshold). Absolute
-  single-probe numbers below predate that change.
+- **Cross-session variance** - numbers here were taken on an idle
+  machine, `performance` power profile and energy-performance preference,
+  `intel_pstate` active, every other workload stopped. Ratios are stable;
+  absolutes move with thermal state.
+- **Parallel ceiling** - `score_many` reaches 5-8× on 14 cores and stops
+  there, memory-bandwidth-bound once the working set spills L3.
+- **Fan-out threshold** - single-probe ops below `num_trees × D = 1024`
+  run the ensemble serially even with the `parallel` feature on, and the
+  stateless codisp walk stays serial below 200 trees; see
+  [Ensemble fan-out threshold](#ensemble-fan-out-threshold).
 
 ---
 
@@ -77,14 +86,14 @@ Criterion HTML reports land in `target/criterion/`.
 
 | Workload                              | Time      | Throughput |
 | ------------------------------------- | --------- | ---------- |
-| `forest_update`                       | **34 µs** | ~29 k/s    |
-| `forest_score`                        | **34 µs** | ~29 k/s    |
-| `forest_attribution`                  | **45 µs** | ~22 k/s    |
-| `forest_score_and_attribution`        | **47 µs** | ~21 k/s    |
-| `forest_split_score_then_attribution` | **79 µs** | ~13 k/s    |
+| `forest_update`                       | **26 µs** | ~39 k/s    |
+| `forest_score`                        | **22 µs** | ~45 k/s    |
+| `forest_attribution`                  | **32 µs** | ~32 k/s    |
+| `forest_score_and_attribution`        | **34 µs** | ~29 k/s    |
+| `forest_split_score_then_attribution` | **57 µs** | ~17 k/s    |
 
-- Fused `score_and_attribution` is **~41 % faster** than `score` +
-  `attribution` separately (one traversal, `47/79 ≈ 0.59`).
+- Fused `score_and_attribution` is **~40 % faster** than `score` +
+  `attribution` separately (one traversal, `34/57 ≈ 0.60`).
 - Fused bbox SIMD kernel (`total_probability_of_cut`) saves one
   `min`/`max` pass per internal node.
 - Typed-arena refactor (persistence v4) cut leaf-arena memory **−90 %**
@@ -92,67 +101,97 @@ Criterion HTML reports land in `target/criterion/`.
 
 Across shapes:
 
-| Config           | `forest_update` | `forest_score` | `forest_attribution` |
-| ---------------- | --------------- | -------------- | -------------------- |
-| `(50, 128, 16)`  | 29 µs           | 25 µs          | - |
-| `(100, 256, 4)`  | 29 µs           | 30 µs          | 35 µs                |
-| `(100, 256, 16)` | 34 µs           | 34 µs          | 45 µs                |
-| `(100, 256, 64)` | 104 µs          | 42 µs          | 88 µs                |
-| `(200, 512, 16)` | 55 µs           | 52 µs          | - |
+| Config           | `trees × D` | `forest_update` | `forest_score` | `forest_attribution` |
+| ---------------- | ----------- | --------------- | -------------- | -------------------- |
+| `(50, 128, 16)`  | 800         | 6.4 µs          | 11.9 µs        | 30.3 µs              |
+| `(100, 256, 4)`  | 400         | 10.4 µs         | 20.8 µs        | 26.2 µs              |
+| `(100, 256, 14)` | 1400        | 35.8 µs         | 21.8 µs        | 30.3 µs              |
+| `(100, 256, 16)` | 1600        | 25.6 µs         | 22.2 µs        | 31.5 µs              |
+| `(150, 256, 14)` | 2100        | 28.6 µs         | 28.3 µs        | 39.4 µs              |
+| `(200, 256, 16)` | 3200        | 33.0 µs         | 32.3 µs        | 47.4 µs              |
+| `(100, 256, 64)` | 6400        | 71.6 µs         | 29.9 µs        | 65.5 µs              |
+| `(200, 512, 16)` | 3200        | 39.5 µs         | 35.2 µs        | -                    |
+
+Each row is a separate persistent forest that the previous group has
+already mutated, so a row-to-row comparison carries the cross-group
+variance above: the `(100, 256, 14)` update reads slower than the
+`(100, 256, 16)` one for that reason, not for any structural one.
 
 ### Ensemble fan-out threshold
 
 Per-tree work is small - roughly `D × depth`, a few hundred nanoseconds
-at the AWS-default shape. That is below rayon's task-dispatch floor, so
-splitting a *single* ensemble walk across workers used to cost more than
-it saved. The fan-out is now gated on estimated work (`num_trees × D`,
-threshold `2048`, `PARALLEL_FANOUT_MIN_WORK` in
+at the AWS-default shape. That is close to rayon's task-dispatch floor,
+so splitting a _single_ ensemble walk across workers only pays once there
+are enough trees and dimensions to amortise it. The fan-out is gated on
+estimated work, `num_trees × D >= 1024` (`PARALLEL_FANOUT_MIN_WORK` in
 `forest/random_cut_forest.rs`): below it the walk stays on the calling
-thread, at or above it rayon fans out as before.
+thread, at or above it rayon fans out. Every single-probe walk - update,
+delete, score, attribution and the fused and aggregate variants - reads
+the same threshold.
 
-Measured back-to-back on one machine, `parallel` feature on in both
-columns, only the threshold flipped (`0` = always fan out, the old
-behaviour):
+**Why one threshold and not one per walk.** Measured op by op in a tight
+loop of that op alone, the crossovers differ: an update-only loop stays
+faster serial up to about 3200 units, a score-only loop crosses near 1400
+and an attribution-only loop already near 400. A real stream does not run
+one op in a loop, though; it interleaves an update with a read on every
+point. When those two walks take different arms, the parallel one starts
+from parked workers each time and pays to wake them, and the mixed stream
+is slower than both pure arms up to 3200 units and never beats the faster
+one at any shape measured. `forest_stream`
+(update then read on each iteration, µs, both walks serial / both walks
+parallel / update serial and read parallel):
 
-| Config           | `trees × D` | `forest_update` | `forest_score` | Arm      |
-| ---------------- | ----------- | --------------- | -------------- | -------- |
-| `(100, 256, 4)`  | 400         | **2.5× faster** | **1.7×**       | serial   |
-| `(50, 128, 16)`  | 800         | **4.9× faster** | **2.9×**       | serial   |
-| `(100, 256, 16)` | 1600        | **1.7× faster** | **1.35×**      | serial   |
-| `(200, 512, 16)` | 3200        | unchanged       | unchanged      | parallel |
-| `(100, 256, 64)` | 6400        | unchanged       | unchanged      | parallel |
+| `trees × D`           | update + score            | update + attribution      | update + codisp           |
+| --------------------- | ------------------------- | ------------------------- | ------------------------- |
+| 400 `(100, 256, 4)`   | **32.5** / 40.9 / 65.2    | **35.1** / 65.2 / 66.7    | **24.5** / 61.0 / 59.7    |
+| 800 `(50, 128, 16)`   | **18.3** / 38.4 / 42.2    | **33.6** / 61.0 / 51.7    | **13.1** / 36.1 / 42.6    |
+| 1400 `(100, 256, 14)` | 50.7 / **46.6** / 94.4    | **76.7** / 81.6 / 105.1   | **37.4** / 59.5 / 93.4    |
+| 1600 `(100, 256, 16)` | 51.4 / **47.8** / 95.3    | 79.3 / **63.9** / 105.2   | **38.1** / 69.1 / 92.4    |
+| 2100 `(150, 256, 14)` | 79.1 / **56.3** / 120.9   | 119.4 / **72.7** / 135.9  | **63.6** / 80.4 / 123.1   |
+| 3200 `(200, 256, 16)` | 111.3 / **61.9** / 155.3  | 173.5 / **115.5** / 187.8 | 90.8 / 91.9 / 156.1       |
+| 6400 `(400, 256, 16)` | 359.1 / **98.1** / 322.1  | 473.1 / **192.8** / 373.8 | 286.2 / **139.2** / 307.1 |
+| 6400 `(100, 256, 64)` | 194.3 / **106.8** / 288.6 | 373.2 / **197.7** / 348.1 | 142.7 / **120.0** / 276.7 |
 
-The two `parallel`-arm rows run identical code in both columns and serve
-as the control group: they moved ≤ 8 %, which sets the noise floor for
-the ratios above.
+The right column never wins, so every walk of a stream must take the same
+arm, and the crossover of the two pure arms for update plus score and
+update plus attribution sits between 800 and 1400 units. `1024` is that
+crossover: at 1400 attribution pays 6 % for being parallel, at 800 both
+reads pay 2× for not being serial. `update_indexed` followed by `delete`
+gives the same picture (serial / parallel: 144.8 / 81.4 µs at 400, 67.7 /
+60.3 at 800, 198.0 / 95.3 at 1600, 400.6 / 149.7 at 3200, with the mixed
+arm slower than both at each), so delete reads the shared threshold too.
+
+**Codisp counts trees, not dimensions.** The stateless codisp walk visits
+one leaf-to-root path per tree and its cost barely moves with `D` (7.2 µs
+at `(100, 256, 4)`, 12.2 µs at `(100, 256, 64)`), so a `trees × D` gate
+would send it parallel on dimension count alone. It is gated on
+`num_trees >= 200` instead (`CODISP_FANOUT_MIN_TREES`), where its own
+serial and parallel arms cross: single probe, serial / parallel, 4.3 /
+16.6 µs at 50 trees, 11.7 / 22.7 at 100, 30.2 / 29.1 at 200, 85.6 / 41.0
+at 400. Its documented use is scoring against a frozen baseline with no
+update in between, so it does not interleave with the update walk; when
+it does, as in the right-hand column above, the serial codisp still wins
+below 200 trees whatever the update did.
+
+**What it costs.** A loop that only updates, with no read in between,
+pays for the shared threshold between 1024 and about 3200 units: at
+`(100, 256, 16)` it runs 15.7 µs serial against 35.1 µs parallel, and
+`DriftAwareForest::update` without a shadow measures 23.5 µs against 15.9
+µs with the gate forced serial. That is a warm-up pattern; once a
+detector scores what it ingests, the stream table is the one that
+applies.
 
 **Consumer shape** - the eBPFsentinel Enterprise RCF detector runs
-`D = 14` at the default 100 trees / 256 samples = 1400 units, so it takes
-the serial arm and picks up the win without any config change. It calls
-only single-probe `score` / `update` (no batch entry point), and keeps
-the `parallel` feature enabled so that raising `num_trees` past the
-threshold restores the fan-out - which a compile-time feature flip could
-not do.
-
-**Open calibration** - nothing is measured between 1600 and 3200 units,
-so `2048` is a midpoint choice rather than a measured optimum; shapes
-landing in that band (150 trees at `D = 14` = 2100) may pick the slower
-arm by a small margin. The historical 3200 sample also varies
-sample_size alongside tree count, confounding depth with breadth. The
-`(100, 256, 14)`, `(150, 256, 14)` and `(200, 256, 16)` cases were added
-to `forest_update` / `forest_score` to settle both; they need an idle
-machine to be meaningful.
+`D = 14` at the default 100 trees / 256 samples = 1400 units, above the
+threshold, so it takes the parallel arm for both its `update` and its
+`score`, which the 1400 row shows to be the faster pair. It calls only
+single-probe entry points (no batch), and keeps the `parallel` feature
+enabled; a compile-time feature flip could not follow `num_trees`.
 
 This affects only per-tree fan-out. Batch entry points (`score_many`,
 `attribution_many`, `score_codisp_stateless_many`) parallelise across
-*points* - each task is a whole ensemble walk, so the fan-out always
+_points_ - each task is a whole ensemble walk, so the fan-out always
 pays and is never gated.
-
-Ratios above are trustworthy (same machine, back-to-back, control group
-included). The **absolute** µs figures in the tables on this page predate
-the gate and were taken in an earlier session; the serial-arm shapes are
-now faster than what they show. Re-stamp them from a quiet machine before
-quoting them as current.
 
 ### Batch scoring
 
@@ -160,36 +199,47 @@ Parallel `score_many` vs serial loop (`D=16`):
 
 | Batch | `score_many` | Serial  | Speedup |
 | ----- | ------------ | ------- | ------- |
-| 64    | 360 µs       | 2.11 ms | 5.9×    |
-| 512   | 3.73 ms      | 17.1 ms | 4.6×    |
-| 4096  | 28.6 ms      | 137 ms  | 4.8×    |
+| 64    | 327 µs       | 1.58 ms | 4.8×    |
+| 512   | 2.26 ms      | 11.5 ms | 5.1×    |
+| 4096  | 16.8 ms      | 134 ms  | 8.0×    |
 
-Caps at ~6× rayon speedup - past L3 the per-probe working set thrashes
-L1/L2 and workers contend on the LLC→DRAM channel.
+Speedup stays at 5-8× on 14 cores - past L3 the per-probe working set
+thrashes L1/L2 and workers contend on the LLC→DRAM channel.
 
 **Codisp variants** - probe-based (`score_codisp_many`) pre-inserts
 probes, shares the leaf→root walk, fans out across trees:
 
 | Batch K | `score_codisp_many` | `score_codisp` loop | Speedup |
 | ------- | ------------------- | ------------------- | ------- |
-| 16      | 1.76 ms             | 2.39 ms             | 1.4×    |
-| 64      | 6.59 ms             | 9.58 ms             | 1.5×    |
+| 16      | 1.61 ms             | 2.40 ms             | 1.5×    |
+| 64      | 5.14 ms             | 9.62 ms             | 1.9×    |
 
-Gain caps at ~1.5× - insert/delete mutation still scales `K × trees`.
+Gain stays under 2× - insert/delete mutation still scales `K × trees`.
 For frozen-baseline batches at any size prefer **`score_codisp_stateless_many`**
 (no reservoir mutation, no `O(K)` saturation):
 
-| Workload                              | Time    |
-| ------------------------------------- | ------- |
-| `score_codisp_stateless` single probe | 29 µs   |
-| `score_codisp_stateless_many` k=16    | 108 µs  |
-| `score_codisp_stateless_many` k=64    | 312 µs  |
-| `score_codisp_stateless_many` k=256   | 1.07 ms |
+| Workload                              | Time   |
+| ------------------------------------- | ------ |
+| `score_codisp_stateless` single probe | 9.9 µs |
+| `score_codisp_stateless_many` k=16    | 57 µs  |
+| `score_codisp_stateless_many` k=64    | 183 µs |
+| `score_codisp_stateless_many` k=256   | 607 µs |
 
-Stateless is ~1.1× faster than non-mutating `score()` single-probe (skips
-EMA/reservoir update) and **~21× faster than mutating batched codisp**
-(312 µs vs 6.59 ms @ k=64) - which is why NAB eval dropped 12.6 s → 1.09 s
-after the switch.
+Stateless is ~2.2× faster than non-mutating `score()` single-probe (one
+leaf-to-root path per tree, serial below 200 trees) and **~28× faster
+than mutating batched codisp** (183 µs vs 5.14 ms @ k=64) - which is why
+NAB eval dropped 12.6 s → 1.09 s after the switch.
+
+Single probe across shapes, which shows the gate on tree count:
+
+| Config           | Trees | Arm      | Time    |
+| ---------------- | ----- | -------- | ------- |
+| `(50, 128, 16)`  | 50    | serial   | 4.3 µs  |
+| `(100, 256, 4)`  | 100   | serial   | 7.2 µs  |
+| `(100, 256, 16)` | 100   | serial   | 9.9 µs  |
+| `(100, 256, 64)` | 100   | serial   | 12.2 µs |
+| `(200, 256, 16)` | 200   | parallel | 36.7 µs |
+| `(400, 256, 16)` | 400   | parallel | 36.1 µs |
 
 ### Early termination
 
@@ -197,24 +247,24 @@ Single probe, `score_early_term`:
 
 | Path                                    | Time    |
 | --------------------------------------- | ------- |
-| `score` (full ensemble)                 | 33 µs   |
-| threshold=0.02 (tight)                  | 36 µs   |
-| threshold=0.20 (loose, stops ~20 trees) | 4.99 µs |
+| `score` (full ensemble)                 | 32 µs   |
+| threshold=0.02 (tight)                  | 29 µs   |
+| threshold=0.20 (loose, stops ~20 trees) | 4.40 µs |
 
-Loose threshold → **6.6×** on baseline-dominated traffic; a tight
-threshold rarely short-circuits and matches a full `score`.
-
-> The `score` row was previously labelled "parallel ensemble". At this
-> shape the ensemble walk now runs serially - see
-> [Ensemble fan-out threshold](#ensemble-fan-out-threshold).
+Loose threshold → **7.3×** on baseline-dominated traffic; a tight
+threshold rarely short-circuits and stays close to a full `score`.
 
 ### Delete
 
-| Workload                                   | Time   |
-| ------------------------------------------ | ------ |
-| `update_indexed + delete` `(100, 256, 16)` | 115 µs |
+| Workload                                   | `trees × D` | Arm      | Time   |
+| ------------------------------------------ | ----------- | -------- | ------ |
+| `update_indexed + delete` `(50, 128, 16)`  | 800         | serial   | 71 µs  |
+| `update_indexed + delete` `(100, 256, 4)`  | 400         | serial   | 148 µs |
+| `update_indexed + delete` `(100, 256, 16)` | 1600        | parallel | 80 µs  |
+| `update_indexed + delete` `(200, 256, 16)` | 3200        | parallel | 152 µs |
 
-~3.4× an update - bbox recompute up the path + arena slot release.
+~3× an update at the default shape - bbox recompute up the path + arena
+slot release.
 Pair with `update_indexed` for probe workflows; otherwise rely on the
 reservoir's cheaper amortised eviction.
 
@@ -268,19 +318,19 @@ matters more than exact `f64` parity.
 
 | Workload                                      | Time  |
 | --------------------------------------------- | ----- |
-| `DynamicForest::update` active=8 / MAX_D=16   | 32 µs |
-| `DriftAwareForest::update` no shadow          | 34 µs |
-| `DriftAwareForest::update` with active shadow | 80 µs |
+| `DynamicForest::update` active=8 / MAX_D=16   | 22 µs |
+| `DriftAwareForest::update` no shadow          | 25 µs |
+| `DriftAwareForest::update` with active shadow | 58 µs |
 
 Dynamic zero-pad overhead is tiny (shallower active-8 trees recover it);
 the no-shadow wrapper has zero always-on cost; an active shadow runs
-primary + shadow sequentially (2.4×).
+primary + shadow sequentially (2.3×).
 
 ### Shingled
 
 | Workload                              | Time  |
 | ------------------------------------- | ----- |
-| `update_scalar` + `score_scalar` D=16 | 71 µs |
+| `update_scalar` + `score_scalar` D=16 | 50 µs |
 
 ≈ update + score + a free ring-buffer push; cost is the downstream forest
 ops on the embedded vector.
@@ -291,9 +341,11 @@ ops on the embedded vector.
 
 | Workload                               | Time  |
 | -------------------------------------- | ----- |
-| `thresholded_process` `(100, 256, 16)` | 73 µs |
+| `thresholded_process` `(100, 256, 16)` | 54 µs |
 
-≈ `update (34) + score (34)` + ~5 µs EMA/tdigest/threshold logic.
+≈ `update (26) + score (22)` + ~6 µs EMA/tdigest/threshold logic. Taken
+from a run of this group alone: inside the full core run, after every
+other group had mutated its forests, it read 72 µs.
 
 ---
 
@@ -301,28 +353,29 @@ ops on the embedded vector.
 
 ### Attribution, confidence, forensic
 
-| Workload                                     | Time     |
-| -------------------------------------------- | -------- |
-| `forensic_baseline` `(100, 256, 4)`          | 13 µs    |
-| `forensic_baseline` `(100, 256, 16)`         | 16 µs    |
-| `forensic_baseline` `(100, 1024, 16)`        | 64 µs    |
-| `FeatureGroups::group_scores` D=16, 3 groups | 39.0 µs  |
-| `attribution_stability` D=16                 | 55.4 µs  |
-| `score_with_confidence` D=16                 | 58.4 µs  |
-| `bootstrap` 4096 pts, `(50, 128)`            | 187.8 ms |
+| Workload                                     | Time    |
+| -------------------------------------------- | ------- |
+| `forensic_baseline` `(100, 256, 4)`          | 13 µs   |
+| `forensic_baseline` `(100, 256, 16)`         | 16 µs   |
+| `forensic_baseline` `(100, 1024, 16)`        | 70 µs   |
+| `FeatureGroups::group_scores` D=16, 3 groups | 28.2 µs |
+| `attribution_stability` D=16                 | 41.8 µs |
+| `score_with_confidence` D=16                 | 25.4 µs |
+| `bootstrap` 4096 pts, `(50, 128)`            | 39.9 ms |
 
 - `forensic_baseline` ≈ `O(live_points × D)` Welford sweep - linear in
-  `sample_size`, ~1.3× over D 4→16.
+  `sample_size`, ~1.2× over D 4→16.
 - `group_scores` ≈ attribution + O(D) post-reduce.
-- `attribution_stability` ≈ 1.2× attribution; `score_with_confidence`
-  ≈ 1.7× score (non-parallel - needs per-tree outputs in order).
-- `bootstrap` ~22 k pts/s on the reduced forest, linear in point count.
+- `attribution_stability` ≈ 1.3× attribution; `score_with_confidence`
+  ≈ 1.1× score (non-parallel - needs per-tree outputs in order).
+- `bootstrap` ~100 k pts/s on the reduced forest, linear in point count;
+  at 800 units its forest walks stay serial.
 
 ### SAGE Shapley attribution
 
-| Workload                                         | Time    |
-| ------------------------------------------------ | ------- |
-| `SageEstimator::explain` D=16, K=64, `(50, 128)` | 40.3 ms |
+| Workload                                         | Time   |
+| ------------------------------------------------ | ------ |
+| `SageEstimator::explain` D=16, K=64, `(50, 128)` | 8.7 ms |
 
 `K · D × forest_score` - SOC triage / forensic replay, not per-alert.
 
@@ -330,8 +383,8 @@ ops on the embedded vector.
 
 | Workload                        | Time    |
 | ------------------------------- | ------- |
-| `to_bytes` `(100, 256, D=16)`   | 5.98 ms |
-| `from_bytes` `(100, 256, D=16)` | 7.66 ms |
+| `to_bytes` `(100, 256, D=16)`   | 2.59 ms |
+| `from_bytes` `(100, 256, D=16)` | 3.16 ms |
 
 2.6 MB postcard payload; tree rehydration dominates deserialise.
 
@@ -346,15 +399,15 @@ ops on the embedded vector.
 
 | Workload                                             | Time                     | Throughput          |
 | ---------------------------------------------------- | ------------------------ | ------------------- |
-| `OnlineStats::update` (Welford, hot)                 | 5.6 ns                   | ~180 M/s            |
-| `OnlineStats::update` (cold, 32-loop)                | 75 ns                    | ~14 M/s             |
+| `OnlineStats::update` (Welford, hot)                 | 5.3 ns                   | ~190 M/s            |
+| `OnlineStats::update` (cold, 32-loop)                | 74 ns                    | ~14 M/s             |
 | `OnlineStats::variance` / `std_dev` read             | 0.2 ns                   | ~5 G/s              |
-| `Normalizer<16>::transform` None / ZScore / MinMax   | 3.5 / 8.0 / 15.3 ns      | ~286 / 125 / 65 M/s |
-| `Normalizer<16>::fit` 1024 samples                   | 6.5 µs                   | per-batch           |
-| `PerFeatureEwma<16>::observe` warmed / spike / cold  | 129 ns / 96 ns / 1.50 µs | ~7.8 / 10 M/s       |
-| `PerFeatureCusum<16>::observe` stable / below / trip | 40 / 68 / 85 ns          | ~25 / 15 / 12 M/s   |
+| `Normalizer<16>::transform` None / ZScore / MinMax   | 3.4 / 7.2 / 15.3 ns      | ~294 / 139 / 65 M/s |
+| `Normalizer<16>::fit` 1024 samples                   | 8.2 µs                   | per-batch           |
+| `PerFeatureEwma<16>::observe` warmed / spike / cold  | 128 ns / 96 ns / 1.58 µs | ~7.8 / 10 M/s       |
+| `PerFeatureCusum<16>::observe` stable / below / trip | 35 / 67 / 80 ns          | ~28 / 15 / 12 M/s   |
 
-- `Normalizer::None` (3.5 ns) is the memcpy baseline; ZScore adds
+- `Normalizer::None` (3.4 ns) is the memcpy baseline; ZScore adds
   centre+scale, MinMax adds the range clamp.
 - EWMA spike < warmed: the zero-variance branch returns `f64::MAX` and
   skips the sqrt.
@@ -364,17 +417,17 @@ ops on the embedded vector.
 
 | Workload                                            | Time          | Throughput       |
 | --------------------------------------------------- | ------------- | ---------------- |
-| `CountMinSketch::increment` / `estimate` w=2048 d=4 | 65 / 61 ns    | ~15 M/s          |
-| `CountMinSketch::reset` w=2048 d=4                  | 808 ns        | 64 KiB zero-fill |
-| `BloomFilter::insert_bytes` n=1k p=0.01             | 22.6 ns       | ~44 M/s          |
-| `BloomFilter::insert_hash` n=100k p=0.01            | 16.8 ns       | ~60 M/s          |
-| `BloomFilter::contains_bytes` n=100k p=0.01         | 28.8 ns       | ~35 M/s          |
-| `BloomFilter::union` two n=10k filters              | 260 ns        | per-merge        |
-| `HyperLogLog::add_bytes` / `add_hash` p=12          | 11.5 / 2.7 ns | ~87 / 370 M/s    |
-| `HyperLogLog::estimate` after 100k, p=12            | 18.6 µs       | query-only       |
-| `HyperLogLog::merge` two p=12                       | 1.64 µs       | per-merge        |
-| `SpaceSaving::observe` hot / evict, K=128           | 9.7 / 310 ns  | ~103 / 3.2 M/s   |
-| `SpaceSaving::top_k(10)` from 1024 keys             | 5.6 µs        | per-query        |
+| `CountMinSketch::increment` / `estimate` w=2048 d=4 | 63 / 59 ns    | ~16 M/s          |
+| `CountMinSketch::reset` w=2048 d=4                  | 770 ns        | 64 KiB zero-fill |
+| `BloomFilter::insert_bytes` n=1k p=0.01             | 26.4 ns       | ~38 M/s          |
+| `BloomFilter::insert_hash` n=100k p=0.01            | 16.9 ns       | ~59 M/s          |
+| `BloomFilter::contains_bytes` n=100k p=0.01         | 27.3 ns       | ~37 M/s          |
+| `BloomFilter::union` two n=10k filters              | 213 ns        | per-merge        |
+| `HyperLogLog::add_bytes` / `add_hash` p=12          | 10.8 / 2.7 ns | ~93 / 377 M/s    |
+| `HyperLogLog::estimate` after 100k, p=12            | 15.6 µs       | query-only       |
+| `HyperLogLog::merge` two p=12                       | 1.43 µs       | per-merge        |
+| `SpaceSaving::observe` hot / evict, K=128           | 7.9 / 590 ns  | ~126 / 1.7 M/s   |
+| `SpaceSaving::top_k(10)` from 1024 keys             | 4.7 µs        | per-query        |
 
 - CMS increment ≈ estimate (both hash twice over 4 rows).
 - `_hash` Bloom/HLL paths skip the `SipHash` call; `contains` miss-path
@@ -387,9 +440,9 @@ ops on the embedded vector.
 
 | Workload                             | Time   | Throughput |
 | ------------------------------------ | ------ | ---------- |
-| `TDigest::record`                    | 42 ns  | ~24 M/s    |
-| `TDigest::quantile(0.99)` after 100k | 57 ns  | query-only |
-| `ScoreHistogram::record`             | 4.9 ns | ~205 M/s   |
+| `TDigest::record`                    | 49 ns  | ~20 M/s    |
+| `TDigest::quantile(0.99)` after 100k | 47 ns  | query-only |
+| `ScoreHistogram::record`             | 5.2 ns | ~194 M/s   |
 
 TDigest amortises compaction into the 10×-compression buffer flush;
 ScoreHistogram is a bin-index + increment.
@@ -398,10 +451,10 @@ ScoreHistogram is a bin-index + increment.
 
 | Workload                                   | Time    | Throughput |
 | ------------------------------------------ | ------- | ---------- |
-| `MetaDriftDetector::observe` (CUSUM)       | 8.0 ns  | ~125 M/s   |
-| `FeatureDriftDetector::observe` D=16/10bin | 85 ns   | ~12 M/s    |
-| `FeatureDriftDetector::psi()` D=16/10bin   | 1.17 µs | query-only |
-| `AdwinDetector::update` cap=4096           | 26.3 µs | ~38 k/s    |
+| `MetaDriftDetector::observe` (CUSUM)       | 7.8 ns  | ~128 M/s   |
+| `FeatureDriftDetector::observe` D=16/10bin | 88 ns   | ~11 M/s    |
+| `FeatureDriftDetector::psi()` D=16/10bin   | 1.16 µs | query-only |
+| `AdwinDetector::update` cap=4096           | 26.5 µs | ~38 k/s    |
 
 ADWIN's `O(N)` prefix-sum dominates at cap=4096 - **not** per-packet
 material. Run it on the score stream (one update per alert) or use
@@ -415,21 +468,21 @@ material. Run it on the score stream (one update per alert) or use
 
 | Workload                                          | Time              | Throughput          |
 | ------------------------------------------------- | ----------------- | ------------------- |
-| `LshAlertClusterer::hash_divector` D=16           | 73 ns             | ~13.7 M/s           |
-| `LshAlertClusterer::observe` D=16                 | 95 ns             | ~10.5 M/s           |
-| `AlertClusterer::observe` D=16 window=32 (cosine) | 771 ns            | ~1.3 M/s            |
-| `PotDetector::record` / `p_value` post-freeze     | 43 / 8.2 ns       | ~23 / 122 M/s       |
-| `PlattCalibrator::fit` 2048 samples               | 1.75 ms           | offline             |
-| `PlattCalibrator::calibrate` single score         | 25.6 ns           | ~39 M/s             |
-| `ensemble::fisher_combine` k=8 / 32 / 128         | 43 / 161 / 642 ns | ~24 / 6.2 / 1.6 M/s |
-| `FeedbackStore::label` capacity=256               | 571 ns            | ~1.8 M/s            |
-| `FeedbackStore::adjust` 512 labels, D=16          | 8.6 µs            | ~116 k/s            |
-| `AuditChain::append` D=4 (HMAC-SHA256 + postcard) | 426 ns            | ~2.3 M/s            |
-| `verify_audit_chain` 256 entries D=4              | 121 µs            | ~470 ns/entry       |
+| `LshAlertClusterer::hash_divector` D=16           | 68 ns             | ~14.7 M/s           |
+| `LshAlertClusterer::observe` D=16                 | 87 ns             | ~11.5 M/s           |
+| `AlertClusterer::observe` D=16 window=32 (cosine) | 360 ns            | ~2.8 M/s            |
+| `PotDetector::record` / `p_value` post-freeze     | 47 / 7.7 ns       | ~21 / 130 M/s       |
+| `PlattCalibrator::fit` 2048 samples               | 715 µs            | offline             |
+| `PlattCalibrator::calibrate` single score         | 11.7 ns           | ~86 M/s             |
+| `ensemble::fisher_combine` k=8 / 32 / 128         | 43 / 161 / 647 ns | ~23 / 6.2 / 1.5 M/s |
+| `FeedbackStore::label` capacity=256               | 15 ns             | ~66 M/s             |
+| `FeedbackStore::adjust` 512 labels, D=16          | 4.2 µs            | ~240 k/s            |
+| `AuditChain::append` D=4 (HMAC-SHA256 + postcard) | 410 ns            | ~2.4 M/s            |
+| `verify_audit_chain` 256 entries D=4              | 118 µs            | ~460 ns/entry       |
 
-- LSH `observe` (95 ns, zero-alloc) is ~8× faster than cosine
+- LSH `observe` (87 ns, zero-alloc) is ~4× faster than cosine
   `AlertClusterer` at window=32 - prefer LSH at MSSP volume (>10k/min).
-- SPOT `p_value` ~5× faster than `record` (closed-form GPD survival on
+- SPOT `p_value` ~6× faster than `record` (closed-form GPD survival on
   cached γ, σ); Platt `calibrate` is two floats + a σ.
 - `fisher_combine` ~5 ns/p-value (Kahan sum + χ² tail).
 - FeedbackStore `adjust` scales with stored labels (Gaussian-kernel sum).
@@ -440,12 +493,13 @@ Each tenant `D=4` / `(50, 64)`, warmed 128 samples:
 
 | N   | `similarity_matrix` | `score_across_tenants` | `most_similar_top5` |
 | --- | ------------------- | ---------------------- | ------------------- |
-| 32  | 37 µs               | 126 µs                 | 0.30 µs             |
-| 128 | 99 µs               | 470 µs                 | 1.12 µs             |
-| 512 | 586 µs              | 2.69 ms                | 5.01 µs             |
+| 32  | 48 µs               | 115 µs                 | 0.31 µs             |
+| 128 | 99 µs               | 395 µs                 | 1.11 µs             |
+| 512 | 544 µs              | 2.25 ms                | 4.51 µs             |
 
-`N=32→512` (16×): `similarity_matrix` (O(N²) parallel) ~16×,
-`score_across_tenants` (O(N)) 21×, `most_similar_top5` (O(N·log k)) 17×
+`N=32→512` (16×): `similarity_matrix` (O(N²) parallel) ~11×,
+`score_across_tenants` (O(N)) 20×, `most_similar_top5` (O(N·log k)) 15×
+
 - rayon hides the quadratic until core saturation.
 
 ---
@@ -454,22 +508,22 @@ Each tenant `D=4` / `(50, 64)`, warmed 128 samples:
 
 Per-call overhead on the classifier hot path:
 
-| Workload                                             | Time       | Throughput       |
-| ---------------------------------------------------- | ---------- | ---------------- |
-| `UpdateSampler::accept_stride` keep=8                | 28 ns      | ~36 M/s          |
-| `UpdateSampler::accept_hash` unkeyed / keyed keep=8  | 14 / 15 ns | ~73 / 67 M/s     |
-| `PrefixRateCap::check_and_record` 100/1s             | 11.6 ns    | ~86 M/s          |
-| `PrefixRateCap::check_and_record` 8-thread contended | ~9 µs/op   | contention floor |
-| `update_channel::try_enqueue` cap=4096 (+ drain)     | 487 ns     | ~2.1 M/s         |
-| `metrics::default_sink()` shared-Arc clone           | 12 ns      | ~85 M/s          |
+| Workload                                             | Time         | Throughput       |
+| ---------------------------------------------------- | ------------ | ---------------- |
+| `UpdateSampler::accept_stride` keep=8                | 10.7 ns      | ~93 M/s          |
+| `UpdateSampler::accept_hash` unkeyed / keyed keep=8  | 7.0 / 7.6 ns | ~142 / 132 M/s   |
+| `PrefixRateCap::check_and_record` 100/1s             | 9.7 ns       | ~103 M/s         |
+| `PrefixRateCap::check_and_record` 8-thread contended | ~8.5 µs/op   | contention floor |
+| `update_channel::try_enqueue` cap=4096 (+ drain)     | 162 ns       | ~6.2 M/s         |
+| `metrics::default_sink()` shared-Arc clone           | 10.9 ns      | ~92 M/s          |
 
 - `accept_hash` beats `accept_stride` (skips the counter atomic; admission
-  is multiply + mod). Keyed adds ~1.2 ns murmur-mix.
-- `PrefixRateCap` 11.6 ns reflects the Acquire-load short-circuit on the
+  is multiply + mod). Keyed adds ~0.5 ns murmur-mix.
+- `PrefixRateCap` 9.7 ns reflects the Acquire-load short-circuit on the
   valid-window case + batched metrics (1 sink call / 64 ops, down from
-  18 ns, −36 %); the CAS loop fires once per window roll, not per packet.
+  18 ns, −46 %); the CAS loop fires once per window roll, not per packet.
   Buckets are `#[repr(C, align(64))]` (16 KiB) to avoid false sharing.
-- Channel throughput is `sync_channel`-lock-bound; 2.1 M/s per producer
+- Channel throughput is `sync_channel`-lock-bound; 6.2 M/s per producer
   covers typical TC/XDP rates with producer fan-out.
 
 ---
@@ -481,10 +535,10 @@ Per-call overhead on the classifier hot path:
 
 | Workload                                   | Time    |
 | ------------------------------------------ | ------- |
-| `compute` n=1024, window=32                | 3.1 ms  |
-| `compute` n=2048, window=64                | 12.3 ms |
-| `compute` n=4096, window=128               | 49.3 ms |
-| `discord_topk(5)` cached n=2048, window=64 | 27.8 µs |
+| `compute` n=1024, window=32                | 3.0 ms  |
+| `compute` n=2048, window=64                | 11.9 ms |
+| `compute` n=4096, window=128               | 47.4 ms |
+| `discord_topk(5)` cached n=2048, window=64 | 22.5 µs |
 
 Scaling matches `O(n²)` (doubling n ≈ 4× cost); window affects only the
 seed column. `discord_topk` is trivial once cached - reuse the profile.
@@ -562,7 +616,7 @@ weighted by positive count:
 | Daphnet                | 1                 | 0.309     | 0.885            | **0.926**       | 0.944     |
 | GECCO                  | 1                 | 0.412     | 0.523            | **0.753**       | 0.594     |
 | GHL                    | 25                | 0.454     | 0.461            | **0.570**       | 0.419     |
-| OPPORTUNITY            | 8 (skipped D=248) | - | - | - | 0.298     |
+| OPPORTUNITY            | 8 (skipped D=248) | -         | -                | -               | 0.298     |
 | SWaT                   | 2                 | 0.282     | **0.825**        | 0.715           | 0.825     |
 | TAO                    | 13                | 0.451     | 0.453            | **0.487**       | 0.471     |
 | **aggregate weighted** | **192 / 200**     | 0.583     | **0.768**        | 0.751           | 0.753     |
@@ -589,7 +643,7 @@ to eBPFsentinel's production feature mix.
 | Impl                                        | Backend             | Updates/s            | Scores/s                | AUC       |
 | ------------------------------------------- | ------------------- | -------------------- | ----------------------- | --------- |
 | `anomstream-core` `score()` (1 seed)        | Rust, rayon         | **31 500**           | **197 900**             | 1.000     |
-| `anomstream-core` `score_codisp()` (1 seed) | Rust, parallel walk | - | 8 150                   | 1.000     |
+| `anomstream-core` `score_codisp()` (1 seed) | Rust, parallel walk | -                    | 8 150                   | 1.000     |
 | `anomstream-core` `score()` (5-seed)        | Rust, rayon         | 17 500 ± 1 240 (7 %) | 125 900 ± 1 840 (1.5 %) | 1.000 ± 0 |
 | `randomcutforest-java` 4.4.0                | JVM 26, cold        | 2 090 ± 134 (6 %)    | 8 870 ± 415 (5 %)       | 1.000 ± 0 |
 | `rrcf` 0.4.4                                | Python + NumPy      | 73 ± 3 (4 %)         | 94 150 ± 4 840 (5 %)    | 0.992 ± 0 |
@@ -604,7 +658,12 @@ to eBPFsentinel's production feature mix.
 - **AUC**: identical within precision (0.992 rrcf, 1.000 others).
 
 Ratios are portable; absolute numbers vary with thermal state (an earlier
-cool-CPU session hit ~32k/203k for `score()`).
+cool-CPU session hit ~32k/203k for `score()`). This table was not re-run
+with the current threshold and toolchain: the Java, rrcf and scikit-learn
+baselines are not installed on the reference machine, and the
+`anomstream-core` rows alone would have nothing to be compared against.
+The NAB and TSB-AD-M tables above were re-run and reproduce to the third
+decimal.
 
 ### Reproduce
 

@@ -138,12 +138,12 @@ fn bench_attribution_for<const D: usize>(
     });
 }
 
-// Shapes straddling the `num_trees × D` fan-out threshold (2048). The
+// Shapes straddling the `num_trees × D` fan-out threshold (1024). The
 // `(*, 256, *)` runs hold sample_size fixed so tree count and tree
 // depth are not varied together, which is what makes them usable for
 // calibrating the threshold; `(200, 512, 16)` keeps the historical
 // deep-tree data point. `D = 14` is the shape the eBPFsentinel
-// Enterprise detector runs at (1400 units - below the threshold).
+// Enterprise detector runs at (1400 units - above the threshold).
 fn bench_insert(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_update");
     bench_update_for::<16>(&mut group, 50, 128);
@@ -172,8 +172,12 @@ fn bench_score(c: &mut Criterion) {
 
 fn bench_attribution(c: &mut Criterion) {
     let mut group = c.benchmark_group("forest_attribution");
+    bench_attribution_for::<16>(&mut group, 50, 128);
     bench_attribution_for::<4>(&mut group, 100, 256);
+    bench_attribution_for::<14>(&mut group, 100, 256);
     bench_attribution_for::<16>(&mut group, 100, 256);
+    bench_attribution_for::<14>(&mut group, 150, 256);
+    bench_attribution_for::<16>(&mut group, 200, 256);
     bench_attribution_for::<64>(&mut group, 100, 256);
     group.finish();
 }
@@ -311,6 +315,81 @@ fn bench_codisp(c: &mut Criterion) {
     loopg.finish();
 }
 
+/// Read op that follows each update in a streaming bench.
+#[derive(Clone, Copy)]
+enum StreamRead {
+    Score,
+    Attribution,
+    Codisp,
+}
+
+/// One update then one read per iteration - the order a streaming
+/// detector runs in. Unlike the per-op groups, the read never finds
+/// the rayon workers still spinning from the previous read, so a
+/// fan-out pays the wake-up it would pay in production.
+fn bench_stream_for<const D: usize>(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    read: StreamRead,
+    num_trees: usize,
+    sample_size: usize,
+) {
+    let name = match read {
+        StreamRead::Score => "score",
+        StreamRead::Attribution => "attribution",
+        StreamRead::Codisp => "codisp_stateless",
+    };
+    let id = format!("update_then_{name}/{num_trees}t_{sample_size}s_{D}d");
+    group.bench_function(&id, |b| {
+        let mut forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
+        let mut rng = ChaCha8Rng::seed_from_u64(13);
+        b.iter(|| {
+            let mut p = [0.0_f64; D];
+            for slot in &mut p {
+                *slot = <ChaCha8Rng as rand::RngExt>::random::<f64>(&mut rng);
+            }
+            forest.update(black_box(p)).expect("update succeeds");
+            match read {
+                StreamRead::Score => {
+                    black_box(forest.score(black_box(&p)).expect("score succeeds"));
+                }
+                StreamRead::Attribution => {
+                    black_box(
+                        forest
+                            .attribution(black_box(&p))
+                            .expect("attribution succeeds"),
+                    );
+                }
+                StreamRead::Codisp => {
+                    black_box(
+                        forest
+                            .score_codisp_stateless(black_box(&p))
+                            .expect("codisp succeeds"),
+                    );
+                }
+            }
+        });
+    });
+}
+
+fn bench_stream(c: &mut Criterion) {
+    let mut group = c.benchmark_group("forest_stream");
+    for read in [
+        StreamRead::Score,
+        StreamRead::Attribution,
+        StreamRead::Codisp,
+    ] {
+        bench_stream_for::<4>(&mut group, read, 100, 256);
+        bench_stream_for::<16>(&mut group, read, 50, 128);
+        bench_stream_for::<14>(&mut group, read, 100, 256);
+        bench_stream_for::<16>(&mut group, read, 100, 256);
+        bench_stream_for::<14>(&mut group, read, 150, 256);
+        bench_stream_for::<16>(&mut group, read, 200, 256);
+        bench_stream_for::<16>(&mut group, read, 400, 256);
+        bench_stream_for::<64>(&mut group, read, 100, 256);
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_insert,
@@ -318,6 +397,7 @@ criterion_group!(
     bench_score_trimmed,
     bench_attribution,
     bench_combined,
-    bench_codisp
+    bench_codisp,
+    bench_stream
 );
 criterion_main!(benches);

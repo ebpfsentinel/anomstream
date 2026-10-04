@@ -974,7 +974,7 @@ impl<const D: usize> RandomCutForest<D> {
         let (total, count) = if let Some(p) = self
             .pool
             .as_deref()
-            .filter(|_| fan_out_pays(self.trees.len(), D))
+            .filter(|_| codisp_fan_out_pays(self.trees.len()))
         {
             p.install(|| codisp_stateless_aggregate(&self.trees, point))?
         } else {
@@ -1549,48 +1549,68 @@ impl<const D: usize> RandomCutForest<D> {
     }
 }
 
-/// Work-units below which a per-tree rayon fan-out costs more than
-/// it saves, so the ensemble walk stays on the calling thread.
+/// Work-units (`num_trees × D`) from which a per-tree rayon fan-out
+/// beats the serial walk, for every ensemble walk but codisp.
 ///
-/// One work unit ≈ one dimension visited in one tree, i.e.
-/// `num_trees × D`. A single tree walk at the AWS-default shape is
-/// ~300 ns - under rayon's task-dispatch floor, so splitting it
-/// across workers loses to the scheduling overhead. Measured on the
-/// crate's own `forest_update` / `forest_score` benches (20 cores):
+/// One threshold rather than one per walk, because a streaming caller
+/// runs an update then a read on every event, and a serial walk
+/// followed by a parallel one is the worst arm of all: the serial walk
+/// gives the rayon workers time to park, and the parallel one pays to
+/// wake them on every call. Measured on the crate's `forest_stream`
+/// and `forest_delete` benches with each arm forced (20 cores,
+/// `performance` profile; medians, µs, all serial / all rayon /
+/// update serial with the read on rayon):
 ///
-/// | `trees × D` | serial | rayon | faster |
-/// |---|---|---|---|
-/// | 400 (100t, D=4) | 14.4 µs | 33.5 µs | serial 2.3× |
-/// | 800 (50t, D=16) | 7.9 µs | 20.6 µs | serial 2.6× |
-/// | 1600 (100t, D=16) | 31.2 µs | 47.7 µs | serial 1.5× |
-/// | 3200 (200t, D=16) | 127.2 µs | 74.6 µs | rayon 1.7× |
-/// | 6400 (100t, D=64) | 218.5 µs | 138.6 µs | rayon 1.6× |
+/// | `trees × D` | shape | update + score | update + attribution | update + delete |
+/// |---|---|---|---|---|
+/// | 400 | (100, 256, 4) | **32.5** / 40.9 / 65.2 | **35.1** / 65.2 / 66.7 | 144.8 / **81.4** / 151.4 |
+/// | 800 | (50, 128, 16) | **18.3** / 38.4 / 42.2 | **33.6** / 61.0 / 51.7 | 67.7 / **60.3** / 117.9 |
+/// | 1400 | (100, 256, 14) | 50.7 / **46.6** / 94.4 | **76.7** / 81.6 / 105.1 | - |
+/// | 1600 | (100, 256, 16) | 51.4 / **47.8** / 95.3 | 79.3 / **63.9** / 105.2 | 198.0 / **95.3** / 224.1 |
+/// | 2100 | (150, 256, 14) | 79.1 / **56.3** / 120.9 | 119.4 / **72.7** / 135.9 | - |
+/// | 3200 | (200, 256, 16) | 111.3 / **61.9** / 155.3 | 173.5 / **115.5** / 187.8 | 400.6 / **149.7** / 457.3 |
+/// | 6400 | (100, 256, 64) | 194.3 / **106.8** / 288.6 | 373.2 / **197.7** / 348.1 | - |
 ///
-/// The crossover sits between 1600 and 3200; `2048` is the power of
-/// two inside that gap. Only per-tree fan-out is gated - batch entry
-/// points (`score_many`, `attribution_many`, `score_codisp_stateless_many`)
-/// parallelise across *points*, where each task is a whole ensemble
-/// walk and the fan-out always pays.
+/// The mixed column never wins, which is what rules out a threshold per
+/// walk. The update-then-score crossover lies between 800 and 1400;
+/// `1024` is a choice inside that gap rather than a measured optimum,
+/// and puts attribution at 1400 on the arm 6 % slower there.
 ///
-/// Known calibration limits - the threshold is correct for the shapes
-/// that matter (the AWS default at 1600 and below sit clearly on the
-/// serial side, `D = 64` clearly on the parallel side), but two points
-/// are unresolved:
+/// The price is paid by a caller that only updates: a bare
+/// `forest_update` loop parks no worker between calls and stays serial
+/// up to ~3200 units (15.7 µs serial against 35.1 µs on rayon at 1600),
+/// so warming a forest in that band costs about twice what a serial
+/// insert would. That is a one-off per forest; the update-then-read
+/// loop is what runs for its whole life.
 ///
-/// - The `3200` sample above is `(200 trees, 512 samples, D = 16)`,
-///   which raises tree *depth* along with tree count, so it does not
-///   isolate `num_trees × D` on its own. `forest_{update,score}` now
-///   carry `(200, 256, 16)` for the un-confounded comparison.
-/// - Nothing is measured between 1600 and 3200, so the exact crossover
-///   inside that band is unknown; `2048` is a midpoint choice, not a
-///   measured optimum. Shapes landing there (e.g. 150 trees at
-///   `D = 14`, 2100 units) may pick the slower arm by a small margin.
-///
-/// Re-measure with the `(100, 256, 14)`, `(150, 256, 14)` and
-/// `(200, 256, 16)` bench cases on an otherwise idle machine to close
-/// this out; see `docs/performance.md`.
+/// Only per-tree fan-out is gated - batch entry points (`score_many`,
+/// `attribution_many`, `score_codisp_stateless_many`) parallelise
+/// across *points*, where each task is a whole ensemble walk and the
+/// fan-out always pays.
 #[cfg(feature = "parallel")]
-const PARALLEL_FANOUT_MIN_WORK: usize = 2048;
+const PARALLEL_FANOUT_MIN_WORK: usize = 1024;
+
+/// Tree count from which a codisp walk fans out, whatever `D`.
+///
+/// Codisp work does not scale with `D`: the stateless walk follows
+/// stored cuts root-to-leaf and the probe walk climbs leaf-to-root
+/// over masses, neither touching more than one coordinate per node
+/// (serial `(100, 256, D)` costs 7.1 µs at `D = 4` and 13.0 µs at
+/// `D = 64`). Its documented use is a frozen baseline scored without
+/// updates in between, so it is calibrated on a bare
+/// `codisp_stateless/single_probe` loop (µs, serial / rayon):
+///
+/// | trees | serial | rayon |
+/// |---|---|---|
+/// | 50 | **4.3** | 16.6 |
+/// | 100 | **11.7** | 22.7 |
+/// | 200 | 30.2 | **29.1** |
+/// | 400 | 85.6 | **41.0** |
+///
+/// The probe-based walk takes the same gate because its cost is the
+/// same depth-bound climb, inferred rather than timed on its own.
+#[cfg(feature = "parallel")]
+const CODISP_FANOUT_MIN_TREES: usize = 200;
 
 /// Whether a per-tree rayon fan-out over `num_trees` trees of `D`
 /// dimensions is expected to beat the serial walk.
@@ -1600,6 +1620,16 @@ const PARALLEL_FANOUT_MIN_WORK: usize = 2048;
 #[inline]
 fn fan_out_pays(num_trees: usize, d: usize) -> bool {
     num_trees.saturating_mul(d) >= PARALLEL_FANOUT_MIN_WORK
+}
+
+/// Whether a per-tree rayon fan-out of a codisp walk over `num_trees`
+/// trees is expected to beat the serial walk.
+///
+/// See [`CODISP_FANOUT_MIN_TREES`] for the calibration.
+#[cfg(feature = "parallel")]
+#[inline]
+fn codisp_fan_out_pays(num_trees: usize) -> bool {
+    num_trees >= CODISP_FANOUT_MIN_TREES
 }
 
 /// Per-tree insert work - returns the list of evicted point indices
@@ -1788,7 +1818,7 @@ fn codisp_many_walks_all_trees<const D: usize>(
     };
 
     #[cfg(feature = "parallel")]
-    if fan_out_pays(trees.len(), D) {
+    if codisp_fan_out_pays(trees.len()) {
         use rayon::prelude::*;
         return trees
             .par_iter()
@@ -1816,7 +1846,7 @@ fn codisp_walk_all_trees<const D: usize>(
     idx: usize,
 ) -> RcfResult<(f64, usize)> {
     #[cfg(feature = "parallel")]
-    if fan_out_pays(trees.len(), D) {
+    if codisp_fan_out_pays(trees.len()) {
         use rayon::prelude::*;
         return trees
             .par_iter()
@@ -1863,7 +1893,7 @@ fn codisp_stateless_aggregate<const D: usize>(
     point: &[f64; D],
 ) -> RcfResult<(f64, usize)> {
     #[cfg(feature = "parallel")]
-    if fan_out_pays(trees.len(), D) {
+    if codisp_fan_out_pays(trees.len()) {
         use rayon::prelude::*;
         return trees
             .par_iter()
@@ -2171,11 +2201,20 @@ mod tests {
         // Below the crossover the ensemble walk stays serial.
         assert!(!fan_out_pays(100, 4)); // 400
         assert!(!fan_out_pays(50, 16)); // 800
-        assert!(!fan_out_pays(100, 16)); // 1600 - AWS default
         // At or above it, the rayon fan-out pays for itself.
-        assert!(fan_out_pays(128, 16)); // 2048 - exact threshold
-        assert!(fan_out_pays(200, 16)); // 3200
+        assert!(fan_out_pays(64, 16)); // 1024 - exact threshold
+        assert!(fan_out_pays(100, 14)); // 1400 - Enterprise detector
+        assert!(fan_out_pays(100, 16)); // 1600 - AWS default
         assert!(fan_out_pays(100, 64)); // 6400
+    }
+
+    #[cfg(feature = "parallel")]
+    #[test]
+    fn codisp_fan_out_gate_counts_trees_not_dimensions() {
+        assert!(!codisp_fan_out_pays(100)); // AWS default, any D
+        assert!(!codisp_fan_out_pays(199));
+        assert!(codisp_fan_out_pays(200)); // exact threshold
+        assert!(codisp_fan_out_pays(400));
     }
 
     #[cfg(feature = "parallel")]

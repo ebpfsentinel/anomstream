@@ -228,23 +228,41 @@ fn bench_tenant(c: &mut Criterion) {
     group.finish();
 }
 
+/// Single-probe `score_codisp_stateless` at one forest shape.
+fn bench_codisp_stateless_single_for<const D: usize>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    num_trees: usize,
+    sample_size: usize,
+) {
+    let forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
+    let probe: [f64; D] = make_batch::<D>(7, 1)[0];
+    group.bench_function(
+        format!("single_probe/{num_trees}t_{sample_size}s_{D}d"),
+        |b| {
+            b.iter(|| {
+                let s = forest
+                    .score_codisp_stateless(black_box(&probe))
+                    .expect("codisp_stateless");
+                black_box(s);
+            });
+        },
+    );
+}
+
 /// `score_codisp_stateless` (single probe) + `_many` (batched).
 /// Root→leaf walk along stored cuts, no reservoir mutation.
 /// Documented at ~12× faster than mutating `score_codisp_many` on
 /// the NAB corpus; micro-bench here pins the per-probe cost.
 fn bench_codisp_stateless(c: &mut Criterion) {
     let mut group = c.benchmark_group("codisp_stateless");
-    let forest = build_warm_forest::<16>(100, 256, 2026);
-    let probe_single: [f64; 16] = make_batch::<16>(7, 1)[0];
+    bench_codisp_stateless_single_for::<16>(&mut group, 50, 128);
+    bench_codisp_stateless_single_for::<4>(&mut group, 100, 256);
+    bench_codisp_stateless_single_for::<16>(&mut group, 100, 256);
+    bench_codisp_stateless_single_for::<16>(&mut group, 200, 256);
+    bench_codisp_stateless_single_for::<16>(&mut group, 400, 256);
+    bench_codisp_stateless_single_for::<64>(&mut group, 100, 256);
 
-    group.bench_function("single_probe/100t_256s_16d", |b| {
-        b.iter(|| {
-            let s = forest
-                .score_codisp_stateless(black_box(&probe_single))
-                .expect("codisp_stateless");
-            black_box(s);
-        });
-    });
+    let forest = build_warm_forest::<16>(100, 256, 2026);
 
     for &batch in &[16_usize, 64, 256] {
         let probes: Vec<[f64; 16]> = make_batch::<16>(11, batch);
@@ -297,13 +315,17 @@ fn bench_thresholded_process(c: &mut Criterion) {
 
 /// `RandomCutForest::delete` - paired with `update_indexed` to
 /// measure the per-probe reservoir mutation cost in isolation.
-fn bench_delete(c: &mut Criterion) {
-    let mut group = c.benchmark_group("forest_delete");
-    group.bench_function("100t_256s_16d", |b| {
-        let mut forest = build_warm_forest::<16>(100, 256, 2026);
+fn bench_delete_for<const D: usize>(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    num_trees: usize,
+    sample_size: usize,
+) {
+    let id = format!("{num_trees}t_{sample_size}s_{D}d");
+    group.bench_function(&id, |b| {
+        let mut forest = build_warm_forest::<D>(num_trees, sample_size, 2026);
         let mut rng = ChaCha8Rng::seed_from_u64(31);
         b.iter(|| {
-            let mut p = [0.0_f64; 16];
+            let mut p = [0.0_f64; D];
             for slot in &mut p {
                 *slot = rng.random::<f64>();
             }
@@ -313,6 +335,14 @@ fn bench_delete(c: &mut Criterion) {
             let _ = forest.delete(black_box(idx));
         });
     });
+}
+
+fn bench_delete(c: &mut Criterion) {
+    let mut group = c.benchmark_group("forest_delete");
+    bench_delete_for::<16>(&mut group, 50, 128);
+    bench_delete_for::<4>(&mut group, 100, 256);
+    bench_delete_for::<16>(&mut group, 100, 256);
+    bench_delete_for::<16>(&mut group, 200, 256);
     group.finish();
 }
 
