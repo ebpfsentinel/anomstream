@@ -225,6 +225,32 @@ fn bench_tenant(c: &mut Criterion) {
             });
         });
     }
+
+    // A first-seen tenant arriving at a full pool: LRU scan, eviction,
+    // factory build and one update. Read across pool sizes, the slope
+    // is the cost of the linear LRU scan; the floor is the factory.
+    for &n in &[32_usize, 512, 4096] {
+        let mut pool: TenantForestPool<u32, 4> = TenantForestPool::new(n, || {
+            ThresholdedForestBuilder::<4>::new()
+                .num_trees(50)
+                .sample_size(64)
+                .seed(2026)
+                .build()
+        })
+        .expect("pool build");
+        let full = u32::try_from(n).expect("bench pool size fits u32");
+        for t in 0..full {
+            pool.process(&t, [0.5; 4]).expect("process");
+        }
+        let mut next = full;
+        group.bench_function(format!("churn_new_tenant_{n}t"), |b| {
+            b.iter(|| {
+                let r = pool.process(black_box(&next), [0.5; 4]).expect("process");
+                next = next.wrapping_add(1);
+                black_box(r);
+            });
+        });
+    }
     group.finish();
 }
 
