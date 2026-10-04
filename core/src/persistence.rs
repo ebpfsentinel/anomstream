@@ -171,44 +171,90 @@ fn read_version_prefix(bytes: &[u8]) -> RcfResult<u32> {
 
 /// Path helpers for atomic write-tmp-rename persistence.
 ///
-/// The tmp suffix is appended to the caller-supplied path so the temp
-/// file lives in the same filesystem - rename is only atomic within a
-/// single filesystem. The file is `fsync`'d before the rename so a
-/// power-loss between `write` and `rename` cannot leave a partially
-/// written snapshot on disk.
+/// The tmp file sits beside the caller-supplied path so it lives in
+/// the same filesystem - rename is only atomic within a single
+/// filesystem. Its name carries the process id and a per-process
+/// sequence number and it is opened with `create_new`, so two
+/// writers never share a tmp file and a pre-planted file or symlink
+/// at that name is refused rather than followed. On unix it is
+/// created `0600`, since a snapshot holds the points it was trained
+/// on. The file is `fsync`'d before the rename and the directory
+/// after it, so a power loss can leave either the previous snapshot
+/// or the new one, never a partial file or a lost rename.
 #[cfg(all(feature = "std", any(feature = "postcard", feature = "serde_json")))]
 mod atomic {
     use std::ffi::OsString;
-    use std::fs::{File, rename};
+    use std::fs::{File, OpenOptions, remove_file, rename};
     use std::io::Write;
     use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     use crate::error::{RcfError, RcfResult};
 
-    /// Compute the temporary path used for the atomic write.
-    pub(super) fn tmp_path(path: &Path) -> PathBuf {
+    /// Compute a temporary path for one atomic write, distinct from
+    /// every other write this process makes.
+    fn tmp_path(path: &Path) -> PathBuf {
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
         let mut s: OsString = path.as_os_str().to_owned();
-        s.push(".tmp");
+        s.push(format!(".{}.{seq}.tmp", std::process::id()));
         PathBuf::from(s)
     }
 
+    /// Open `tmp` for writing, refusing an existing file and, on
+    /// unix, granting the owner alone read and write.
+    fn create_tmp(tmp: &Path) -> std::io::Result<File> {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options.open(tmp)
+    }
+
+    /// `fsync` the directory holding `path`, which is what makes a
+    /// completed rename survive a power loss. Unix only: elsewhere a
+    /// directory cannot be opened as a file.
+    #[cfg(unix)]
+    fn sync_parent(path: &Path) -> std::io::Result<()> {
+        let parent = match path.parent() {
+            Some(p) if !p.as_os_str().is_empty() => p,
+            _ => Path::new("."),
+        };
+        File::open(parent)?.sync_all()
+    }
+
     /// Write `bytes` to `path` atomically: tmp file first, fsync,
-    /// then rename onto the target.
+    /// rename onto the target, fsync the directory. The tmp file is
+    /// removed when any step before the rename fails.
     pub(super) fn write_atomic(path: &Path, bytes: &[u8]) -> RcfResult<()> {
         let tmp = tmp_path(path);
-        let mut f = File::create(&tmp)
+        let mut f = create_tmp(&tmp)
             .map_err(|e| RcfError::SerializationFailed(format!("create {}: {e}", tmp.display())))?;
-        f.write_all(bytes)
-            .map_err(|e| RcfError::SerializationFailed(format!("write {}: {e}", tmp.display())))?;
-        f.sync_all()
-            .map_err(|e| RcfError::SerializationFailed(format!("fsync {}: {e}", tmp.display())))?;
+        let written = f
+            .write_all(bytes)
+            .map_err(|e| RcfError::SerializationFailed(format!("write {}: {e}", tmp.display())))
+            .and_then(|()| {
+                f.sync_all().map_err(|e| {
+                    RcfError::SerializationFailed(format!("fsync {}: {e}", tmp.display()))
+                })
+            });
         drop(f);
-        rename(&tmp, path).map_err(|e| {
-            RcfError::SerializationFailed(format!(
-                "rename {} -> {}: {e}",
-                tmp.display(),
-                path.display()
-            ))
+        let renamed = written.and_then(|()| {
+            rename(&tmp, path).map_err(|e| {
+                RcfError::SerializationFailed(format!(
+                    "rename {} -> {}: {e}",
+                    tmp.display(),
+                    path.display()
+                ))
+            })
+        });
+        if renamed.is_err() {
+            let _ = remove_file(&tmp);
+        }
+        renamed?;
+        #[cfg(unix)]
+        sync_parent(path).map_err(|e| {
+            RcfError::SerializationFailed(format!("fsync directory of {}: {e}", path.display()))
         })?;
         Ok(())
     }
@@ -322,8 +368,9 @@ impl<const D: usize> RandomCutForest<D> {
     }
 
     /// Atomically serialise the forest to `path` using the binary
-    /// encoding. Writes `<path>.tmp`, `fsync`s it, then renames onto
-    /// `path` - a mid-write crash leaves the previous snapshot
+    /// encoding. Writes a tmp file beside `path` (`create_new`, `0600`
+    /// on unix), `fsync`s it, renames it onto `path` and `fsync`s the
+    /// directory - a mid-write crash leaves the previous snapshot
     /// intact.
     ///
     /// # Errors

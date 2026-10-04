@@ -41,13 +41,36 @@ fn unique_tmp_path(tag: &str) -> PathBuf {
     p
 }
 
+/// Tmp files a save of `path` may have left beside it: every one
+/// starts with the snapshot's own file name and ends in `.tmp`.
+fn leftover_tmp_files(path: &Path) -> Vec<PathBuf> {
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+        return Vec::new();
+    };
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.file_name().is_some_and(|n| {
+                        let n = n.to_string_lossy();
+                        n.starts_with(&name) && n.len() > name.len() && n.ends_with(".tmp")
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Best-effort cleanup - ignore failures (another test may have
 /// already unlinked the file, or it may never have existed).
 fn cleanup(path: &Path) {
     let _ = fs::remove_file(path);
-    let mut tmp: OsString = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    let _ = fs::remove_file(PathBuf::from(tmp));
+    for tmp in leftover_tmp_files(path) {
+        let _ = fs::remove_file(tmp);
+    }
 }
 
 fn trained_forest(seed: u64, updates: u32) -> RandomCutForest<4> {
@@ -85,12 +108,42 @@ fn forest_atomic_write_leaves_no_tmp_on_success() {
     f.to_path(&path).unwrap();
     assert!(path.exists(), "final snapshot must exist on success");
 
-    let mut tmp: OsString = path.as_os_str().to_owned();
-    tmp.push(".tmp");
     assert!(
-        !PathBuf::from(&tmp).exists(),
+        leftover_tmp_files(&path).is_empty(),
         "tmp file must be renamed away on success",
     );
+    cleanup(&path);
+}
+
+#[cfg(unix)]
+#[test]
+fn forest_snapshot_is_readable_by_its_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let path = unique_tmp_path("forest-mode");
+    trained_forest(7, 50).to_path(&path).unwrap();
+    let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    cleanup(&path);
+    assert_eq!(mode, 0o600, "snapshot mode {mode:o}");
+}
+
+#[cfg(unix)]
+#[test]
+fn forest_save_does_not_follow_a_planted_symlink() {
+    // Every tmp name this process will use starts with the target
+    // path, so a symlink planted at the old fixed `<path>.tmp` name
+    // is no longer on the write path at all, and the target it
+    // points to stays untouched.
+    let path = unique_tmp_path("forest-symlink");
+    let victim = unique_tmp_path("forest-symlink-victim");
+    fs::write(&victim, b"keep").unwrap();
+    let mut planted: OsString = path.as_os_str().to_owned();
+    planted.push(".tmp");
+    let planted = PathBuf::from(planted);
+    std::os::unix::fs::symlink(&victim, &planted).unwrap();
+    trained_forest(7, 50).to_path(&path).unwrap();
+    assert_eq!(fs::read(&victim).unwrap(), b"keep");
+    let _ = fs::remove_file(&planted);
+    let _ = fs::remove_file(&victim);
     cleanup(&path);
 }
 
