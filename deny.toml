@@ -29,15 +29,11 @@ version = 2
 # MPL globally.
 allow = [
     "Apache-2.0",
-    "Apache-2.0 WITH LLVM-exception",
     "MIT",
     "BSD-2-Clause",
     "BSD-3-Clause",
-    "ISC",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "Zlib",
-    "CC0-1.0",
 ]
 exceptions = []
 confidence-threshold = 0.9
@@ -51,7 +47,15 @@ highlight = "all"
 # Acknowledged duplicates that do not ship in the release
 # dependency graph. Removing each requires an upstream bump we
 # do not control.
+# Every entry below is one crate that the dependency graph carries at two or
+# more semver-incompatible versions, each pulled by a different upstream crate
+# mid-migration (syn 2 and 3, rand 0.9 and 0.10, digest 0.10 and 0.11, ...).
+# A lock refresh cannot merge them; only upstream releases can. The list is
+# self-pruning: cargo-deny warns on an entry that no longer matches a duplicate,
+# so it shrinks as upstream catches up, and a duplicate of any crate not named
+# here still warns.
 skip = [
+    "syn",
 ]
 
 [sources]
