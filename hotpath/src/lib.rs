@@ -816,9 +816,10 @@ pub struct PrefixRateCap {
     /// Per-bucket admit counter, cache-line padded to defeat
     /// false sharing. 256 buckets × 64 B = 16 KiB total.
     buckets: [PaddedBucket; Self::BUCKETS],
-    /// Epoch-millisecond timestamp at which the current window
-    /// opened. The next `check_and_record` past `+ window_ms`
-    /// atomically resets the buckets.
+    /// Caller clock at which the current window opened, plus one
+    /// (`0` means no window has opened yet). The next
+    /// `check_and_record` past `+ window_ms` atomically resets the
+    /// buckets.
     window_start_ms: AtomicU64,
     /// Window length. Cap counts reset every `window_ms`.
     window_ms: u64,
@@ -984,17 +985,22 @@ impl PrefixRateCap {
         }
         // Atomically roll the window if needed. Loop until the
         // observed `start` is either still valid or we successfully
-        // install `now_ms` via CAS.
+        // install `now` via CAS. The stored clock is shifted by one
+        // so `0` stays free as the never-opened sentinel: a caller
+        // whose clock starts at zero would otherwise read as "no
+        // window" on every call of its first millisecond and reset
+        // the whole bucket bank each time.
+        let now = now_ms.saturating_add(1);
         loop {
             let start = self.window_start_ms.load(Ordering::Acquire);
-            if start != 0 && now_ms.saturating_sub(start) < self.window_ms {
+            if start != 0 && now.saturating_sub(start) < self.window_ms {
                 break;
             }
             // Peer-move on `Err` - just loop; `Ok` wins the reset.
             // Bounded by thread count; no livelock.
             if self
                 .window_start_ms
-                .compare_exchange_weak(start, now_ms, Ordering::AcqRel, Ordering::Relaxed)
+                .compare_exchange_weak(start, now, Ordering::AcqRel, Ordering::Relaxed)
                 .is_ok()
             {
                 // Winner - zero-fill the bucket bank. The
@@ -1476,6 +1482,19 @@ mod tests {
 
     fn nz_u32(n: u32) -> NonZeroU32 {
         NonZeroU32::new(n).expect("non-zero")
+    }
+
+    #[test]
+    fn prefix_cap_holds_its_window_on_a_clock_starting_at_zero() {
+        // Millisecond zero is a real instant for a relative clock;
+        // the window opened there must hold rather than reset on
+        // every call.
+        let cap = PrefixRateCap::new(nz_u32(2), nz_u64(1_000));
+        assert!(cap.check_and_record(5, 0));
+        assert!(cap.check_and_record(5, 0));
+        assert!(!cap.check_and_record(5, 0));
+        assert!(!cap.check_and_record(5, 999));
+        assert!(cap.check_and_record(5, 1_000));
     }
 
     #[test]
