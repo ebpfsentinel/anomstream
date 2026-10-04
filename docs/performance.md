@@ -518,7 +518,8 @@ Per-call overhead on the classifier hot path:
 | `metrics::default_sink()` shared-Arc clone           | 10.9 ns      | ~92 M/s          |
 
 - `accept_hash` beats `accept_stride` (skips the counter atomic; admission
-  is multiply + mod). Keyed adds ~0.5 ns murmur-mix.
+  is multiply + mod). Keyed adds ~4 ns: `SipHash-1-3` over one block,
+  five rounds, the price of a PRF over the keyed bijection it replaced.
 - `PrefixRateCap` 9.7 ns reflects the Acquire-load short-circuit on the
   valid-window case + batched metrics (1 sink call / 64 ops, down from
   18 ns, −46 %); the CAS loop fires once per window roll, not per packet.

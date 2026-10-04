@@ -159,6 +159,54 @@ fn flush_batched(
     }
 }
 
+/// One `SipRound` over the four-word state.
+#[inline]
+fn sip_round(v: &mut [u64; 4]) {
+    v[0] = v[0].wrapping_add(v[1]);
+    v[1] = v[1].rotate_left(13) ^ v[0];
+    v[0] = v[0].rotate_left(32);
+    v[2] = v[2].wrapping_add(v[3]);
+    v[3] = v[3].rotate_left(16) ^ v[2];
+    v[0] = v[0].wrapping_add(v[3]);
+    v[3] = v[3].rotate_left(21) ^ v[0];
+    v[2] = v[2].wrapping_add(v[1]);
+    v[1] = v[1].rotate_left(17) ^ v[2];
+    v[2] = v[2].rotate_left(32);
+}
+
+/// `SipHash-C-D` of the eight little-endian bytes of `m` under the
+/// 128-bit key `(k0, k1)`: one message block, then the length block.
+#[inline]
+fn siphash_u64<const C: usize, const D: usize>(k0: u64, k1: u64, m: u64) -> u64 {
+    let mut v = [
+        k0 ^ 0x736f_6d65_7073_6575,
+        k1 ^ 0x646f_7261_6e64_6f6d,
+        k0 ^ 0x6c79_6765_6e65_7261,
+        k1 ^ 0x7465_6462_7974_6573,
+    ];
+    for block in [m, 8_u64 << 56] {
+        v[3] ^= block;
+        for _ in 0..C {
+            sip_round(&mut v);
+        }
+        v[0] ^= block;
+    }
+    v[2] ^= 0xff;
+    for _ in 0..D {
+        sip_round(&mut v);
+    }
+    v[0] ^ v[1] ^ v[2] ^ v[3]
+}
+
+/// `SipHash-1-3` - the keyed PRF behind every hash-based admission
+/// decision in this crate, and the variant `std` uses for `HashMap`.
+/// A PRF rather than a keyed bijection: observing which inputs were
+/// admitted reveals nothing that predicts the next decision.
+#[inline]
+fn siphash13_u64(k0: u64, k1: u64, m: u64) -> u64 {
+    siphash_u64::<1, 3>(k0, k1, m)
+}
+
 /// Stride-based or per-flow-hash update sampler.
 ///
 /// Accepts `1 / keep_every_n` of the offered updates. The sampler
@@ -184,18 +232,14 @@ pub struct UpdateSampler {
     accepted_flushed: AtomicU64,
     /// Sink-side cumulative emitted count for `rejected`.
     rejected_flushed: AtomicU64,
-    /// Per-sampler secret multipliers used by [`Self::accept_hash`].
-    /// When non-zero the sampler runs a keyed remix of the caller-
-    /// supplied `flow_hash` before the modulo decision - makes the
-    /// admission boundary unpredictable to an attacker who can
-    /// observe or influence their own `flow_hash` value but cannot
-    /// learn the sampler secret. Zero-init means "no remix", matches
-    /// the historical deterministic behaviour of [`Self::new`].
-    mix_k1: u64,
-    /// Second secret - XOR'd at the end of the mix to avoid the
-    /// multiply by `mix_k1` alone (a structure the attacker could
-    /// invert given enough observations).
-    mix_k2: u64,
+    /// Per-sampler 128-bit `SipHash-1-3` key used by
+    /// [`Self::accept_hash`]. When set, the caller-supplied
+    /// `flow_hash` goes through the keyed PRF before the modulo
+    /// decision, so the admission boundary is unpredictable to an
+    /// attacker who can observe or influence their own `flow_hash`
+    /// but cannot learn the key. `None` keeps the deterministic
+    /// behaviour of [`Self::new`].
+    mix_key: Option<[u64; 2]>,
     /// Observability sink - emitted every [`METRICS_BATCH_SIZE`]
     /// hot-path calls (in-process atomic counters stay bit-exact
     /// every call). Defaults to [`anomstream_core::NoopSink`].
@@ -222,8 +266,7 @@ impl UpdateSampler {
             rejected: AtomicU64::new(0),
             accepted_flushed: AtomicU64::new(0),
             rejected_flushed: AtomicU64::new(0),
-            mix_k1: 0,
-            mix_k2: 0,
+            mix_key: None,
             metrics: default_sink(),
         }
     }
@@ -250,9 +293,9 @@ impl UpdateSampler {
     pub fn new_keyed(keep_every_n: u32) -> Result<Self, getrandom::Error> {
         let mut buf = [0_u8; 16];
         getrandom::fill(&mut buf)?;
-        let mix_k1 = u64::from_le_bytes(buf[0..8].try_into().expect("16 bytes"));
-        let mix_k2 = u64::from_le_bytes(buf[8..16].try_into().expect("16 bytes"));
-        Ok(Self::new_keyed_with_seeds(keep_every_n, mix_k1, mix_k2))
+        let k0 = u64::from_le_bytes(buf[0..8].try_into().expect("16 bytes"));
+        let k1 = u64::from_le_bytes(buf[8..16].try_into().expect("16 bytes"));
+        Ok(Self::new_keyed_with_seeds(keep_every_n, k0, k1))
     }
 
     /// Caller-supplied-seed variant of [`Self::new_keyed`] - for
@@ -261,15 +304,12 @@ impl UpdateSampler {
     /// `wasm32-unknown-unknown` without a JS host) **or** for
     /// reproducible / snapshot-replayable test fixtures.
     ///
-    /// `k1` is forced odd via `| 1` so it remains a valid
-    /// multiplicative-bijection modulus inside [`Self::keyed_mix`];
-    /// `k2` is XOR'd at the end of the mix unchanged. Passing
-    /// `(0, 0)` would degrade `mix_k1` to `1` and `mix_k2` to `0` -
-    /// still keyed (the murmur finaliser still runs) but with a
-    /// publicly-known seed, so the per-sampler-secret defence
-    /// against `AML.T0020` poisoning sprays goes away. **Do not**
-    /// use the all-zero seed in production; in that case prefer
-    /// [`Self::new`] which advertises its deterministic admission
+    /// `(k1, k2)` form the 128-bit `SipHash-1-3` key, used as given.
+    /// Any pair is a valid key, but a publicly-known one - `(0, 0)`
+    /// in a test fixture, say - gives the per-sampler-secret defence
+    /// against `AML.T0020` poisoning sprays away. **Do not** use a
+    /// guessable seed in production; in that case prefer
+    /// [`Self::new`], which advertises its deterministic admission
     /// behaviour explicitly.
     ///
     /// # Production seed sourcing
@@ -282,11 +322,6 @@ impl UpdateSampler {
     /// cannot recover the seed.
     #[must_use]
     pub fn new_keyed_with_seeds(keep_every_n: u32, k1: u64, k2: u64) -> Self {
-        // `| 1` forces odd + non-zero so `mix_k1` is always a
-        // valid multiplicative-bijection modulus. A caller-passed
-        // even `k1` (or `0`) silently rounds up to the next odd
-        // value rather than degenerating the keyed mix.
-        let mix_k1 = k1 | 1;
         Self {
             keep_every_n,
             counter: AtomicU64::new(0),
@@ -294,8 +329,7 @@ impl UpdateSampler {
             rejected: AtomicU64::new(0),
             accepted_flushed: AtomicU64::new(0),
             rejected_flushed: AtomicU64::new(0),
-            mix_k1,
-            mix_k2: k2,
+            mix_key: Some([k1, k2]),
             metrics: default_sink(),
         }
     }
@@ -317,7 +351,7 @@ impl UpdateSampler {
     /// Whether this sampler was built with a keyed mix.
     #[must_use]
     pub fn is_keyed(&self) -> bool {
-        self.mix_k1 != 0
+        self.mix_key.is_some()
     }
 
     /// Configured ratio denominator.
@@ -372,11 +406,11 @@ impl UpdateSampler {
     /// 5-tuple bytes (`SipHash` / `FxHash` / custom). Quality of
     /// sampling only matters modulo `keep_every_n`.
     ///
-    /// When the sampler was built via [`Self::new_keyed`] a
-    /// per-sampler secret mix (murmur-style finaliser keyed on
-    /// `mix_k1` / `mix_k2`) is applied **before** the modulo so the
-    /// admission residue class is unpredictable without the secret
-    /// (defends against `AML.T0020` reservoir-poisoning sprays).
+    /// When the sampler was built via [`Self::new_keyed`] the hash
+    /// goes through `SipHash-1-3` under the per-sampler key
+    /// **before** the modulo, so the admission residue class is
+    /// unpredictable without the key (defends against `AML.T0020`
+    /// reservoir-poisoning sprays).
     pub fn accept_hash(&self, flow_hash: u64) -> bool {
         if self.keep_every_n <= 1 {
             record_batched(
@@ -407,22 +441,16 @@ impl UpdateSampler {
         ok
     }
 
-    /// Murmur3-64 finaliser keyed by the sampler secret. Returns
-    /// `h` unchanged when the sampler was built unkeyed (via
+    /// `SipHash-1-3` of `h` under the sampler key. Returns `h`
+    /// unchanged when the sampler was built unkeyed (via
     /// [`Self::new`]) so the legacy `accept_hash` behaviour is
     /// preserved bit-for-bit.
     #[inline]
     fn keyed_mix(&self, h: u64) -> u64 {
-        if self.mix_k1 == 0 {
-            return h;
+        match self.mix_key {
+            Some([k0, k1]) => siphash13_u64(k0, k1, h),
+            None => h,
         }
-        let mut x = h.wrapping_add(self.mix_k1);
-        x ^= x >> 33;
-        x = x.wrapping_mul(0xff51_afd7_ed55_8ccd);
-        x ^= x >> 33;
-        x = x.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
-        x ^= x >> 33;
-        x ^ self.mix_k2
     }
 
     /// Running total of accepted offers since construction.
@@ -1278,10 +1306,10 @@ mod tests {
         let diff_decision = (0..32_u64)
             .filter(|h| unkeyed.accept_hash(*h) != keyed.accept_hash(*h))
             .count();
-        // The mix is a random oracle, not a uniform shuffle; the
-        // point of the assertion is only that the keyed sampler is
-        // *not* the unkeyed one. These seeds diverge on 14 of 32
-        // hashes.
+        // The point of the assertion is only that the keyed sampler
+        // is *not* the unkeyed one: under a PRF each hash diverges
+        // with probability 1/2, so 32 agreements would be a 2^-32
+        // event.
         assert!(
             diff_decision > 0,
             "keyed sampler accepted every hash exactly like unkeyed - mix ineffective"
@@ -1330,16 +1358,36 @@ mod tests {
     }
 
     #[test]
-    fn new_keyed_with_seeds_forces_odd_k1() {
-        // Even k1 (including zero) must round up to odd so the
-        // murmur mix stays valid. Two samplers built with
-        // `(k1=0, k2=X)` and `(k1=1, k2=X)` therefore agree on
-        // every hash because both effectively use `mix_k1 = 1`.
-        let s_zero = UpdateSampler::new_keyed_with_seeds(4, 0, 0);
-        let s_one = UpdateSampler::new_keyed_with_seeds(4, 1, 0);
-        for h in 0..16_u64 {
-            assert_eq!(s_zero.accept_hash(h), s_one.accept_hash(h));
+    fn siphash_matches_std_reference() {
+        // `std`'s default hasher is SipHash-1-3 under the zero key;
+        // the deprecated `SipHasher` is SipHash-2-4 under any key.
+        // Together they pin the rounds, the constants and the key
+        // schedule of the local implementation.
+        use std::hash::Hasher;
+        for m in [0_u64, 1, 0xdead_beef_cafe_babe, u64::MAX] {
+            let mut h13 = std::hash::DefaultHasher::new();
+            h13.write(&m.to_le_bytes());
+            assert_eq!(siphash13_u64(0, 0, m), h13.finish());
+            for (k0, k1) in [
+                (0_u64, 0_u64),
+                (0x0706_0504_0302_0100, 0x0f0e_0d0c_0b0a_0908),
+            ] {
+                #[allow(deprecated)]
+                let mut h24 = std::hash::SipHasher::new_with_keys(k0, k1);
+                h24.write(&m.to_le_bytes());
+                assert_eq!(siphash_u64::<2, 4>(k0, k1, m), h24.finish());
+            }
         }
+    }
+
+    #[test]
+    fn zero_seed_is_still_a_keyed_sampler() {
+        let s = UpdateSampler::new_keyed_with_seeds(4, 0, 0);
+        assert!(s.is_keyed());
+        let differs = (0..32_u64)
+            .filter(|h| s.accept_hash(*h) != UpdateSampler::new(4).accept_hash(*h))
+            .count();
+        assert!(differs > 0);
     }
 
     #[test]

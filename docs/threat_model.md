@@ -37,8 +37,10 @@ longer flagged. Two vectors:
 
 - **Keyed sampler**: `UpdateSampler::new_keyed(keep_every_n)`
   seeds 128 bits of per-sampler secret from `getrandom` at
-  construction, applies a murmur3-style keyed finaliser to every
-  `accept_hash` input before the modulo. Attacker cannot steer
+  construction and runs every `accept_hash` input through
+  `SipHash-1-3` under that key before the modulo - a keyed PRF, so
+  observing which hashes were admitted predicts nothing about the
+  next one. Attacker cannot steer
   their flow hash into the admitted residue class without learning
   the sampler secret; the secret never leaves the process. The
   paired `UpdateSampler::new_keyed_with_seeds(keep, k1, k2)`

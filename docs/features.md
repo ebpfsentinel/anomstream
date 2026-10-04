@@ -1267,8 +1267,8 @@ before any RCF work. Two decision modes:
 
 Build via `UpdateSampler::new(keep)` (unkeyed, deterministic
 admission - back-compatible), **`UpdateSampler::new_keyed(keep)`**
-(128-bit secret from `getrandom`, murmur3 keyed mix applied
-before the modulo), or
+(128-bit secret from `getrandom`, `SipHash-1-3` under that key
+applied before the modulo), or
 **`UpdateSampler::new_keyed_with_seeds(keep, k1, k2)`**
 (caller-supplied seeds, for restricted environments where
 `getrandom` is unavailable - embedded boot, chroot without
@@ -1495,12 +1495,11 @@ shared-Arc identity is enforced by a regression test
 
 ### Hotpath correctness
 
-- **Sampler key seeding** - `UpdateSampler::new_keyed` always
-  forces the `mix_k1` multiplier odd via `| 1`. The previous
-  code had a zero-check that, on the 2⁻⁶⁴ chance of `getrandom`
-  returning exactly zero, swapped in a publicly-known constant;
-  the current code degrades to `1` instead (still odd, still a
-  valid multiplicative bijection, non-deterministic for attackers).
+- **Sampler key** - `UpdateSampler::new_keyed` draws a 128-bit
+  `SipHash-1-3` key and uses it as drawn: every key is valid, so
+  there is no sentinel value and no adjustment that could swap in
+  a publicly-known constant. Whether the sampler is keyed is a
+  separate `Option`, not a property of the key bits.
 - **PrefixRateCap rollover** - window reset is a
   `compare_exchange_weak` loop with `AcqRel` on success and
   `Acquire` on the rollover-side load. Happens-before order

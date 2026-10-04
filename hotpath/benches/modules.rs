@@ -17,7 +17,7 @@ use std::hint::black_box;
 static GLOBAL: MiMalloc = MiMalloc;
 
 /// `UpdateSampler` `accept_stride` + `accept_hash` + keyed
-/// `accept_hash` (murmur-mix secret). Target: per-packet overhead
+/// `accept_hash` (`SipHash-1-3` under the sampler key). Target: per-packet overhead
 /// on the classifier hot path.
 fn bench_hot_path_sampler(c: &mut Criterion) {
     let mut group = c.benchmark_group("hot_path_sampler");
