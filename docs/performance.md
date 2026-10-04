@@ -48,6 +48,12 @@ explicitly.
 
 Criterion HTML reports land in `target/criterion/`.
 
+The workspace sets `[profile.bench]` to `lto = "fat"` and
+`codegen-units = 1`, which is what both consumer workspaces (OSS agent
+and Enterprise) build their release binaries with. A library's own
+release profile never reaches its dependents, so measuring without it
+would time cross-crate call boundaries the shipped binary does not have.
+
 ### Reference hardware
 
 |           |                                                    |
@@ -67,6 +73,19 @@ Criterion HTML reports land in `target/criterion/`.
   machine, `performance` power profile and energy-performance preference,
   `intel_pstate` active, every other workload stopped. Ratios are stable;
   absolutes move with thermal state.
+- **Hybrid CPU** - the reference CPU mixes six P-cores (up to 5.2 GHz,
+  CPUs 0-11) and eight E-cores (3.9 GHz, CPUs 12-19), and the scheduler
+  places the bench thread and rayon's workers on either. Single-probe
+  walks at or above the fan-out threshold are the most exposed: on
+  2026-10-04 the same binary read `forest_score` `(100, 256, 16)` at 24
+  µs on one run and 33 µs on the next, and still moved 10-15 % pinned to
+  the P-cores with `taskset -c 0-11`. The forest tables below come from
+  an earlier session and were not replaced by that day's slower reading:
+  the tree before and after that day's changes, alternated binary
+  against binary in one session, measured the same update and score
+  times, so the gap was the machine and not the code. Compare a change
+  against a baseline taken in the same session, never against a number
+  on this page.
 - **Parallel ceiling** - `score_many` reaches 5-8× on 14 cores and stops
   there, memory-bandwidth-bound once the working set spills L3.
 - **Fan-out threshold** - single-probe ops below `num_trees × D = 1024`
@@ -493,14 +512,30 @@ Each tenant `D=4` / `(50, 64)`, warmed 128 samples:
 
 | N   | `similarity_matrix` | `score_across_tenants` | `most_similar_top5` |
 | --- | ------------------- | ---------------------- | ------------------- |
-| 32  | 48 µs               | 115 µs                 | 0.31 µs             |
-| 128 | 99 µs               | 395 µs                 | 1.11 µs             |
-| 512 | 544 µs              | 2.25 ms                | 4.51 µs             |
+| 32  | 36 µs               | 108 µs                 | 0.29 µs             |
+| 128 | 98 µs               | 397 µs                 | 1.08 µs             |
+| 512 | 558 µs              | 2.29 ms                | 4.77 µs             |
 
-`N=32→512` (16×): `similarity_matrix` (O(N²) parallel) ~11×,
-`score_across_tenants` (O(N)) 20×, `most_similar_top5` (O(N·log k)) 15×
+`N=32→512` (16×): `similarity_matrix` (O(N²) parallel) ~16×,
+`score_across_tenants` (O(N)) 21×, `most_similar_top5` (O(N·log k)) 16×
 
 - rayon hides the quadratic until core saturation.
+
+A first-seen tenant arriving at a full pool (`churn_new_tenant`: LRU
+scan, eviction, factory build, one update; tenants `D=4` / `(50, 64)`):
+
+| Pool size | Time    |
+| --------- | ------- |
+| 32        | 18.7 µs |
+| 512       | 36.9 µs |
+| 4096      | 40.5 µs |
+
+The LRU victim is found by a linear scan, and this is what it costs:
+going from 512 to 4096 tenants, eight times the entries, adds 3.6 µs,
+so the scan is under a tenth of the arrival at the largest size. The
+step from 32 to 512 is the working set leaving cache, not the scan. An
+indexed LRU would charge every access to save a few microseconds on an
+arrival that already builds a whole forest, so the scan stays.
 
 ---
 
@@ -508,24 +543,36 @@ Each tenant `D=4` / `(50, 64)`, warmed 128 samples:
 
 Per-call overhead on the classifier hot path:
 
-| Workload                                             | Time         | Throughput       |
-| ---------------------------------------------------- | ------------ | ---------------- |
-| `UpdateSampler::accept_stride` keep=8                | 10.7 ns      | ~93 M/s          |
-| `UpdateSampler::accept_hash` unkeyed / keyed keep=8  | 7.0 / 7.6 ns | ~142 / 132 M/s   |
-| `PrefixRateCap::check_and_record` 100/1s             | 9.7 ns       | ~103 M/s         |
-| `PrefixRateCap::check_and_record` 8-thread contended | ~8.5 µs/op   | contention floor |
-| `update_channel::try_enqueue` cap=4096 (+ drain)     | 162 ns       | ~6.2 M/s         |
-| `metrics::default_sink()` shared-Arc clone           | 10.9 ns      | ~92 M/s          |
+| Workload                                                 | Time          | Throughput     |
+| -------------------------------------------------------- | ------------- | -------------- |
+| `UpdateSampler::accept_stride` keep=8                    | 11.4 ns       | ~88 M/s        |
+| `UpdateSampler::accept_hash` unkeyed / keyed keep=8      | 7.4 / 11.3 ns | ~135 / 88 M/s  |
+| `UpdateSampler::accept_hash` 8 threads, one sampler      | 19.8 ns       | ~50 M/s/thread |
+| `PrefixRateCap::check_and_record` 100/1s unkeyed / keyed | 9.9 / 12.4 ns | ~101 / 81 M/s  |
+| `PrefixRateCap::check_and_record` 8 threads, one cap     | 38 ns         | ~26 M/s/thread |
+| `update_channel::try_enqueue` cap=4096 (+ drain)         | 152 ns        | ~6.6 M/s       |
+| `update_channel::try_enqueue` 8 producers, one channel   | 1.2-1.5 µs    | lock-bound     |
+| `metrics::default_sink()` shared-Arc clone               | 9.7 ns        | ~103 M/s       |
 
 - `accept_hash` beats `accept_stride` (skips the counter atomic; admission
   is multiply + mod). Keyed adds ~4 ns: `SipHash-1-3` over one block,
   five rounds, the price of a PRF over the keyed bijection it replaced.
-- `PrefixRateCap` 9.7 ns reflects the Acquire-load short-circuit on the
-  valid-window case + batched metrics (1 sink call / 64 ops, down from
-  18 ns, −46 %); the CAS loop fires once per window roll, not per packet.
-  Buckets are `#[repr(C, align(64))]` (16 KiB) to avoid false sharing.
-- Channel throughput is `sync_channel`-lock-bound; 6.2 M/s per producer
-  covers typical TC/XDP rates with producer fan-out.
+  A keyed `PrefixRateCap` pays the same hash on its bucket index, ~2.5 ns.
+- `PrefixRateCap` 9.9 ns reflects the Acquire-load short-circuit on the
+  valid-window case + batched metrics (1 sink call / 64 ops); the CAS
+  loop fires once per window roll, not per packet. Buckets are
+  `#[repr(C, align(64))]` (16 KiB) to avoid false sharing.
+- The lifetime counters are striped across sixteen padded cache lines,
+  one per thread, and summed on read. Eight threads on one sampler went
+  from 209 to 20 ns a call and eight on one rate cap from 257 to 38 ns,
+  both about −88 %; a single thread pays a few tenths of a nanosecond
+  for the stripe lookup. The rate cap's earlier "~8.5 µs" contended
+  figure was not contention: the bench drives a clock stuck at zero, and
+  a window opened at time zero read as never opened, so every call reset
+  every bucket. A window now stores its start plus one.
+- Channel throughput is `sync_channel`-lock-bound; 6.6 M/s per producer
+  covers typical TC/XDP rates. Eight producers on one channel queue on
+  its lock, which the striped counters do not change.
 
 ---
 
