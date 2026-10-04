@@ -411,6 +411,44 @@ impl ReservoirSampler {
     }
 }
 
+#[cfg(feature = "serde")]
+impl ReservoirSampler {
+    /// Check a sampler rebuilt from a snapshot against the capacity
+    /// its forest was configured with. The heap order relies on
+    /// finite weights, and the parameters must pass the same bounds
+    /// the constructor enforces.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::DeserializationFailed`] naming the first
+    /// broken invariant.
+    pub(crate) fn validate_restored(&self, capacity: usize) -> RcfResult<()> {
+        if self.capacity != capacity || self.heap.len() > capacity {
+            return Err(RcfError::DeserializationFailed(format!(
+                "ReservoirSampler capacity {} holding {} entr(ies), forest expects capacity {capacity}",
+                self.capacity,
+                self.heap.len()
+            )));
+        }
+        if !self.time_decay.is_finite()
+            || self.time_decay < 0.0
+            || !self.initial_accept_fraction.is_finite()
+            || self.initial_accept_fraction <= 0.0
+            || self.initial_accept_fraction > 1.0
+        {
+            return Err(RcfError::DeserializationFailed(
+                "ReservoirSampler parameters out of range".into(),
+            ));
+        }
+        if self.heap.iter().any(|e| !e.weight.is_finite()) {
+            return Err(RcfError::DeserializationFailed(
+                "ReservoirSampler holds a non-finite weight".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[allow(
     clippy::float_cmp,

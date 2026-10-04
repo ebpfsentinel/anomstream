@@ -805,6 +805,177 @@ fn isolates_point<const D: usize>(cut: &Cut, point: &[f64], n_bbox: &BoundingBox
     false
 }
 
+#[cfg(feature = "serde")]
+/// Snapshot refusal naming the tree as the broken structure.
+fn broken(msg: impl core::fmt::Display) -> RcfError {
+    RcfError::DeserializationFailed(format!("RandomCutTree: {msg}"))
+}
+
+#[cfg(feature = "serde")]
+impl<const D: usize> RandomCutTree<D> {
+    /// Check a tree rebuilt from a snapshot before anything walks it.
+    ///
+    /// Beyond the arena shape ([`NodeStore::validate_layout`]), the
+    /// walk from the root must reach every live node exactly once -
+    /// a node reached twice is a cycle or a shared child, either of
+    /// which turns a root-to-leaf descent into an endless loop - and
+    /// each child must name its parent back. Masses must add up,
+    /// cuts must name a real dimension and a finite value, and the
+    /// reverse index must agree with the leaves: each leaf resolves
+    /// through an index mapped to it, and its mass equals the number
+    /// of indices mapped to it. `point_live` reports whether the
+    /// point store still holds a slot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::DeserializationFailed`] naming the first
+    /// broken invariant.
+    pub(crate) fn validate_restored(&self, point_live: &impl Fn(usize) -> bool) -> RcfResult<()> {
+        self.store.validate_layout()?;
+        let cap = self.store.capacity() as usize;
+        let mut seen_internal = alloc::vec![false; cap];
+        let mut seen_leaf = alloc::vec![false; cap];
+        let mut reached_internal = 0_usize;
+        let mut reached_leaf = 0_usize;
+        let mut stack: Vec<NodeRef> = Vec::new();
+        if let Some(root) = self.root {
+            if self.store.view(root)?.parent().is_some() {
+                return Err(broken("root names a parent"));
+            }
+            stack.push(root);
+        }
+        while let Some(n) = stack.pop() {
+            let view = self.store.view(n)?;
+            let seen = if n.is_leaf() {
+                &mut seen_leaf
+            } else {
+                &mut seen_internal
+            };
+            if seen[n.index()] {
+                return Err(broken(format!("node {:#x} reached twice", n.raw())));
+            }
+            seen[n.index()] = true;
+            match view {
+                NodeView::Leaf(l) => {
+                    reached_leaf += 1;
+                    if l.mass == 0 {
+                        return Err(broken(format!("leaf {:#x} has zero mass", n.raw())));
+                    }
+                    if !point_live(l.point_idx) || self.leaf_index_get(l.point_idx) != Some(n) {
+                        return Err(broken(format!(
+                            "leaf {:#x} resolves through point {} which is not mapped to it",
+                            n.raw(),
+                            l.point_idx
+                        )));
+                    }
+                }
+                NodeView::Internal(i) => {
+                    reached_internal += 1;
+                    if i.cut.dim() >= D || !i.cut.value().is_finite() {
+                        return Err(broken(format!(
+                            "internal {:#x} cut ({}, {}) is not a finite cut over {D} dimension(s)",
+                            n.raw(),
+                            i.cut.dim(),
+                            i.cut.value()
+                        )));
+                    }
+                    let ordered = i
+                        .bbox
+                        .min()
+                        .iter()
+                        .zip(i.bbox.max())
+                        .all(|(lo, hi)| lo.is_finite() && hi.is_finite() && lo <= hi);
+                    if !ordered {
+                        return Err(broken(format!(
+                            "internal {:#x} carries a non-finite or inverted bounding box",
+                            n.raw()
+                        )));
+                    }
+                    let mut children_mass = 0_u64;
+                    for child in [i.left, i.right] {
+                        let cv = self.store.view(child)?;
+                        if cv.parent() != Some(n) {
+                            return Err(broken(format!(
+                                "child {:#x} does not name {:#x} as its parent",
+                                child.raw(),
+                                n.raw()
+                            )));
+                        }
+                        children_mass = children_mass
+                            .checked_add(cv.mass())
+                            .ok_or_else(|| broken("mass overflows u64"))?;
+                        stack.push(child);
+                    }
+                    if children_mass != i.mass {
+                        return Err(broken(format!(
+                            "internal {:#x} mass {} != children mass {children_mass}",
+                            n.raw(),
+                            i.mass
+                        )));
+                    }
+                }
+            }
+        }
+        if reached_internal != self.store.live_internal_count()
+            || reached_leaf != self.store.live_leaf_count()
+        {
+            return Err(broken(format!(
+                "root reaches {reached_internal} internal and {reached_leaf} leaf node(s), \
+                 the arenas hold {} and {}",
+                self.store.live_internal_count(),
+                self.store.live_leaf_count()
+            )));
+        }
+        self.validate_reverse_index(&seen_leaf, point_live)
+    }
+
+    /// Second half of [`Self::validate_restored`]: the reverse index
+    /// maps only live points to leaves the walk reached, its size is
+    /// `distinct_count`, and each leaf's mass is the number of points
+    /// mapped to it.
+    fn validate_reverse_index(
+        &self,
+        seen_leaf: &[bool],
+        point_live: &impl Fn(usize) -> bool,
+    ) -> RcfResult<()> {
+        let cap = seen_leaf.len();
+        let mut mapped = alloc::vec![0_u64; cap];
+        let mut distinct = 0_usize;
+        for (idx, entry) in self.leaf_index.iter().enumerate() {
+            let Some(n) = *entry else { continue };
+            distinct += 1;
+            if !n.is_leaf() || n.index() >= cap || !seen_leaf[n.index()] || !point_live(idx) {
+                return Err(broken(format!(
+                    "reverse index maps point {idx} to {:#x}, not a live leaf over a live point",
+                    n.raw()
+                )));
+            }
+            mapped[n.index()] += 1;
+        }
+        if distinct != self.distinct_count {
+            return Err(broken(format!(
+                "reverse index holds {distinct} point(s), distinct_count says {}",
+                self.distinct_count
+            )));
+        }
+        for (i, slot) in seen_leaf.iter().enumerate() {
+            if *slot {
+                let mass = self
+                    .store
+                    .leaf(NodeRef::leaf(u32::try_from(i).unwrap_or(0)))?
+                    .mass;
+                if mass != mapped[i] {
+                    return Err(broken(format!(
+                        "leaf {i} has mass {mass} but {} point(s) map to it",
+                        mapped[i]
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::float_cmp)] // Tests assert exact equality on bounding-box bounds.
 mod tests {

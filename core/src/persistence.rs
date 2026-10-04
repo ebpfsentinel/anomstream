@@ -56,6 +56,16 @@
 //!   decoder runs against the bytes.
 //! - All deserialisers return a typed error rather than panicking
 //!   on truncated, mismatched, or malformed input.
+//! - A decoded forest is admitted only once its structure checks
+//!   out: arenas sized to their capacity, free lists naming exactly
+//!   the empty slots, every live node reached once from the root
+//!   with each child naming its parent back, masses adding up,
+//!   finite cuts and boxes, a reverse index agreeing with the
+//!   leaves, and refcounts equal to the number of trees sampling
+//!   each point. A payload that decodes but could never have been
+//!   produced by this library is refused with
+//!   [`RcfError::DeserializationFailed`] instead of panicking or
+//!   looping on the first score.
 //!
 //! For checkpoints sourced from outside the process boundary
 //! (network sync, multi-tenant restore endpoints, partner-supplied

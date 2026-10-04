@@ -335,6 +335,56 @@ impl<const D: usize> PointAccessor<D> for PointStore<D> {
     }
 }
 
+#[cfg(feature = "serde")]
+impl<const D: usize> PointStore<D> {
+    /// Whether slot `idx` currently holds a point.
+    pub(crate) fn is_live(&self, idx: usize) -> bool {
+        matches!(self.points.get(idx), Some(Some(_)))
+    }
+
+    /// Check a store rebuilt from a snapshot: one refcount per slot,
+    /// a free list naming every empty slot exactly once, and only
+    /// finite coordinates in live slots.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::DeserializationFailed`] naming the first
+    /// broken invariant.
+    pub(crate) fn validate_restored(&self) -> RcfResult<()> {
+        if self.points.len() != self.ref_counts.len() {
+            return Err(RcfError::DeserializationFailed(format!(
+                "PointStore holds {} slot(s) but {} refcount(s)",
+                self.points.len(),
+                self.ref_counts.len()
+            )));
+        }
+        let mut listed = alloc::vec![false; self.points.len()];
+        for &idx in &self.free_list {
+            match self.points.get(idx) {
+                Some(None) if !listed[idx] => listed[idx] = true,
+                _ => {
+                    return Err(RcfError::DeserializationFailed(format!(
+                        "PointStore free list names slot {idx}, which is live, repeated or out of range"
+                    )));
+                }
+            }
+        }
+        let empty = self.points.iter().filter(|p| p.is_none()).count();
+        if empty != self.free_list.len() {
+            return Err(RcfError::DeserializationFailed(format!(
+                "PointStore has {empty} empty slot(s) but its free list names {}",
+                self.free_list.len()
+            )));
+        }
+        for p in self.points.iter().flatten() {
+            ensure_finite(p).map_err(|_| {
+                RcfError::DeserializationFailed("PointStore holds a non-finite point".into())
+            })?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::float_cmp)] // Tests assert exact equality on stored point payloads.
 mod tests {

@@ -72,6 +72,7 @@ std::thread_local! {
 /// assert!(score >= 0.0);
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "RandomCutForestWire<D>"))]
 pub struct RandomCutForest<const D: usize> {
     /// Validated configuration.
     config: RcfConfig,
@@ -112,6 +113,102 @@ pub struct RandomCutForest<const D: usize> {
     /// (reservoir eviction or explicit [`Self::delete`]).
     #[cfg_attr(feature = "serde", serde(default))]
     timestamps: alloc::collections::BTreeMap<usize, u64>,
+}
+
+/// Wire image of [`RandomCutForest`]: the serialised fields in the
+/// same order, decoded first and admitted only once
+/// [`RandomCutForest::try_from`] has checked them. Every path that
+/// rebuilds a forest - postcard, JSON, a forest nested in a
+/// thresholded detector or a tenant pool - goes through that check,
+/// so a crafted snapshot fails to load instead of panicking or
+/// looping on first use.
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize)]
+struct RandomCutForestWire<const D: usize> {
+    /// See [`RandomCutForest::config`].
+    config: RcfConfig,
+    /// See [`RandomCutForest::trees`].
+    trees: Vec<TreeSlot<D>>,
+    /// See [`RandomCutForest::point_store`].
+    point_store: PointStore<D>,
+    /// See [`RandomCutForest::updates_seen`].
+    updates_seen: u64,
+    /// See [`RandomCutForest::timestamps`].
+    #[serde(default)]
+    timestamps: alloc::collections::BTreeMap<usize, u64>,
+}
+
+#[cfg(feature = "serde")]
+impl<const D: usize> TryFrom<RandomCutForestWire<D>> for RandomCutForest<D> {
+    type Error = RcfError;
+
+    /// Check the cross-structure invariants a snapshot must hold:
+    /// one tree per configured tree, each sampler and tree describing
+    /// the same live points, and every point's refcount equal to the
+    /// number of trees sampling it.
+    fn try_from(w: RandomCutForestWire<D>) -> RcfResult<Self> {
+        fn broken(msg: impl core::fmt::Display) -> RcfError {
+            RcfError::DeserializationFailed(format!("RandomCutForest: {msg}"))
+        }
+        if w.trees.len() != w.config.num_trees {
+            return Err(broken(format!(
+                "{} tree(s) for num_trees {}",
+                w.trees.len(),
+                w.config.num_trees
+            )));
+        }
+        w.point_store.validate_restored()?;
+        let slots = w.point_store.capacity();
+        let mut holders = vec![0_u32; slots];
+        let mut seen = vec![false; slots];
+        for (tree, sampler, _) in &w.trees {
+            sampler.validate_restored(w.config.sample_size)?;
+            tree.validate_restored(&|i| w.point_store.is_live(i))?;
+            seen.fill(false);
+            for idx in sampler.iter_indices() {
+                if !w.point_store.is_live(idx) || seen[idx] || !tree.contains(idx) {
+                    return Err(broken(format!(
+                        "sampler holds point {idx}, which is dead, repeated or absent from its tree"
+                    )));
+                }
+                seen[idx] = true;
+                holders[idx] += 1;
+            }
+            if tree.distinct_point_count() != sampler.len() {
+                return Err(broken(format!(
+                    "tree indexes {} point(s), its sampler holds {}",
+                    tree.distinct_point_count(),
+                    sampler.len()
+                )));
+            }
+        }
+        for (idx, &held) in holders.iter().enumerate() {
+            if w.point_store.is_live(idx) && w.point_store.ref_count(idx) != held {
+                return Err(broken(format!(
+                    "point {idx} has refcount {} but {held} tree(s) sample it",
+                    w.point_store.ref_count(idx)
+                )));
+            }
+        }
+        if let Some((&idx, _)) = w
+            .timestamps
+            .iter()
+            .find(|(i, _)| !w.point_store.is_live(**i))
+        {
+            return Err(broken(format!("timestamp recorded for dead point {idx}")));
+        }
+        Ok(Self {
+            config: w.config,
+            trees: w.trees,
+            point_store: w.point_store,
+            updates_seen: w.updates_seen,
+            #[cfg(feature = "parallel")]
+            pool: None,
+            #[cfg(feature = "std")]
+            metrics: crate::metrics::default_sink(),
+            timestamps: w.timestamps,
+        })
+    }
 }
 
 #[allow(clippy::missing_fields_in_debug)] // Bounded summary - see method docstring.

@@ -508,6 +508,75 @@ impl<const D: usize> NodeStore<D> {
     }
 }
 
+#[cfg(feature = "serde")]
+impl<const D: usize> NodeStore<D> {
+    /// Check the arena shape of a store rebuilt from a snapshot:
+    /// both arenas hold exactly `capacity` slots, and each free list
+    /// names every empty slot of its arena once and nothing else.
+    /// Every indexed access in this module trusts that shape, so a
+    /// payload breaking it would otherwise panic on first use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::DeserializationFailed`] naming the first
+    /// broken invariant.
+    pub(crate) fn validate_layout(&self) -> RcfResult<()> {
+        let cap = self.capacity as usize;
+        if self.capacity == 0 || self.capacity > NodeRef::MAX_INDEX {
+            return Err(RcfError::DeserializationFailed(format!(
+                "NodeStore capacity {} outside 1..={}",
+                self.capacity,
+                NodeRef::MAX_INDEX
+            )));
+        }
+        if self.internals.len() != cap || self.leaves.len() != cap {
+            return Err(RcfError::DeserializationFailed(format!(
+                "NodeStore arenas hold {} internal and {} leaf slot(s), capacity is {cap}",
+                self.internals.len(),
+                self.leaves.len()
+            )));
+        }
+        check_free_list(&self.internals, &self.internal_free, "internal")?;
+        check_free_list(&self.leaves, &self.leaf_free, "leaf")
+    }
+}
+
+/// Assert `free` lists every `None` slot of `slots` exactly once.
+#[cfg(feature = "serde")]
+fn check_free_list<T>(slots: &[Option<T>], free: &[u32], arena: &str) -> RcfResult<()> {
+    let mut listed = alloc::vec![false; slots.len()];
+    for &idx in free {
+        let i = idx as usize;
+        match slots.get(i) {
+            Some(None) if !listed[i] => listed[i] = true,
+            Some(None) => {
+                return Err(RcfError::DeserializationFailed(format!(
+                    "NodeStore {arena} free list names slot {i} twice"
+                )));
+            }
+            Some(Some(_)) => {
+                return Err(RcfError::DeserializationFailed(format!(
+                    "NodeStore {arena} free list names live slot {i}"
+                )));
+            }
+            None => {
+                return Err(RcfError::DeserializationFailed(format!(
+                    "NodeStore {arena} free list names slot {i} past capacity {}",
+                    slots.len()
+                )));
+            }
+        }
+    }
+    let empty = slots.iter().filter(|s| s.is_none()).count();
+    if empty != free.len() {
+        return Err(RcfError::DeserializationFailed(format!(
+            "NodeStore {arena} arena has {empty} empty slot(s) but its free list names {}",
+            free.len()
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 #[allow(clippy::float_cmp)] // Tests assert exact equality on integer-valued masses.
 mod tests {
