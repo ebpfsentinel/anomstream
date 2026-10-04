@@ -184,10 +184,10 @@ proptest! {
             }
         }
         let back = RandomCutForest::<2>::from_bytes(&f.to_bytes().unwrap()).unwrap();
+        // A sequence ending on deletes can empty the forest, and the
+        // restored one must then refuse to score in the same way.
         let probe = [2.5, 1.0];
-        prop_assert_eq!(
-            f64::from(f.score(&probe).unwrap()).to_bits(),
-            f64::from(back.score(&probe).unwrap()).to_bits()
-        );
+        let bits = |r: Result<_, RcfError>| r.map(|s| f64::from(s).to_bits()).map_err(|e| format!("{e:?}"));
+        prop_assert_eq!(bits(f.score(&probe)), bits(back.score(&probe)));
     }
 }
