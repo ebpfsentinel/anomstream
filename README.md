@@ -8,7 +8,9 @@ The Random Cut Forest is a focused port of Guha et al. (ICML 2016) within the AW
 
 ## Catalogue
 
-**Multivariate anomaly detectors** - operate on the joint `[f64; D]` distribution
+### Multivariate anomaly detectors
+
+Operate on the joint `[f64; D]` distribution.
 
 - `RandomCutForest<D>` - AWS-conformant aggregate root (Guha 2016)
 - `ThresholdedForest<D>` - adaptive threshold wrapper (TRCF)
@@ -18,20 +20,26 @@ The Random Cut Forest is a focused port of Guha et al. (ICML 2016) within the AW
 - `DriftAwareForest` - shadow-swap recovery when a drift detector fires
 - `TenantForestPool` - bounded per-tenant forest pool with LRU eviction
 
-**Per-feature univariate detectors** - one accumulator per dimension, finds _which_ feature drifted
+### Per-feature univariate detectors
+
+One accumulator per dimension, finds _which_ feature drifted.
 
 - `PerFeatureEwma<D>` - parallel univariate EWMA z-score detector
 - `PerFeatureCusum<D>` - parallel two-sided CUSUM change-point detector
 - `FeatureDriftDetector<D>` - PSI / KL distributional drift on raw features
 
-**Score-level drift + regime change** - operate on a scalar anomaly-score stream
+### Score-level drift + regime change
+
+Operate on a scalar anomaly-score stream.
 
 - `MetaDriftDetector` - two-sided CUSUM on the score stream
 - `AdwinDetector` - adaptive windowing (Bifet 2007)
 - `PotDetector` - SPOT / DSPOT univariate Peaks-Over-Threshold (Siffer 2017)
 - `fisher_combine` - combine `k` independent p-values into one test statistic
 
-**Streaming stats + sketches** - bounded-memory summaries reused across detectors
+### Streaming stats + sketches
+
+Bounded-memory summaries reused across detectors.
 
 - `OnlineStats` - Welford streaming mean + variance
 - `TDigest` - Dunning streaming quantile digest
@@ -42,7 +50,7 @@ The Random Cut Forest is a focused port of Guha et al. (ICML 2016) within the AW
 - `BloomFilter` - set membership, zero false negatives, tunable FPR
 - `Normalizer<D>` - per-feature `MinMax` / `ZScore` / `None`, with a `fit` learner
 
-**Explanation + triage**
+### Explanation + triage
 
 - `DiVector` + `FeatureGroups` - per-dim and per-group attribution
 - `AttributionStability` - inter-tree dispersion + confidence
@@ -50,7 +58,7 @@ The Random Cut Forest is a focused port of Guha et al. (ICML 2016) within the AW
 - `PlattCalibrator` - batch + online-SGD probability calibration
 - `SeverityBands` / `Severity` - ordinal severity classification
 
-**SOC + ops**
+### SOC + ops
 
 - `AlertClusterer` / `LshAlertClusterer` - cosine and LSH alert dedup (LSH seeded per instance)
 - `FeedbackStore` - SOC-label-driven score adjustment, at most `MAX_CAPACITY` (65 536) labels
@@ -58,14 +66,14 @@ The Random Cut Forest is a focused port of Guha et al. (ICML 2016) within the AW
 - `AuditChain` / `verify_audit_chain` - HMAC-SHA256-chained tamper-evident audit trail
 - `ForensicBaseline` - post-hoc distance-to-sample summary
 
-**Hot-path ingress**
+### Hot-path ingress
 
 - `UpdateSampler` - stride or per-flow-hash sampler, optionally keyed with a per-instance secret (MITRE ATLAS `AML.T0020`)
 - `PrefixRateCap` - per-prefix admission cap over 256 cache-padded buckets, optionally keyed
 - `update_channel` / `try_update_channel` - bounded MPSC channel for the classifier / updater split
 - `MetricsSink` - pluggable telemetry; hot-path dispatch batched every `METRICS_BATCH_SIZE` (64) calls, `flush_metrics()` on shutdown
 
-**Evaluation**
+### Evaluation
 
 - `vus_pr` / `vus_pr_with_buffer` / `range_auc_pr` - Volume Under Surface PR (Paparrizos VLDB 2022), threshold-free length-aware quality metric
 - `TsbAdMDataset` - CSV loader for the TSB-AD-M multivariate benchmark (Liu & Paparrizos NeurIPS 2024)

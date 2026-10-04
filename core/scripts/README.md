@@ -3,20 +3,20 @@
 Three bench corpora; each lives under its own directory with a
 uniform file layout:
 
-| Dir | Corpus | Pipeline |
-|---|---|---|
-| [`synthetic/`](synthetic/README.md) | 10 k Gaussian points + 1 % outliers (`gen_points.py`) | update / score / AUC - primary throughput comparison |
-| [`nab/`](nab/README.md) | Numenta Anomaly Benchmark `realKnownCause` | 8-lag temporal embedding, frozen baseline, weighted-AUC |
-| [`tsb_ad/`](tsb_ad/README.md) | TSB-AD multivariate (TheDatumOrg, 2024) | native multivariate, per-dim z-score, frozen baseline |
+| Dir                                 | Corpus                                                | Pipeline                                                |
+| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| [`synthetic/`](synthetic/README.md) | 10 k Gaussian points + 1 % outliers (`gen_points.py`) | update / score / AUC - primary throughput comparison    |
+| [`nab/`](nab/README.md)             | Numenta Anomaly Benchmark `realKnownCause`            | 8-lag temporal embedding, frozen baseline, weighted-AUC |
+| [`tsb_ad/`](tsb_ad/README.md)       | TSB-AD multivariate (TheDatumOrg, 2024)               | native multivariate, per-dim z-score, frozen baseline   |
 
 Each directory ships a uniform set of files, suffixed by the
 bench name so the filenames stay unique repo-wide:
 
-| Dir | rrcf runner | AWS Java driver |
-|---|---|---|
+| Dir          | rrcf runner               | AWS Java driver          |
+| ------------ | ------------------------- | ------------------------ |
 | `synthetic/` | `bench_rrcf_synthetic.py` | `RcfBenchSynthetic.java` |
-| `nab/` | `bench_rrcf_nab.py` | `RcfBenchNab.java` |
-| `tsb_ad/` | `bench_rrcf_tsb_ad.py` | `RcfBenchTsbAd.java` |
+| `nab/`       | `bench_rrcf_nab.py`       | `RcfBenchNab.java`       |
+| `tsb_ad/`    | `bench_rrcf_tsb_ad.py`    | `RcfBenchTsbAd.java`     |
 
 Auxiliary helpers as needed: `gen_points.py` +
 `bench_sklearn_synthetic.py` + `variance_sweep.sh` in

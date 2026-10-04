@@ -114,7 +114,7 @@ sits inside the (drifted) baseline and is not flagged.
 
 ### Defences NOT shipped
 
-- Automatic drift *recovery* (shadow-forest swap on alert). The
+- Automatic drift _recovery_ (shadow-forest swap on alert). The
   ADWIN-based swap is P1 on the roadmap.
 
 ## T3 - Model extraction (`AML.T0024`)
@@ -159,7 +159,7 @@ the updater thread, starving legitimate updates.
   1/N stride or per-flow gate is free (no allocations, no
   syscalls).
 - `update_channel(capacity)` validates `capacity ∈
-  1..=MAX_CHANNEL_CAPACITY` (`1 << 20` slots) at construction -
+1..=MAX_CHANNEL_CAPACITY` (`1 << 20` slots) at construction -
   caller cannot OOM the allocator with `usize::MAX` or silently
   drop every offer with `0`. The non-panicking
   `try_update_channel` Result-returning variant surfaces the
@@ -169,7 +169,7 @@ the updater thread, starving legitimate updates.
   asymmetry (`window_ms == 0` panicked, `cap == 0` silently
   disabled the cap) is impossible to express.
 - `FeedbackStore::new(capacity, ...)` rejects `capacity >
-  MAX_CAPACITY = 65 536` - the bounded ledger can no longer be
+MAX_CAPACITY = 65 536` - the bounded ledger can no longer be
   driven into allocator pressure by a hostile config. The
   per-cluster `contributing_tenants` rolodex on
   `AlertClusterer` is bounded by `MAX_TENANTS_PER_CLUSTER = 32`
@@ -205,7 +205,7 @@ not just the storage - to be tamper-evident.
   `AuditChain::new(key)` wraps a stream of `AlertRecord`s in
   `AuditChainEntry { record, seq, prev_tag, tag }` with
   `tag = HMAC-SHA256(key, u64_le(seq) || prev_tag ||
-  postcard(record))`. Reordering breaks the next entry's
+postcard(record))`. Reordering breaks the next entry's
   `prev_tag`; editing a record breaks its own `tag`; deleting a
   record breaks the next entry's `prev_tag` linkage; forging an
   appended entry without the secret key is computationally
@@ -246,7 +246,7 @@ not just the storage - to be tamper-evident.
   directly).
 - Attacks on the persistence format (`to_bytes` / `from_bytes`)
   - the crate enforces versioned envelopes with upfront
-  rejection of incompatible versions, but a compromised
-  serialised state file trivially compromises the loaded
-  detector. Callers must treat forest snapshots as
-  integrity-sensitive (sign + verify out-of-band).
+    rejection of incompatible versions, but a compromised
+    serialised state file trivially compromises the loaded
+    detector. Callers must treat forest snapshots as
+    integrity-sensitive (sign + verify out-of-band).

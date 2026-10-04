@@ -48,7 +48,7 @@ Extensions beyond the AWS signature:
   walk + delete refactor. On NAB `realKnownCause` it lifts
   aggregate AUC 0.719 → 0.776. Mutates the reservoir per probe
   - known baseline drift on long streams, see
-  `score_codisp_stateless`.
+    `score_codisp_stateless`.
 - `score_codisp_stateless` - non-mutating codisp estimate via
   root → leaf descent along stored cuts, `max(sibling_mass /
 subtree_mass)` per depth. Takes `&self`, rayon-parallel across

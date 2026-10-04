@@ -51,7 +51,7 @@ taxonomy as the README:
 9. [Persistence](#persistence)
 10. [Observability](#observability)
 11. [Hot-path integration (eBPF ingress)](#hot-path-integration-ebpf-ingress)
-12. [Security & threat model](#security--threat-model)
+12. [Security & hardening](#security--hardening)
 13. [Multi-tenancy](#multi-tenancy)
 14. [Quality](#quality)
 

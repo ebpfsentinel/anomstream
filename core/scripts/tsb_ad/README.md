@@ -1,7 +1,6 @@
 # TSB-AD-M detection-quality protocol
 
-Modern complement to the NAB regression test. TSB-AD-M (TheDatumOrg,
-2024) ships **200 multivariate time series** with per-point binary
+Modern complement to the NAB regression test. TSB-AD-M (TheDatumOrg, 2024) ships **200 multivariate time series** with per-point binary
 labels across 16 source datasets (MSL, SMAP, SMD, MITDB, SVDB, PSM,
 GHL, Exathlon, OPPORTUNITY, CATSv2, LTDB, …). Unlike NAB's
 windowed labels, every row is independently labelled, and series
@@ -32,6 +31,7 @@ cargo test --release --test tsb_ad_m --all-features \
 ## Pipeline
 
 Per file:
+
 1. Parse filename - `NNN_DATASET_id_K_Category_tr_<train>_1st_<first>.csv`.
    `tr_<N>` is the upstream train-split boundary.
 2. Per-dim z-score using the train-split mean / stddev - the
@@ -46,19 +46,19 @@ Per file:
 
 ## Coverage
 
-| `D` | Files |
-|---|---|
-| 2 | 48 |
-| 3 | 14 |
-| 7-9 | 4 |
-| 12 | 3 |
-| 16-19 | 46 |
-| 25 | 28 |
-| 29-31 | 9 |
-| 38 | 22 |
-| 51-55 | 17 |
-| 66 | 1 |
-| 248 | 8 *(skipped)* |
+| `D`   | Files         |
+| ----- | ------------- |
+| 2     | 48            |
+| 3     | 14            |
+| 7-9   | 4             |
+| 12    | 3             |
+| 16-19 | 46            |
+| 25    | 28            |
+| 29-31 | 9             |
+| 38    | 22            |
+| 51-55 | 17            |
+| 66    | 1             |
+| 248   | 8 _(skipped)_ |
 
 The 17-value const-generic whitelist covers **192 / 200** files
 (96 %). Eight `D = 248` files are skipped - monomorphising a

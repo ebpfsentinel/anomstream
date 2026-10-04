@@ -7,7 +7,7 @@ published reference implementations:
   the original open-source RCF port.
 - [`scikit-learn` `IsolationForest`](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.IsolationForest.html)
   - not RCF, but the canonical streaming-friendly tree-isolation
-  baseline every comparison pins against.
+    baseline every comparison pins against.
 - AWS's [`randomcutforest-java`](https://github.com/aws/random-cut-forest-by-aws)
   4.4.0 - JVM reference. See `../README.md`.
 
@@ -63,12 +63,12 @@ java -cp "scripts/synthetic:$JAR" RcfBenchSynthetic \
 coefficient of variation in parens. Driven by
 `variance_sweep.sh`.
 
-| Impl | Backend | Updates / s | Scores / s | AUC |
-|---|---|---|---|---|
-| `anomstream-core` 0.0.0-dev | Rust, rayon-parallel | **17 500 ± 1 240** (7 %) | 125 900 ± 1 840 (1.5 %) | 1.000 ± 0 |
-| `randomcutforest-java` 4.4.0 | JVM 26, cold | 2 090 ± 134 (6 %) | 8 870 ± 415 (5 %) | 1.000 ± 0 |
-| `rrcf` 0.4.4 | Python + NumPy | 73 ± 3 (4 %) | 94 150 ± 4 840 (5 %) | 0.992 ± 0 |
-| `sklearn.IsolationForest` | NumPy + Cython | batch-only | **136 300 ± 2 450** (2 %) | 1.000 ± 0 |
+| Impl                         | Backend              | Updates / s              | Scores / s                | AUC       |
+| ---------------------------- | -------------------- | ------------------------ | ------------------------- | --------- |
+| `anomstream-core` 0.0.0-dev  | Rust, rayon-parallel | **17 500 ± 1 240** (7 %) | 125 900 ± 1 840 (1.5 %)   | 1.000 ± 0 |
+| `randomcutforest-java` 4.4.0 | JVM 26, cold         | 2 090 ± 134 (6 %)        | 8 870 ± 415 (5 %)         | 1.000 ± 0 |
+| `rrcf` 0.4.4                 | Python + NumPy       | 73 ± 3 (4 %)             | 94 150 ± 4 840 (5 %)      | 0.992 ± 0 |
+| `sklearn.IsolationForest`    | NumPy + Cython       | batch-only               | **136 300 ± 2 450** (2 %) | 1.000 ± 0 |
 
 Ratios (mean / mean):
 

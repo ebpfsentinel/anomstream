@@ -1,0 +1,9 @@
+{
+  // Prettier owns layout: prose is wrapped by hand, tables are aligned by
+  // prettier, so the two rules that restate layout are off.
+  "config": {
+    "MD013": false,
+    "MD060": false,
+    "MD024": { "siblings_only": true },
+  },
+}
