@@ -50,3 +50,12 @@ unsafe_code = "forbid"
 
 [profile.release]
 overflow-checks = true
+
+# A library's own profile never reaches its dependents, so the bench
+# profile is set to what the two consumers build with (`lto = true`,
+# `codegen-units = 1` in the OSS and Enterprise workspaces): a number
+# measured here is then the number the shipped binary gets, not one a
+# cross-crate call boundary the consumer's LTO removes had inflated.
+[profile.bench]
+lto = "fat"
+codegen-units = 1
