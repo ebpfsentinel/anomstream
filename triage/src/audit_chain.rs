@@ -77,7 +77,6 @@
 #![cfg(all(feature = "audit-integrity", feature = "postcard"))]
 
 use alloc::format;
-use alloc::vec::Vec;
 
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
@@ -143,19 +142,22 @@ where
 /// `seq` counter and `prev_tag` so each [`Self::append`] call
 /// chains off the previous entry without caller bookkeeping.
 ///
-/// The HMAC key is held in a `Vec<u8>` and zeroed on `Drop` via
-/// the `hmac` crate's internal scrubbing - but the *original*
-/// caller-provided slice is unchanged, so callers should
-/// themselves zero their copy after construction if the key
-/// material is sensitive. Use a key-management library (`zeroize`,
-/// `secrecy`) at the call site for hardened deployments.
+/// The chain never keeps the key bytes: construction absorbs them
+/// into a keyed HMAC state, which each [`Self::append`] clones
+/// instead of re-deriving the inner and outer pads from the key.
+/// That state is wiped on drop (the `zeroize` feature of `hmac` and
+/// `sha2`), as is every per-append clone. The caller's own slice is
+/// untouched, so a caller holding sensitive key material zeroes its
+/// copy after construction (`zeroize`, `secrecy`).
 #[derive(Clone)]
 pub struct AuditChain<K, const D: usize>
 where
     K: Clone,
 {
-    /// HMAC-SHA256 secret key, ≥ [`MIN_KEY_LEN`] bytes.
-    key: Vec<u8>,
+    /// HMAC-SHA256 state keyed once at construction.
+    mac: HmacSha256,
+    /// Length of the key the state was built from, for `Debug`.
+    key_len: usize,
     /// Monotonic sequence number stamped on the next emission.
     seq: u64,
     /// Tag of the most recently appended entry, `genesis_prev`
@@ -167,12 +169,13 @@ where
     _marker: core::marker::PhantomData<fn() -> AlertRecord<K, D>>,
 }
 
+#[allow(clippy::missing_fields_in_debug)] // The keyed state is never printed.
 impl<K: Clone, const D: usize> core::fmt::Debug for AuditChain<K, D> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // Never print the key - Debug is for logs which the
         // tamper-evident trail must not leak the signing key into.
         f.debug_struct("AuditChain")
-            .field("key_len", &self.key.len())
+            .field("key_len", &self.key_len)
             .field("seq", &self.seq)
             .field("prev_tag_hex_first8", &hex8(&self.prev_tag))
             .finish()
@@ -209,7 +212,8 @@ impl<K: Clone, const D: usize> AuditChain<K, D> {
             ));
         }
         Ok(Self {
-            key: key.to_vec(),
+            mac: keyed_mac(key)?,
+            key_len: key.len(),
             seq,
             prev_tag: genesis_prev,
             _marker: core::marker::PhantomData,
@@ -229,7 +233,7 @@ impl<K: Clone, const D: usize> AuditChain<K, D> {
     where
         K: serde::Serialize,
     {
-        let tag = compute_tag(&self.key, self.seq, &self.prev_tag, &record)?;
+        let tag = compute_tag(self.mac.clone(), self.seq, &self.prev_tag, &record)?;
         let entry = AuditChainEntry {
             record,
             seq: self.seq,
@@ -260,21 +264,25 @@ impl<K: Clone, const D: usize> AuditChain<K, D> {
     }
 }
 
-/// Compute the HMAC-SHA256 tag for a single chain entry.
+/// Key an HMAC-SHA256 state once, to be cloned per tag.
+fn keyed_mac(key: &[u8]) -> RcfResult<HmacSha256> {
+    HmacSha256::new_from_slice(key).map_err(|_| {
+        // Unreachable in practice: HMAC-SHA256 accepts any key
+        // length.
+        RcfError::InvalidConfig("AuditChain: HMAC-SHA256 init failed".into())
+    })
+}
+
+/// Compute the HMAC-SHA256 tag for a single chain entry from a
+/// fresh clone of the keyed state.
 ///
 /// Tag domain: `u64_le(seq) || prev_tag || postcard(record)`.
 fn compute_tag<K: Clone + serde::Serialize, const D: usize>(
-    key: &[u8],
+    mut mac: HmacSha256,
     seq: u64,
     prev_tag: &[u8; TAG_LEN],
     record: &AlertRecord<K, D>,
 ) -> RcfResult<[u8; TAG_LEN]> {
-    let mut mac = HmacSha256::new_from_slice(key).map_err(|_| {
-        // Unreachable in practice: HMAC-SHA256 accepts any key
-        // length; the constructor only fails on internal alloc
-        // pressure that has already poisoned the allocator.
-        RcfError::InvalidConfig("AuditChain: HMAC-SHA256 init failed".into())
-    })?;
     mac.update(&seq.to_le_bytes());
     mac.update(prev_tag);
     let body = postcard::to_allocvec(record)
@@ -325,6 +333,7 @@ where
     if entries.is_empty() {
         return Ok(());
     }
+    let mac = keyed_mac(key)?;
     let mut expected_prev = *genesis_prev;
     let mut expected_seq = entries[0].seq;
     for (i, entry) in entries.iter().enumerate() {
@@ -343,7 +352,7 @@ where
                     .into(),
             ));
         }
-        let recomputed = compute_tag(key, entry.seq, &entry.prev_tag, &entry.record)?;
+        let recomputed = compute_tag(mac.clone(), entry.seq, &entry.prev_tag, &entry.record)?;
         if recomputed.ct_eq(&entry.tag).unwrap_u8() != 1 {
             return Err(RcfError::InvalidConfig(
                 format!("verify_chain: entry {i} tag mismatch - record tampered or key wrong")

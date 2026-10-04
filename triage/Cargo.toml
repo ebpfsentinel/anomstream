@@ -40,8 +40,8 @@ rand_chacha = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
-hmac = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true, features = ["zeroize"] }
+sha2 = { workspace = true, optional = true, features = ["zeroize"] }
 subtle = { workspace = true, optional = true }
 
 [dev-dependencies]
