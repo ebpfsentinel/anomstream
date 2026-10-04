@@ -1403,6 +1403,12 @@ Grab-bag of pre-release cleanups driven by the audit:
   cost, so a runaway `window` turned forensic calls into
   compute bombs. The public docstring now carries a
   `# Complexity` note with practical wall-clock numbers.
+- **`MatrixProfile` series cap.** The join is `O(n²)` in the series
+  length, so the window cap alone left a few million points with a
+  small window at hours of CPU per call. `compute` refuses a series
+  longer than `MATRIX_PROFILE_MAX_SERIES_LEN = 65_536` (about twelve
+  seconds on a modern core); `compute_with_max_len` takes an
+  explicit bound for a caller who has budgeted a longer capture.
 - **`AlertClusterer` tenant key.** Docstring updated to
   recommend `AlertClusterer::<u64, D>` for deployments that
   carry numeric tenant identifiers; the default `K = String`

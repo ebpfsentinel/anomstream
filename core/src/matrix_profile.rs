@@ -57,6 +57,16 @@ pub const MIN_WINDOW: usize = 4;
 /// longer windows should pre-downsample or chunk the series.
 pub const MAX_WINDOW: usize = 10_000;
 
+/// Default upper bound on series length accepted by
+/// [`MatrixProfile::compute`]. The join is `O(n²)`, so the window cap
+/// alone does not bound the work: a series of a few million points
+/// with a small window is hours of CPU from one call. `65 536`
+/// points is roughly twelve seconds on a modern core (the measured
+/// 49 ms at `n = 4 096`, times 256); a caller with a longer capture
+/// opts in through
+/// [`MatrixProfile::compute_with_max_len`] or chunks the series.
+pub const MAX_SERIES_LEN: usize = 65_536;
+
 /// Computed matrix profile for a fixed `(series, window)` pair.
 ///
 /// The profile array is always in 1-to-1 correspondence with the
@@ -119,15 +129,43 @@ impl MatrixProfile {
     ///
     /// Returns [`RcfError::InvalidConfig`] when
     /// `window < MIN_WINDOW`, `window > MAX_WINDOW`, when the
-    /// series is too short (`series.len() < 2 · window`), when
-    /// `series` contains a non-finite value, or when
-    /// `exclusion_zone` would leave zero valid neighbours.
+    /// series is too short (`series.len() < 2 · window`) or longer
+    /// than [`MAX_SERIES_LEN`], when `series` contains a non-finite
+    /// value, or when `exclusion_zone` would leave zero valid
+    /// neighbours.
     #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
     pub fn compute(
         series: &[f64],
         window: usize,
         exclusion_zone: Option<usize>,
     ) -> RcfResult<Self> {
+        Self::compute_with_max_len(series, window, exclusion_zone, MAX_SERIES_LEN)
+    }
+
+    /// [`Self::compute`] with an explicit series-length cap in place
+    /// of [`MAX_SERIES_LEN`], for a caller who has budgeted the
+    /// `O(n²)` join for a longer capture.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::compute`], with `max_len` as the length bound.
+    #[must_use = "detector output should be checked - dropping it silently usually indicates a logic bug"]
+    pub fn compute_with_max_len(
+        series: &[f64],
+        window: usize,
+        exclusion_zone: Option<usize>,
+        max_len: usize,
+    ) -> RcfResult<Self> {
+        if series.len() > max_len {
+            return Err(RcfError::InvalidConfig(
+                alloc::format!(
+                    "MatrixProfile: series len {} > cap {max_len} (O(n²) join) - use \
+                     `compute_with_max_len` to opt into a longer series",
+                    series.len()
+                )
+                .into(),
+            ));
+        }
         if window < MIN_WINDOW {
             return Err(RcfError::InvalidConfig(
                 alloc::format!("MatrixProfile: window {window} < MIN_WINDOW {MIN_WINDOW}").into(),
@@ -414,6 +452,15 @@ mod tests {
     fn compute_rejects_oversized_window() {
         let data = cosine_series(32_000, 0.3);
         assert!(MatrixProfile::compute(&data, MAX_WINDOW + 1, None).is_err());
+    }
+
+    #[test]
+    fn compute_rejects_series_past_the_length_cap() {
+        let data = cosine_series(MAX_SERIES_LEN + 1, 0.3);
+        assert!(MatrixProfile::compute(&data, 8, None).is_err());
+        let short = cosine_series(64, 0.3);
+        assert!(MatrixProfile::compute_with_max_len(&short, 8, None, 63).is_err());
+        assert!(MatrixProfile::compute_with_max_len(&short, 8, None, 64).is_ok());
     }
 
     #[test]

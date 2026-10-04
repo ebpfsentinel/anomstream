@@ -250,7 +250,10 @@ pub use hyperloglog::{
     MIN_PRECISION as HLL_MIN_PRECISION,
 };
 #[cfg(feature = "std")]
-pub use matrix_profile::{MIN_WINDOW as MATRIX_PROFILE_MIN_WINDOW, MatrixProfile};
+pub use matrix_profile::{
+    MAX_SERIES_LEN as MATRIX_PROFILE_MAX_SERIES_LEN, MIN_WINDOW as MATRIX_PROFILE_MIN_WINDOW,
+    MatrixProfile,
+};
 pub use meta_drift::{CusumConfig, DriftKind, DriftVerdict, MetaDriftDetector};
 pub use metrics::{MetricsSink, NoopSink};
 pub use normalize::{NormParams, NormStrategy, Normalizer};
