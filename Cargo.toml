@@ -7,8 +7,8 @@ version = "0.0.0-dev"
 edition = "2024"
 rust-version = "1.99"
 license = "Apache-2.0"
-repository = "https://github.com/maximewewer/anomstream"
-homepage = "https://github.com/maximewewer/anomstream"
+repository = "https://github.com/ebpfsentinel/anomstream"
+homepage = "https://github.com/ebpfsentinel/anomstream"
 
 [workspace.dependencies]
 # Internal members - path deps resolve within the workspace.
