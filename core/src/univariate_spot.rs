@@ -172,6 +172,20 @@ impl PotDetector {
         self.peak_count
     }
 
+    /// Current quantile threshold `u` - the frozen value once
+    /// [`Self::freeze_baseline`] has been called, otherwise the
+    /// live `q`-quantile read off the digest. `None` before the
+    /// digest holds anything.
+    ///
+    /// Exposed so a caller driving an operator-visible threshold
+    /// off this detector can report the figure it is comparing
+    /// against, rather than reporting an alert probability nobody
+    /// can place on the scale of the scores they are looking at.
+    #[must_use]
+    pub fn current_threshold(&self) -> Option<f64> {
+        self.current_u()
+    }
+
     /// Fold `value` into the baseline. Peaks (values above the
     /// frozen or live quantile threshold `u`) also fold into the
     /// Welford running statistics used by the GPD fit.
@@ -417,5 +431,24 @@ mod tests {
         }
         // 0.5 quite likely under baseline - not anomalous at 1e-3.
         assert!(!d.is_anomaly(0.5, 1.0e-3));
+    }
+
+    #[test]
+    fn current_threshold_none_until_recorded_then_tracks_freeze() {
+        let mut d = PotDetector::new(0.9).unwrap();
+        assert!(d.current_threshold().is_none());
+        for i in 0..1000 {
+            d.record(i as f64 * 0.001);
+        }
+        let live = d.current_threshold().expect("live quantile");
+        assert!((0.0..=1.0).contains(&live), "live = {live}");
+        d.freeze_baseline().unwrap();
+        let frozen = d.current_threshold().expect("frozen quantile");
+        assert!((frozen - live).abs() < 1e-9, "live {live}, frozen {frozen}");
+        for i in 0..200 {
+            d.record(5.0 + i as f64);
+        }
+        let after = d.current_threshold().expect("frozen quantile");
+        assert!((after - frozen).abs() < f64::EPSILON);
     }
 }

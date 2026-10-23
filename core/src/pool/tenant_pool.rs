@@ -40,7 +40,7 @@ use crate::error::{RcfError, RcfResult};
 use crate::thresholded::{AnomalyGrade, ThresholdedForest};
 
 /// Factory closure type carried by the pool.
-type ForestFactory<const D: usize> = dyn Fn() -> RcfResult<ThresholdedForest<D>>;
+type ForestFactory<const D: usize> = dyn Fn() -> RcfResult<ThresholdedForest<D>> + Send + Sync;
 
 /// Stored per-tenant entry: the detector + its LRU timestamp.
 #[derive(Debug)]
@@ -247,6 +247,10 @@ where
     ///
     /// The factory is stored and invoked on every first-seen tenant -
     /// it must be able to build a detector repeatedly, not just once.
+    /// It is `Send + Sync` because a pool is normally owned by a
+    /// server and reached through a lock: a factory that could not
+    /// cross a thread would make the whole pool unshareable, which is
+    /// a limit the pool has no reason to impose.
     /// Seed the factory's builder deterministically (or from a
     /// per-tenant seed inside the closure) when reproducibility
     /// matters.
@@ -256,7 +260,7 @@ where
     /// Returns [`RcfError::InvalidConfig`] when `capacity == 0`.
     pub fn new<F>(capacity: usize, factory: F) -> RcfResult<Self>
     where
-        F: Fn() -> RcfResult<ThresholdedForest<D>> + 'static,
+        F: Fn() -> RcfResult<ThresholdedForest<D>> + Send + Sync + 'static,
     {
         if capacity == 0 {
             return Err(RcfError::InvalidConfig(
@@ -989,6 +993,12 @@ mod tests {
                 .seed(42)
                 .build()
         }
+    }
+
+    #[test]
+    fn a_pool_crosses_threads() {
+        fn assert_shareable<T: Send + Sync>() {}
+        assert_shareable::<TenantForestPool<String, 2>>();
     }
 
     #[test]

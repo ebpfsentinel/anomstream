@@ -102,6 +102,19 @@ impl FeedbackLabel {
             Self::Confirmed => 1.0,
         }
     }
+
+    /// Stable lower-case identifier - `"benign"` or `"confirmed"`.
+    ///
+    /// For a metric label, an export column or a log field, where
+    /// the `Debug` spelling would tie a wire format to the variant
+    /// names and change under them.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Benign => "benign",
+            Self::Confirmed => "confirmed",
+        }
+    }
 }
 
 /// Bounded ledger of labelled points - oldest-first LRU eviction
@@ -520,6 +533,16 @@ mod tests {
         assert!(
             (adjusted - raw).abs() < 1e-6,
             "FP-noise-floor leak: raw {raw}, adjusted {adjusted}"
+        );
+    }
+
+    #[test]
+    fn label_as_str_is_stable_and_distinct() {
+        assert_eq!(FeedbackLabel::Benign.as_str(), "benign");
+        assert_eq!(FeedbackLabel::Confirmed.as_str(), "confirmed");
+        assert_ne!(
+            FeedbackLabel::Benign.as_str(),
+            FeedbackLabel::Confirmed.as_str()
         );
     }
 
