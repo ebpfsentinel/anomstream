@@ -141,7 +141,7 @@ pub use anomstream_triage::{
 #[doc(inline)]
 pub use anomstream_triage::{
     AUDIT_CHAIN_GENESIS_PREV, AUDIT_CHAIN_MIN_KEY_LEN, AUDIT_CHAIN_TAG_LEN, AuditChain,
-    AuditChainEntry, verify_audit_chain,
+    AuditChainEntry, PayloadChain, PayloadChainEntry, verify_audit_chain, verify_payload_chain,
 };
 
 // -- Hot-path re-exports --------------------------------------

@@ -54,8 +54,8 @@ pub use audit::{ALERT_RECORD_VERSION, AlertContext, AlertRecord};
 #[cfg(all(feature = "audit-integrity", feature = "postcard"))]
 pub use audit_chain::{
     AuditChain, AuditChainEntry, GENESIS_PREV as AUDIT_CHAIN_GENESIS_PREV,
-    MIN_KEY_LEN as AUDIT_CHAIN_MIN_KEY_LEN, TAG_LEN as AUDIT_CHAIN_TAG_LEN,
-    verify_chain as verify_audit_chain,
+    MIN_KEY_LEN as AUDIT_CHAIN_MIN_KEY_LEN, PayloadChain, PayloadChainEntry,
+    TAG_LEN as AUDIT_CHAIN_TAG_LEN, verify_chain as verify_audit_chain, verify_payload_chain,
 };
 pub use calibrator::{PlattCalibrator, PlattFitConfig};
 #[cfg(feature = "std")]

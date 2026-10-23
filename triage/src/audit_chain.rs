@@ -278,20 +278,30 @@ fn keyed_mac(key: &[u8]) -> RcfResult<HmacSha256> {
 ///
 /// Tag domain: `u64_le(seq) || prev_tag || postcard(record)`.
 fn compute_tag<K: Clone + serde::Serialize, const D: usize>(
-    mut mac: HmacSha256,
+    mac: HmacSha256,
     seq: u64,
     prev_tag: &[u8; TAG_LEN],
     record: &AlertRecord<K, D>,
 ) -> RcfResult<[u8; TAG_LEN]> {
-    mac.update(&seq.to_le_bytes());
-    mac.update(prev_tag);
     let body = postcard::to_allocvec(record)
         .map_err(|e| RcfError::InvalidConfig(format!("AuditChain: postcard encode: {e}").into()))?;
-    mac.update(&body);
+    Ok(tag_over_body(mac, seq, prev_tag, &body))
+}
+
+/// The tag domain both chains share: `u64_le(seq) || prev_tag || body`.
+fn tag_over_body(
+    mut mac: HmacSha256,
+    seq: u64,
+    prev_tag: &[u8; TAG_LEN],
+    body: &[u8],
+) -> [u8; TAG_LEN] {
+    mac.update(&seq.to_le_bytes());
+    mac.update(prev_tag);
+    mac.update(body);
     let out = mac.finalize().into_bytes();
     let mut tag = [0u8; TAG_LEN];
     tag.copy_from_slice(&out);
-    Ok(tag)
+    tag
 }
 
 /// Verify a slice of [`AuditChainEntry`] in-order against `key`
@@ -362,6 +372,183 @@ where
         expected_prev = entry.tag;
         expected_seq = expected_seq.checked_add(1).ok_or_else(|| {
             RcfError::InvalidConfig("verify_chain: seq overflow during walk".into())
+        })?;
+    }
+    Ok(())
+}
+
+/// The chain position and tags of one payload, without the payload.
+///
+/// [`AuditChainEntry`] carries its [`AlertRecord`]; a
+/// [`PayloadChain`] entry does not, because the caller already
+/// stores the bytes it chained in whatever form it keeps them
+/// and only needs the linkage beside them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PayloadChainEntry {
+    /// Sequence number of this entry.
+    pub seq: u64,
+    /// Tag of the previous entry, or the genesis value.
+    pub prev_tag: [u8; TAG_LEN],
+    /// HMAC-SHA256 over `u64_le(seq) || prev_tag || payload`.
+    pub tag: [u8; TAG_LEN],
+}
+
+/// The same HMAC-SHA256 chain as [`AuditChain`], over caller-
+/// encoded bytes rather than an [`AlertRecord`].
+///
+/// The tag domain is identical - `u64_le(seq) || prev_tag ||
+/// payload` - so the threat model at the top of this module
+/// holds unchanged: editing a payload breaks its tag, deleting
+/// one breaks the next entry's `prev_tag`, reordering breaks the
+/// sequence. Which bytes are chained is the caller's decision,
+/// and the caller must encode them canonically, since the
+/// verifier recomputes the tag from exactly what it is handed.
+#[derive(Clone)]
+pub struct PayloadChain {
+    /// HMAC-SHA256 state keyed once at construction.
+    mac: HmacSha256,
+    /// Length of the key the state was built from, for `Debug`.
+    key_len: usize,
+    /// Sequence number stamped on the next append.
+    seq: u64,
+    /// Tag of the most recent entry, `genesis_prev` before any.
+    prev_tag: [u8; TAG_LEN],
+}
+
+#[allow(clippy::missing_fields_in_debug)] // The keyed state is never printed.
+impl core::fmt::Debug for PayloadChain {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PayloadChain")
+            .field("key_len", &self.key_len)
+            .field("seq", &self.seq)
+            .field("prev_tag_hex_first8", &hex8(&self.prev_tag))
+            .finish()
+    }
+}
+
+impl PayloadChain {
+    /// Build a chain starting at `seq = 0` off [`GENESIS_PREV`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::InvalidConfig`] when `key.len() < MIN_KEY_LEN`.
+    pub fn new(key: &[u8]) -> RcfResult<Self> {
+        Self::with_genesis(key, GENESIS_PREV, 0)
+    }
+
+    /// Build a chain continuing from a persisted `(seq, prev_tag)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::InvalidConfig`] when `key.len() < MIN_KEY_LEN`.
+    pub fn with_genesis(key: &[u8], genesis_prev: [u8; TAG_LEN], seq: u64) -> RcfResult<Self> {
+        if key.len() < MIN_KEY_LEN {
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "PayloadChain: key length {} below MIN_KEY_LEN {MIN_KEY_LEN}",
+                    key.len()
+                )
+                .into(),
+            ));
+        }
+        Ok(Self {
+            mac: keyed_mac(key)?,
+            key_len: key.len(),
+            seq,
+            prev_tag: genesis_prev,
+        })
+    }
+
+    /// Chain `payload` and advance.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RcfError::InvalidConfig`] when the sequence would
+    /// overflow.
+    pub fn append(&mut self, payload: &[u8]) -> RcfResult<PayloadChainEntry> {
+        let tag = tag_over_body(self.mac.clone(), self.seq, &self.prev_tag, payload);
+        let entry = PayloadChainEntry {
+            seq: self.seq,
+            prev_tag: self.prev_tag,
+            tag,
+        };
+        self.seq = self.seq.checked_add(1).ok_or_else(|| {
+            RcfError::InvalidConfig(
+                "PayloadChain: seq overflow - rotate the chain (rare: 2^64 entries)".into(),
+            )
+        })?;
+        self.prev_tag = tag;
+        Ok(entry)
+    }
+
+    /// The `seq` the next [`Self::append`] stamps.
+    #[must_use]
+    pub fn seq(&self) -> u64 {
+        self.seq
+    }
+
+    /// The tag the next entry chains off.
+    #[must_use]
+    pub fn prev_tag(&self) -> [u8; TAG_LEN] {
+        self.prev_tag
+    }
+}
+
+/// Verify `(payload, entry)` pairs in order against `key` and
+/// `genesis_prev`, under the same three rules as [`verify_chain`].
+///
+/// # Errors
+///
+/// Returns [`RcfError::InvalidConfig`] naming the entry index on a
+/// short key, a sequence gap, a broken linkage or a tag mismatch.
+pub fn verify_payload_chain(
+    entries: &[(&[u8], PayloadChainEntry)],
+    key: &[u8],
+    genesis_prev: &[u8; TAG_LEN],
+) -> RcfResult<()> {
+    if key.len() < MIN_KEY_LEN {
+        return Err(RcfError::InvalidConfig(
+            format!(
+                "verify_payload_chain: key length {} below MIN_KEY_LEN {MIN_KEY_LEN}",
+                key.len()
+            )
+            .into(),
+        ));
+    }
+    let Some((_, first)) = entries.first() else {
+        return Ok(());
+    };
+    let mac = keyed_mac(key)?;
+    let mut expected_prev = *genesis_prev;
+    let mut expected_seq = first.seq;
+    for (i, (payload, entry)) in entries.iter().enumerate() {
+        if entry.seq != expected_seq {
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "verify_payload_chain: entry {i} seq {} != expected {expected_seq}",
+                    entry.seq
+                )
+                .into(),
+            ));
+        }
+        if entry.prev_tag.ct_eq(&expected_prev).unwrap_u8() != 1 {
+            return Err(RcfError::InvalidConfig(
+                format!("verify_payload_chain: entry {i} prev_tag mismatch - chain broken").into(),
+            ));
+        }
+        let recomputed = tag_over_body(mac.clone(), entry.seq, &entry.prev_tag, payload);
+        if recomputed.ct_eq(&entry.tag).unwrap_u8() != 1 {
+            return Err(RcfError::InvalidConfig(
+                format!(
+                    "verify_payload_chain: entry {i} tag mismatch - payload tampered or key wrong"
+                )
+                .into(),
+            ));
+        }
+        expected_prev = entry.tag;
+        expected_seq = expected_seq.checked_add(1).ok_or_else(|| {
+            RcfError::InvalidConfig("verify_payload_chain: seq overflow during walk".into())
         })?;
     }
     Ok(())
@@ -559,5 +746,48 @@ mod tests {
         // Key bytes are 0..=31; their hex would contain "1f".
         // Confirm no raw key byte sequence shows up.
         assert!(!dbg.contains("000102030405"), "key bytes leaked in Debug");
+    }
+
+    #[test]
+    fn payload_chain_verifies_and_resumes() {
+        let key = key32();
+        let mut chain = PayloadChain::new(&key).unwrap();
+        let a = chain.append(b"written capture-1").unwrap();
+        let b = chain.append(b"expired capture-1").unwrap();
+        let mut resumed = PayloadChain::with_genesis(&key, chain.prev_tag(), chain.seq()).unwrap();
+        let c = resumed.append(b"deleted capture-2").unwrap();
+        let entries: [(&[u8], PayloadChainEntry); 3] = [
+            (b"written capture-1", a),
+            (b"expired capture-1", b),
+            (b"deleted capture-2", c),
+        ];
+        verify_payload_chain(&entries, &key, &GENESIS_PREV).unwrap();
+        verify_payload_chain(&entries[1..], &key, &a.tag).unwrap();
+    }
+
+    #[test]
+    fn payload_chain_detects_tamper_deletion_and_wrong_key() {
+        let key = key32();
+        let mut chain = PayloadChain::new(&key).unwrap();
+        let a = chain.append(b"one").unwrap();
+        let b = chain.append(b"two").unwrap();
+        let c = chain.append(b"three").unwrap();
+        let tampered: [(&[u8], PayloadChainEntry); 2] = [(b"one", a), (b"TWO", b)];
+        assert!(verify_payload_chain(&tampered, &key, &GENESIS_PREV).is_err());
+        let deleted: [(&[u8], PayloadChainEntry); 2] = [(b"one", a), (b"three", c)];
+        assert!(verify_payload_chain(&deleted, &key, &GENESIS_PREV).is_err());
+        let honest: [(&[u8], PayloadChainEntry); 1] = [(b"one", a)];
+        assert!(verify_payload_chain(&honest, &[0x11u8; 32], &GENESIS_PREV).is_err());
+        assert!(PayloadChain::new(&[0u8; 8]).is_err());
+    }
+
+    #[test]
+    fn payload_chain_shares_the_alert_chain_tag_domain() {
+        let key = key32();
+        let mut chain = PayloadChain::new(&key).unwrap();
+        let entry = chain.append(b"body").unwrap();
+        let expected = tag_over_body(keyed_mac(&key).unwrap(), 0, &GENESIS_PREV, b"body");
+        assert_eq!(entry.tag, expected);
+        assert!(!format!("{chain:?}").contains("mac"));
     }
 }
