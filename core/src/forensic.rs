@@ -68,8 +68,8 @@ impl<const D: usize> ForensicBaseline<D> {
         }
         let mut best: usize = 0;
         let mut best_val = self.zscore[0].abs();
-        for d in 1..D {
-            let v = self.zscore[d].abs();
+        for (d, z) in self.zscore.iter().enumerate().skip(1) {
+            let v = z.abs();
             if v > best_val {
                 best = d;
                 best_val = v;

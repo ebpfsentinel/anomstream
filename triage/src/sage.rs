@@ -99,8 +99,8 @@ impl<const D: usize> SageExplanation<D> {
         }
         let mut best: usize = 0;
         let mut best_val = self.shapley[0].abs();
-        for d in 1..D {
-            let v = self.shapley[d].abs();
+        for (d, s) in self.shapley.iter().enumerate().skip(1) {
+            let v = s.abs();
             if v > best_val {
                 best = d;
                 best_val = v;

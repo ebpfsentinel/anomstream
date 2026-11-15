@@ -5,7 +5,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 description = "SOC-opinionated triage layer (Platt calibration, SAGE attribution, alert clustering, feedback, audit) on top of anomstream-core"
 readme = "../README.md"
 keywords = ["anomaly-detection", "soc", "calibration", "alerting", "triage"]

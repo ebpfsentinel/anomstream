@@ -5,7 +5,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 description = "Streaming anomaly detection toolkit - Random Cut Forest, per-feature drift, streaming sketches, SOC triage, hot-path ingress. Facade re-export of anomstream-core / anomstream-triage / anomstream-hotpath."
 readme = "../README.md"
 keywords = ["anomaly-detection", "streaming", "random-cut-forest", "drift-detection", "cusum"]

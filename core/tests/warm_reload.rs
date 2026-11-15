@@ -48,20 +48,18 @@ fn leftover_tmp_files(path: &Path) -> Vec<PathBuf> {
         return Vec::new();
     };
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::read_dir(dir)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .filter(|p| {
-                    p.file_name().is_some_and(|n| {
-                        let n = n.to_string_lossy();
-                        n.starts_with(&name) && n.len() > name.len() && n.ends_with(".tmp")
-                    })
+    fs::read_dir(dir).map_or_default(|entries| {
+        entries
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name().is_some_and(|n| {
+                    let n = n.to_string_lossy();
+                    n.starts_with(&name) && n.len() > name.len() && n.ends_with(".tmp")
                 })
-                .collect()
-        })
-        .unwrap_or_default()
+            })
+            .collect()
+    })
 }
 
 /// Best-effort cleanup - ignore failures (another test may have

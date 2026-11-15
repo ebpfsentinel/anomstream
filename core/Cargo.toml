@@ -5,7 +5,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 description = "Core streaming anomaly detectors + companion primitives (Random Cut Forest, per-feature EWMA / CUSUM, drift detectors, streaming stats) - part of the anomstream toolkit"
 readme = "../README.md"
 keywords = ["anomaly-detection", "streaming", "random-cut-forest", "drift-detection", "cusum"]
