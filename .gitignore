@@ -18,3 +18,6 @@ scripts/**/*.pyc
 # IA
 CLAUDE.*
 .claude
+# A target dir under another name (CARGO_TARGET_DIR=target-docker for a
+# container build) is as regenerable and as large as target/.
+target-*/
